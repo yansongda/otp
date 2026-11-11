@@ -24,9 +24,9 @@ Agent 负责：分析真实 diff、写 CHANGELOG、跑 `release:check`、建 rel
 | 包              | npm 公开包 `@yansongda/miniprogram-otp`（scoped，`publishConfig.access: "public"`）                                               |
 | 包入口          | `main: dist/index.js`、`types: dist/index.d.ts`、`miniprogram: dist`                                                              |
 | 测试 CI         | `.github/workflows/ci.yml`：push `main`、PR、tag `v*`；Bun 版本由 `.bun-version` 固定（当前 `1.4.4`），另有非阻塞 `compat-latest` |
-| 发布 CI         | **当前没有 release.yml**；npm 发布由人工在本地执行                                                                                |
-| 发布鉴权        | 本地 `npm login` + npm 2FA；仓库不保存 token                                                                                      |
-| 发布前守卫      | `npm publish` 触发 `prepublishOnly` → `bun run release:check`                                                                     |
+| 发布 CI         | `.github/workflows/release.yml`：push tag `v*` → tag/version 校验 → `release:check` → 版本已存在则跳过 → OIDC `npm publish`       |
+| 发布鉴权        | GitHub OIDC Trusted Publishing（`id-token: write`）；仓库不保存 `NPM_TOKEN`；首次发布除外                                         |
+| 发布前守卫      | release.yml 运行 `bun run release:check`；本地手动发布仍由 `prepublishOnly` → `release:check` 兜底                                |
 | `release:check` | invariants + lint + typecheck + test + build + dist smoke + `npm pack --dry-run`                                                  |
 | GitHub Release  | 手动 `gh release create`；notes 由真实 diff 清单生成，不用 `--generate-notes`                                                     |
 | tag 命名        | `vX.Y.Z`，必须与 `package.json` 的 `version` 逐字符一致                                                                           |
@@ -49,18 +49,18 @@ git pull --ff-only origin main
 gh auth status                      # 需要 gh release 权限
 git describe --tags --abbrev=0      # 无输出 = 首次发版
 npm view @yansongda/miniprogram-otp version  # 404 = 尚未发布
-npm whoami                          # 发布前必须已登录
+npm whoami                          # 仅首次发布 / 手动兜底需要
 date +%F                            # CHANGELOG 日期
 gh run list --workflow=ci.yml --limit 1  # 最新 main CI 必须 success
 ```
 
 ### 三道闸门
 
-| 闸门                     | 谁决定                               | Agent 行为                       |
-| ------------------------ | ------------------------------------ | -------------------------------- |
-| 版本号                   | 用户确认或指定                       | 给建议 + 理由，等待确认          |
-| `npm publish`            | 用户当次明确授权                     | 展示版本、包内容、命令，等待授权 |
-| `git push`（分支 / tag） | 用户当次明确说「push / 推送 / 执行」 | 展示命令，等待授权               |
+| 闸门                     | 谁决定                               | Agent 行为                                                            |
+| ------------------------ | ------------------------------------ | --------------------------------------------------------------------- |
+| 版本号                   | 用户确认或指定                       | 给建议 + 理由，等待确认                                               |
+| `git push`（分支 / tag） | 用户当次明确说「push / 推送 / 执行」 | 展示命令，等待授权；**必须说明 push tag 会触发 release.yml 发布 npm** |
+| 手动 `npm publish`       | 用户当次明确授权                     | 仅用于首次发布 / OIDC 不可用时的兜底；展示命令后等待授权              |
 
 「完成」「处理一下」「惯例上要 push/publish」都不构成授权；上一轮会话的授权不延续到本轮。
 
@@ -77,9 +77,9 @@ gh run list --workflow=ci.yml --limit 1  # 最新 main CI 必须 success
   → 人工合并
   → pull main + 核对 version
   → annotated tag vX.Y.Z
-  → 用户授权 push tag
-  → tag CI success
-  → 用户授权 npm publish
+  → 用户授权 push tag（会触发 release.yml 发布 npm）
+  → release.yml: tag/version 校验 → release:check → OIDC npm publish
+  → tag CI / release workflow success
   → 发布后核验
   → 生成 notes + GitHub Release
   → 清理 release 分支（如有）
@@ -281,68 +281,47 @@ git describe --tags --abbrev=0   # 应为 $TAG
 - tag：vX.Y.Z（annotated，指向 <commit>）
 - 本地验收：release:check 全绿
 - 待执行：git push origin vX.Y.Z
-- push 后：tag 触发 ci.yml（main + compat-latest）
-- 随后需单独授权 npm publish
+- push 后：tag 触发 ci.yml（main + compat-latest）与 release.yml（OIDC npm publish）
+- 首次发布：必须先本地手动 npm publish，再推 tag（见「首次发布特例」）
 ```
 
-**STOP B。** 只有用户明确说「push / 推送 / 执行」才继续。
+**STOP B。** 只有用户明确说「push / 推送 / 执行」才继续；授权前必须说明 push tag 会自动发布 npm。
 
-### Step 8：push tag（获授权后）
+### Step 8：push tag（获授权后，自动触发 npm publish）
+
+**push tag 会触发 `.github/workflows/release.yml` 并发布 npm。** 因此 push tag 的授权必须明确告知用户这一点；用户当次说「push / 推送 / 执行」后，才执行：
 
 ```bash
 git push origin main          # 仅当 main 有本地未推提交；PR 流程通常已同步
 git push origin "$TAG"        # 不要用 --tags，避免带上陈旧 tag
 ```
 
-等待 tag CI：
+等待发布 workflow：
 
 ```bash
-gh run list --workflow=ci.yml --limit 1
+gh run list --workflow=release.yml --limit 1
 gh run watch <run-id> --exit-status
 ```
 
-CI 失败时：先修问题，删除远端 tag（需授权），从 Step 4 重走；不要带失败 tag 发布。
+release.yml 行为：
 
-### Step 9：npm publish（单独授权）
+1. 校验 tag ↔ `package.json` version；
+2. 跑 `bun run release:check`；
+3. `npm view` 检查包/版本状态；
+4. 版本已存在 → 跳过 publish（用于首次手动发布后的 tag、以及失败重跑）；
+5. 版本不存在 → OIDC `npm publish --ignore-scripts --provenance --access public --tag <latest|next>`；
+6. 核验 `npm view` 与 dist-tag。
 
-**当前仓库没有 release.yml，由人工在本地发布。** 发布前确认：
+失败时：先看 `gh run view <run-id> --log-failed`；修复后优先 `gh run rerun <run-id>`（版本已存在时 workflow 会跳过 publish，不会 403）。若必须改 tag，删除远端 tag（需授权）后从 Step 4 重走。
 
-```bash
-npm whoami
-npm view @yansongda/miniprogram-otp version  # 必须与 X.Y.Z 不同（首次为 404）
-```
-
-可选但推荐：先验证 npm 生命周期与 tarball（不会发布）：
-
-```bash
-npm publish --dry-run --access public
-```
-
-首次发布（`npm view` 404）：
+### Step 9：查看 release workflow 核验结果
 
 ```bash
-npm login          # 用户亲自输入凭据；agent 不接触 token / OTP
-npm whoami
-npm publish --access public
+gh run view <run-id> --json status,conclusion,jobs
+gh run view <run-id> --log
 ```
 
-后续稳定版：
-
-```bash
-npm publish --access public
-```
-
-预发布：
-
-```bash
-npm publish --access public --tag next
-```
-
-说明：
-
-- `npm publish` 会自动触发 `prepublishOnly` → `bun run release:check`；不要加 `--ignore-scripts`
-- 发布是不可逆动作；必须先获得用户当次明确授权
-- 不要在命令、日志、文件中出现 token / `_authToken` / OTP
+成功标准：`Publish to npm` 任务 success；`Verify published version` 步骤 output 中 `npm view` 能返回版本、tarball、integrity，dist-tags 指向预期 tag。
 
 ### Step 10：发布后核验（必做）
 
@@ -421,26 +400,46 @@ git remote prune origin
 
 触发条件：`npm view @yansongda/miniprogram-otp version` 返回 404。
 
-- **npm 侧包尚不存在**，不能依赖任何 tag 触发的 CI 发布；必须由用户本机 `npm login` + `npm publish --access public` 完成第一次发布。
-- 首次发布同样走 Step 1–3 的 diff / CHANGELOG / release:check；可以打 tag `v1.0.0` 并创建 GitHub Release（与 OIDC 首发特例不同，本仓库没有 release.yml，不存在 tag 二次发布风险）。
-- 发布成功后：
-  - `npm view @yansongda/miniprogram-otp version` 必须等于首发版本；
-  - 在 npm 包设置页配置 2FA / Trusted Publisher（如未来接入 OIDC）；
-  - 下一版再评估是否新增 `.github/workflows/release.yml`。
-- 首次发布也必须在用户明确授权后执行 `npm publish`；agent 不输入 npm 凭据 / OTP。
+release.yml 要求 npm 包已存在且 Trusted Publisher 已配置，因此**首次发布必须先本地手动完成，再推 tag**：
 
-## 可选后续优化：OIDC Trusted Publishing
+1. 按 Step 1–3 完成 diff / CHANGELOG / `release:check`；合并发布 PR。
+2. 本地创建 annotated tag `v1.0.0`（先不 push）。
+3. 用户执行本地首发：
+   ```bash
+   npm login          # 用户亲自输入凭据；agent 不接触 token / OTP
+   npm whoami
+   npm publish --access public
+   ```
+   `prepublishOnly` 会再跑一次 `release:check`。
+4. 核验：
+   ```bash
+   npm view @yansongda/miniprogram-otp version   # 必须等于首发版本
+   ```
+5. 在 npm 包设置页配置 Trusted Publisher：
+   - Organization/user: `yansongda`
+   - Repository: `miniprogram-otp`
+   - Workflow filename: `release.yml`
+   - Allowed actions: 勾选 **`npm publish`**
+6. push tag（需当次授权）：
+   ```bash
+   git push origin v1.0.0
+   ```
+   release.yml 会跑 `release:check`，发现该版本已在 npm 上 → 跳过 publish；tag CI 正常跑。
+7. 按 Step 11 创建 GitHub Release。
 
-当前仓库没有 `release.yml`，发布由人工本地执行。首次手动发布成功后，可另开任务接入 OIDC：
+> 若先 push tag 再手动发布，release.yml 会在 `Check npm package state` 步骤报「包不存在」并失败。这是预期的首次发布保护。
+
+## OIDC 配置 checklist（npm 侧）
+
+release.yml 已使用 OIDC，仓库不需要 `NPM_TOKEN`；但 npm 包需要完成一次配置：
 
 1. npm 包设置 → Trusted Publisher：`yansongda` / `miniprogram-otp` / `release.yml`，允许 `npm publish`；
-2. 新增 `.github/workflows/release.yml`：push tag `v*` 触发，校验 tag ↔ `package.json` version，跑 `release:check`，执行
-   `npm publish --provenance --access public --tag <latest|next>`；
-3. workflow 使用 `permissions: id-token: write`，不保存 `NPM_TOKEN`；
-4. 要求 npm CLI ≥ 11.5.1、Node ≥ 22.14（CI 用 Node 24）；
-5. 新配置的 Trusted Publisher 需在 2 天内完成一次成功发布，否则配置过期。
-
-**不要**在首次发布前就依赖 OIDC：npm 上包不存在时，Trusted Publisher 无法完成首次发布。
+2. workflow 已有 `permissions: id-token: write`，发布命令为
+   `npm publish --ignore-scripts --provenance --access public --tag <latest|next>`；
+3. 要求 npm CLI ≥ 11.5.1、Node ≥ 22.14（release.yml 用 Node 24）；
+4. 新配置的 Trusted Publisher 需在 **2 天内**完成一次成功发布，否则配置过期，只能删除重建；
+5. 若 publish 报 `ENEEDAUTH` / `Unable to authenticate`，逐项核对 workflow 文件名大小写、仓库名、`package.json` 的 `repository.url`、Allowed actions 是否允许 `npm publish`；
+6. 失败重跑优先用 `gh run rerun <run-id>`；版本已存在时 release.yml 会跳过 publish，不会 403。
 
 ## 异常与回滚
 
@@ -458,37 +457,40 @@ git remote prune origin
 
 ## Anti-Patterns & Rationalizations
 
-| 借口                                         | 事实                                            |
-| -------------------------------------------- | ----------------------------------------------- |
-| 「用户说发版 = 授权 push」                   | 发版 ≠ push；push 必须当次授权                  |
-| 「用户说发版 = 授权 npm publish」            | publish 不可逆；必须单独当次授权                |
-| 「PR CI 绿了，可以自动合并」                 | 永不自动合并；等人工合并后告知                  |
-| 「CHANGELOG 抄 commit message 更快」         | commit message 会漏/夸大；唯一依据是 diff       |
-| 「Release notes 用 `--generate-notes` 省事」 | 它汇总 commit/PR，不是代码 diff；禁止           |
-| 「tag 先推，版本号之后再看」                 | tag/version 不一致会污染永久历史                |
-| 「本地 release:check 跑过，tag CI 可跳」     | tag CI 是发布前最后一道自动验证，必须等 success |
-| 「publish 失败就重跑 workflow/tag」          | 版本可能已发布，重跑会 403；先查 npm            |
-| 「token 写进 .npmrc 方便」                   | 仓库不保存 token；用本地 `npm login` + 2FA      |
+| 借口                                         | 事实                                                                |
+| -------------------------------------------- | ------------------------------------------------------------------- |
+| 「用户说发版 = 授权 push」                   | 发版 ≠ push；push 必须当次授权                                      |
+| 「push tag 只是打标签，不等于发布」          | release.yml 会 OIDC publish；授权前必须明确告知                     |
+| 「用户说发版 = 授权手动 npm publish」        | 首次发布 / 兜底 publish 不可逆；必须单独当次授权                    |
+| 「PR CI 绿了，可以自动合并」                 | 永不自动合并；等人工合并后告知                                      |
+| 「CHANGELOG 抄 commit message 更快」         | commit message 会漏/夸大；唯一依据是 diff                           |
+| 「Release notes 用 `--generate-notes` 省事」 | 它汇总 commit/PR，不是代码 diff；禁止                               |
+| 「tag 先推，版本号之后再看」                 | tag/version 不一致会污染永久历史                                    |
+| 「本地 release:check 跑过，tag CI 可跳」     | tag CI 是发布前最后一道自动验证，必须等 success                     |
+| 「publish 失败就重推同一个 tag」             | 先 `gh run rerun`；workflow 发现版本已存在会跳过 publish            |
+| 「token 写进 .npmrc 方便」                   | release.yml 用 OIDC；仓库不保存 token；本地首发用 `npm login` + 2FA |
 
 ## Quick Reference
 
-| 步骤           | 命令要点                                                                          | 授权                                      |
-| -------------- | --------------------------------------------------------------------------------- | ----------------------------------------- |
-| 前置检查       | `git status --short`、`npm view ... version`、`git describe --tags`、`npm whoami` | 无需                                      |
-| 版本建议       | `git diff BASE..HEAD`                                                             | 版本需用户确认                            |
-| diff→清单      | `docs/evidence/.../diff-inventory.md`（gitignored）                               | 无需                                      |
-| 版本同步       | 改 `package.json` + `CHANGELOG.md`；`git grep <旧版本>`                           | 无需                                      |
-| 发布验收       | `bun run release:check`                                                           | 无需                                      |
-| PR             | `chore(release): vX.Y.Z` → `gh pr create`                                         | push 分支需授权；合并人工                 |
-| tag            | `git tag -a vX.Y.Z` + `git show`                                                  | 无需（本地）                              |
-| push tag       | `git push origin vX.Y.Z`                                                          | **需当次授权**                            |
-| npm publish    | `npm publish --access public`                                                     | **需单独当次授权**                        |
-| 核验           | `npm view`、临时安装、`npm pack` 查产物                                           | 无需                                      |
-| GitHub Release | 复用清单写 notes → `gh release create --notes-file`                               | push 授权不自动覆盖；创建前给用户看 notes |
+| 步骤             | 命令要点                                                                          | 授权                                      |
+| ---------------- | --------------------------------------------------------------------------------- | ----------------------------------------- |
+| 前置检查         | `git status --short`、`npm view ... version`、`git describe --tags`、`npm whoami` | 无需                                      |
+| 版本建议         | `git diff BASE..HEAD`                                                             | 版本需用户确认                            |
+| diff→清单        | `docs/evidence/.../diff-inventory.md`（gitignored）                               | 无需                                      |
+| 版本同步         | 改 `package.json` + `CHANGELOG.md`；`git grep <旧版本>`                           | 无需                                      |
+| 发布验收         | `bun run release:check`                                                           | 无需                                      |
+| PR               | `chore(release): vX.Y.Z` → `gh pr create`                                         | push 分支需授权；合并人工                 |
+| tag              | `git tag -a vX.Y.Z` + `git show`                                                  | 无需（本地）                              |
+| push tag         | `git push origin vX.Y.Z` → 触发 release.yml OIDC publish                          | **需当次授权，并告知会自动发布 npm**      |
+| 手动 npm publish | 仅首次发布 / OIDC 兜底：`npm publish --access public`                             | **需单独当次授权**                        |
+| workflow 核验    | `gh run view <run-id> --log`、`npm view`、dist-tags                               | 无需                                      |
+| 本地核验         | `npm view`、临时安装、`npm pack` 查产物                                           | 无需                                      |
+| GitHub Release   | 复用清单写 notes → `gh release create --notes-file`                               | push 授权不自动覆盖；创建前给用户看 notes |
 
 ## 相关文件（真相来源）
 
 - `.github/workflows/ci.yml`：main / PR / tag `v*` 的测试定义；Bun 版本见 `.bun-version`
+- `.github/workflows/release.yml`：tag `v*` 触发 OIDC npm publish；版本已存在时跳过 publish
 - `package.json`：`version`、`files`、`main`、`types`、`miniprogram`、`prepublishOnly`
 - `scripts/ci/check-invariants.mjs`：仓库不变量（含版本 ↔ CHANGELOG、发布脚本、`.bun-version`）
 - `scripts/ci/smoke-dist.mjs`：构建产物冒烟

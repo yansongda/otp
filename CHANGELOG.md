@@ -13,6 +13,7 @@
 - `otpauth://` URI 解析与生成、`TOTP.fromURI` / `HOTP.fromURI`
 - 统一 `OtpError` 与 18 个冻结错误码
 - 纯 JS HMAC / SHA，零运行时依赖，TypeScript 类型声明
+- 新增 tag `v*` 触发的 OIDC 发布 workflow（`release.yml`）：tag/version 校验、`release:check`、已发布版本跳过、npm provenance
 - Bun 测试 242 项、不变量守卫、构建产物冒烟、GitHub Actions CI
 
 ### Compatibility

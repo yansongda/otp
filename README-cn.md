@@ -233,6 +233,8 @@ bun run release:check     # 发版前全量检查（含 npm pack --dry-run）
 
 Bun 版本固定于 `.bun-version`（当前 `1.4.4`）；CI 另有一个非阻塞的 latest Bun 兼容任务。`bun fmt` 可格式化 README/JSON，但 CI 的格式判定以 Biome 为准。
 
+发版：`.github/workflows/release.yml` 在 tag `v*` 上通过 GitHub OIDC Trusted Publishing 发布到 npm；首次发布手动完成，详见 `.agents/skills/release/SKILL.md`。
+
 ## 许可证
 
 MIT

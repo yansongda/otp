@@ -256,7 +256,7 @@ check(".bun-version 固定且 CI 使用版本文件", () => {
   return `Bun ${version} + latest compat`;
 });
 
-check("发布脚本与 release skill 存在", () => {
+check("发布脚本、release skill 与 release.yml 存在", () => {
   const pkg = JSON.parse(readText("package.json"));
   const scripts = pkg.scripts || {};
   for (const key of [
@@ -282,7 +282,28 @@ check("发布脚本与 release skill 存在", () => {
   if (!/docs\/evidence\//.test(readText(".gitignore"))) {
     throw new Error(".gitignore 未忽略 docs/evidence/");
   }
-  return "release:check + release skill + evidence ignore";
+  const release = readText(".github/workflows/release.yml");
+  if (!/tags:\s*\["v\*"\]/.test(release)) {
+    throw new Error("release.yml 必须由 tag v* 触发");
+  }
+  if (!/id-token:\s*write/.test(release)) {
+    throw new Error("release.yml 缺少 id-token: write（OIDC）");
+  }
+  if (!/npm publish[^\n]*--provenance/.test(release)) {
+    throw new Error("release.yml 缺少 npm publish --provenance");
+  }
+  if (!/npm publish[^\n]*--ignore-scripts/.test(release)) {
+    throw new Error(
+      "release.yml 的 npm publish 必须带 --ignore-scripts（避免重复 prepublishOnly）",
+    );
+  }
+  if (!/release:check/.test(release)) {
+    throw new Error("release.yml 必须在发布前运行 release:check");
+  }
+  if (/NPM_TOKEN|NODE_AUTH_TOKEN/.test(release)) {
+    throw new Error("release.yml 不得使用 NPM_TOKEN / NODE_AUTH_TOKEN");
+  }
+  return "release:check + release skill + release.yml OIDC + evidence ignore";
 });
 
 console.log(`\n仓库不变量检查：${toPosix(REPO_ROOT)}\n`);
