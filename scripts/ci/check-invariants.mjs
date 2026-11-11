@@ -241,6 +241,21 @@ check("禁止重新引入第三方 OTP / vendor 产物", () => {
   return "自研实现";
 });
 
+check(".bun-version 固定且 CI 使用版本文件", () => {
+  const version = readText(".bun-version").trim();
+  if (!/^\d+\.\d+\.\d+$/.test(version)) {
+    throw new Error(`.bun-version 格式非法：${JSON.stringify(version)}`);
+  }
+  const ci = readText(".github/workflows/ci.yml");
+  if (!/bun-version-file:\s*\.bun-version/.test(ci)) {
+    throw new Error("主 CI 未使用 bun-version-file: .bun-version");
+  }
+  if (!/bun-version:\s*latest/.test(ci)) {
+    throw new Error("缺少 Bun latest 兼容任务");
+  }
+  return `Bun ${version} + latest compat`;
+});
+
 console.log(`\n仓库不变量检查：${toPosix(REPO_ROOT)}\n`);
 let failed = 0;
 for (const c of checks) {

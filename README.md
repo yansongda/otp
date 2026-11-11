@@ -230,7 +230,7 @@ bun run check:invariants  # repository invariants
 bun run smoke:dist        # require dist and verify RFC vectors
 ```
 
-`bun fmt` can format README/JSON files, but the CI source of truth is Biome.
+The Bun version is pinned in `.bun-version` (currently `1.4.4`); CI also runs a non-blocking latest-Bun compatibility job. `bun fmt` can format README/JSON files, but the CI source of truth is Biome.
 
 ## License
 

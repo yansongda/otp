@@ -230,7 +230,7 @@ bun run check:invariants  # 仓库不变量
 bun run smoke:dist        # require dist 并验证 RFC 向量
 ```
 
-`bun fmt` 可格式化 README/JSON，但 CI 的格式判定以 Biome 为准。
+Bun 版本固定于 `.bun-version`（当前 `1.4.4`）；CI 另有一个非阻塞的 latest Bun 兼容任务。`bun fmt` 可格式化 README/JSON，但 CI 的格式判定以 Biome 为准。
 
 ## 许可证
 
