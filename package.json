@@ -1,0 +1,62 @@
+{
+  "name": "@yansongda/miniprogram-otp",
+  "version": "1.0.0",
+  "description": "RFC 4226/6238 HOTP and TOTP library for WeChat Mini Program (SHA1/SHA256/SHA512, OTPAuth URI, drift window)",
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "miniprogram": "dist",
+  "sideEffects": true,
+  "files": [
+    "dist",
+    "README.md",
+    "README-cn.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "lint": "biome check",
+    "lint:fix": "biome check --fix",
+    "lint:fix:unsafe": "biome check --fix --unsafe",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test tests",
+    "build": "tsc -p tsconfig.build.json",
+    "check:invariants": "node scripts/ci/check-invariants.mjs",
+    "smoke:dist": "node scripts/ci/smoke-dist.mjs",
+    "prepublishOnly": "bun run check:invariants && bun run lint && bun run typecheck && bun test && bun run build && node scripts/ci/smoke-dist.mjs"
+  },
+  "keywords": [
+    "otp",
+    "totp",
+    "hotp",
+    "2fa",
+    "mfa",
+    "authenticator",
+    "rfc6238",
+    "rfc4226",
+    "wechat",
+    "miniprogram"
+  ],
+  "author": {
+    "name": "yansongda",
+    "url": "https://yansongda.cn"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yansongda/miniprogram-otp.git"
+  },
+  "homepage": "https://github.com/yansongda/miniprogram-otp",
+  "bugs": {
+    "url": "https://github.com/yansongda/miniprogram-otp/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@biomejs/biome": "^2.6.6",
+    "@types/bun": "^1.4.4",
+    "typescript": "^7.0.2"
+  }
+}
