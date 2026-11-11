@@ -45,10 +45,12 @@ bun run lint              # biome check（格式 + lint + import 组织）
 bun run lint:fix          # biome check --fix
 bun run typecheck         # tsc --noEmit
 bun test                  # 全部 Bun 测试（tests/）
+bun run test:coverage     # Bun 覆盖率
 bun run build             # tsc -> dist（CJS + d.ts）
 bun run check:invariants  # 仓库不变量守卫（零依赖 node 脚本）
 bun run smoke:dist        # require dist 并验证 RFC 向量
-npm pack --dry-run        # 发布内容预检
+bun run release:check     # 发版前全量检查（含 npm pack --dry-run）
+npm pack --dry-run        # 仅检查发布内容
 ```
 
 > Bun 1.4.4 尚未提供内置 linter；`bun lint` 当前等价于执行 package.json 的 `lint` 脚本（Biome）。`bun fmt` 是 Bun 内置格式化器，可用于 README/JSON，但 CI 的代码格式判定以 Biome 为准。
@@ -75,12 +77,21 @@ Bun 版本固定于 `.bun-version`（当前 `1.4.4`）。主 CI 通过 `bun-vers
 ## 6. 发布与仓库边界
 
 - **禁止自动 `git push` / `npm publish`**：均需人工明确授权后执行。
-- `prepublishOnly` 串联 guard / lint / typecheck / test / build / smoke；发布前必须通过。
+- `prepublishOnly` → `release:check`（guard / lint / typecheck / test / build / smoke / pack）；发布前必须通过。
 - 包名固定 `@yansongda/miniprogram-otp`；修改包名属于设计性变更，需确认。
 - 父仓库 `yansongda-application/wechat/miniprogram/totp` 不在本仓库编辑范围；迁移父仓库属于独立任务。
 - 与 `ohos-otp/library` 对齐时，以公开 API / 错误码 / 行为为准；实现细节允许按 TypeScript / 微信运行时调整。
 
-## 7. 已知边界
+## 7. 发版
+
+- 完整流程见 `.agents/skills/release/SKILL.md`。
+- 三道闸门：版本号用户确认；`npm publish` 单独授权；`git push` 当次授权。
+- 发版前统一跑 `bun run release:check`（invariants + lint + typecheck + test + build + dist smoke + pack dry-run）。
+- tag 必须是 annotated `vX.Y.Z`，且与 `package.json` 的 `version` 逐字符一致。
+- 当前没有 `release.yml`，npm 发布由人工在本地执行；未来接入 OIDC 需另开任务。
+- `docs/evidence/` 已被 gitignore，用于放 diff 清单与 release notes 草稿。
+
+## 8. 已知边界
 
 - counter ≤ `2^53-1`。
 - `otpauth://` 遵循 Google Authenticator 事实标准。

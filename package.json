@@ -20,10 +20,13 @@
     "lint:fix:unsafe": "biome check --fix --unsafe",
     "typecheck": "tsc --noEmit",
     "test": "bun test tests",
+    "test:coverage": "bun test --coverage",
     "build": "tsc -p tsconfig.build.json",
     "check:invariants": "node scripts/ci/check-invariants.mjs",
     "smoke:dist": "node scripts/ci/smoke-dist.mjs",
-    "prepublishOnly": "bun run check:invariants && bun run lint && bun run typecheck && bun test && bun run build && node scripts/ci/smoke-dist.mjs"
+    "pack": "npm pack --dry-run",
+    "release:check": "bun run check:invariants && bun run lint && bun run typecheck && bun test && bun run build && bun run smoke:dist && npm pack --dry-run",
+    "prepublishOnly": "bun run release:check"
   },
   "keywords": [
     "otp",

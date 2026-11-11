@@ -228,6 +228,7 @@ bun test                  # Bun tests
 bun run build             # tsc -> dist (CommonJS + d.ts)
 bun run check:invariants  # repository invariants
 bun run smoke:dist        # require dist and verify RFC vectors
+bun run release:check     # full pre-release gate (includes npm pack --dry-run)
 ```
 
 The Bun version is pinned in `.bun-version` (currently `1.4.4`); CI also runs a non-blocking latest-Bun compatibility job. `bun fmt` can format README/JSON files, but the CI source of truth is Biome.

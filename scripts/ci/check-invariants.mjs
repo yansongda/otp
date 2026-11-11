@@ -256,6 +256,35 @@ check(".bun-version 固定且 CI 使用版本文件", () => {
   return `Bun ${version} + latest compat`;
 });
 
+check("发布脚本与 release skill 存在", () => {
+  const pkg = JSON.parse(readText("package.json"));
+  const scripts = pkg.scripts || {};
+  for (const key of [
+    "release:check",
+    "prepublishOnly",
+    "pack",
+    "test:coverage",
+  ]) {
+    if (typeof scripts[key] !== "string" || scripts[key].length === 0) {
+      throw new Error(`package.json 缺少 scripts.${key}`);
+    }
+  }
+  if (!scripts.prepublishOnly.includes("release:check")) {
+    throw new Error("prepublishOnly 必须调用 release:check");
+  }
+  const skill = readText(".agents/skills/release/SKILL.md");
+  if (!/^name:\s*release\s*$/m.test(skill)) {
+    throw new Error("release skill 缺少 name: release");
+  }
+  if (!/^description:/m.test(skill)) {
+    throw new Error("release skill 缺少 description");
+  }
+  if (!/docs\/evidence\//.test(readText(".gitignore"))) {
+    throw new Error(".gitignore 未忽略 docs/evidence/");
+  }
+  return "release:check + release skill + evidence ignore";
+});
+
 console.log(`\n仓库不变量检查：${toPosix(REPO_ROOT)}\n`);
 let failed = 0;
 for (const c of checks) {
