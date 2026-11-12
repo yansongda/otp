@@ -1,0 +1,87 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # 主 CI：固定 Bun 版本，保证 lockfile / 测试 / 构建产物可复现。
+  test-and-build:
+    name: lint + test + build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Repository invariants
+        run: bun run check:invariants
+
+      - name: Lint + format check
+        run: bun run lint
+
+      - name: Type check
+        run: bun run typecheck
+
+      - name: Unit tests
+        run: bun test
+
+      - name: Build
+        run: bun run build
+
+      - name: Dist smoke test
+        run: bun run smoke:dist
+
+      - name: Package contents
+        run: npm pack --dry-run
+
+  # 兼容性探针：跟随 Bun latest，提前暴露新版本导致的 lockfile / test / build 变化。
+  # 非阻塞：失败只提示，不阻止合并；确认稳定后再升级 .bun-version。
+  compat-latest:
+    name: Bun latest compatibility (non-blocking)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Bun latest
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Repository invariants
+        run: bun run check:invariants
+
+      - name: Unit tests
+        run: bun test
+
+      - name: Build
+        run: bun run build
+
+      - name: Dist smoke test
+        run: bun run smoke:dist

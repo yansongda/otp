@@ -1,0 +1,119 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+
+      - name: Setup Node.js for npm registry
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+
+      - name: Verify toolchain
+        run: |
+          set -euo pipefail
+          node --version
+          npm --version
+          node -e '
+          const version = process.argv[1].split(".").map(Number);
+          if (version[0] < 11 || (version[0] === 11 && version[1] < 5)) {
+            console.error("npm >= 11.5.1 is required for trusted publishing");
+            process.exit(1);
+          }
+          ' "$(npm --version)"
+
+      - name: Verify tag and select dist-tag
+        id: meta
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p 'require("./package.json").version')"
+          TAG="$GITHUB_REF_NAME"
+          test "$TAG" = "v$VERSION" || {
+            echo "::error::tag $TAG does not match package version v$VERSION"
+            exit 1
+          }
+          case "$VERSION" in
+            *-*) DIST_TAG=next ;;
+            *) DIST_TAG=latest ;;
+          esac
+          {
+            echo "version=$VERSION"
+            echo "tag=$TAG"
+            echo "dist_tag=$DIST_TAG"
+          } >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG version=$VERSION dist-tag=$DIST_TAG"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Release check
+        run: bun run release:check
+
+      - name: Check npm package state
+        id: state
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+          PKG="@yansongda/miniprogram-otp"
+          if ! npm view "$PKG" version >/dev/null 2>&1; then
+            echo "::error::$PKG does not exist on npm yet. Publish the first release locally and configure the npm Trusted Publisher before pushing the tag."
+            exit 1
+          fi
+          if npm view "$PKG@$VERSION" version >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Version $VERSION is already on npm; npm publish will be skipped."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish package
+        if: steps.state.outputs.exists != 'true'
+        env:
+          DIST_TAG: ${{ steps.meta.outputs.dist_tag }}
+        run: |
+          set -euo pipefail
+          # release:check already ran; skip prepublishOnly to avoid duplicate work.
+          # OIDC trusted publishing generates provenance automatically for public packages.
+          npm publish --ignore-scripts --provenance --access public --tag "$DIST_TAG"
+
+      - name: Verify published version
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+          DIST_TAG: ${{ steps.meta.outputs.dist_tag }}
+        run: |
+          set -euo pipefail
+          npm view "@yansongda/miniprogram-otp@$VERSION" version dist.tarball dist.integrity
+          npm view "@yansongda/miniprogram-otp" dist-tags --json
+          {
+            echo "### npm release"
+            echo
+            echo "- version: \`$VERSION\`"
+            echo "- dist-tag: \`$DIST_TAG\`"
+            echo "- run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          } >> "$GITHUB_STEP_SUMMARY"
