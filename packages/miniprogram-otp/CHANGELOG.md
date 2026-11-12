@@ -2,6 +2,15 @@
 
 本文件遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 规范，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.0.1] - 2026-11-12
+
+发布链路验证版：无代码变更，用于通过 OIDC Trusted Publishing 完成一次真实发布。
+
+### Engineering
+
+- 通过 `release-miniprogram.yml` 的 OIDC Trusted Publishing 完成首发后的首次自动化发布验证
+- 发布物内容与 1.0.0 一致
+
 ## [1.0.0] - 2026-11-12
 
 ### Added
