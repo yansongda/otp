@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.1.1 - 2026-11-12
+
+> 仅内部架构与包元数据变更，**无 API / 行为变化**；消费方无需改动任何代码。
+
+#### Changed
+
+- 实现层迁移到 monorepo 共享 core（`packages/core` 为唯一源码，经 `bun run sync:core` 生成为 `library/src/main/ets/core/**`）；`Secret` / `HOTP` / `TOTP` / `OTPAuthURI` 与 `internal/*` 收敛为薄壳
+- `OtpError` 改由 core 经错误工厂注入（`setErrorFactory` + `asOtpErrorCode`）：消费者仍收到同一个 `OtpError`，`code` 的 18 个枚举值与 `message`（固定为错误码字符串）逐字不变
+- `oh-package.json5` 的 `repository` / `homepage` 指向 monorepo `github.com/yansongda/otp`（此前指向独立仓 `github.com/yansongda/ohos-otp`）
+
+#### Compatibility
+
+- 无破坏性变更：公开符号、DTO 字段名与可选性、错误码集合（18 个）、全同步 API、零运行时依赖全部保持
+- 本地单测 266 条全绿；设备端 `ohosTest` 仍为 37/37
+
+---
+
 ## 1.1.0 - 2026-10-26
 
 > 新增**可选**严格 base32 解析（`{ strict: true }`）与错误码 `INVALID_BASE32_PADDING`；不传 `options` 时行为与 v1.0.x 逐字一致，单参调用无需改动。
