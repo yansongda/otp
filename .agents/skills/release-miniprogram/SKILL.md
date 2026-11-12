@@ -300,7 +300,7 @@ git describe --tags --abbrev=0   # 应为 $TAG
 
 ### Step 8：push tag（获授权后，自动触发 npm publish）
 
-**push tag 会触发 `.github/workflows/release-miniprogram.yml` 并发布 npm。** 因此 push tag 的授权必须明确告知用户这一点；用户当次说「push / 推送 / 执行」后，才执行：
+> ⚠️ **版本发布不可撤回**：push tag 即触发 `.github/workflows/release-miniprogram.yml` 真实 `npm publish`；授权前必须明确告知用户这一点，并逐项确认（版本号、产物、`release:check` 结果）。用户当次说「push / 推送 / 执行」后，才执行：
 
 ```bash
 git push origin main          # 仅当 main 有本地未推提交；PR 流程通常已同步
@@ -325,14 +325,16 @@ release-miniprogram.yml 行为：
 
 失败时：先看 `gh run view <run-id> --log-failed`；修复后优先 `gh run rerun <run-id>`（版本已存在时 workflow 会跳过 publish，不会 403）。若必须改 tag，删除远端 tag（需授权）后从 Step 4 重走。
 
-### Step 9：查看 release workflow 核验结果
+### Step 9：查看 release workflow 结果
 
 ```bash
 gh run view <run-id> --json status,conclusion,jobs
 gh run view <run-id> --log
 ```
 
-成功标准：`Publish to npm` 任务 success；`Verify published version` 步骤 output 中 `npm view` 能返回版本、tarball、integrity，dist-tags 指向预期 tag。
+成功标准：`Publish to npm` 任务 success（`Publish package` 步骤 executed 或 skipped）。
+workflow **不在内部做 `npm view` 断言**：npm publish 成功后 registry 传播需要数十秒到几分钟，
+立即查询必然 404（v1.0.1 首发就因此误报失败，rerun 才变绿）。发布物核验统一放到 Step 10（本地执行）。
 
 ### Step 10：发布后核验（必做）
 

@@ -105,18 +105,21 @@ jobs:
           # OIDC trusted publishing generates provenance automatically for public packages.
           npm publish --ignore-scripts --provenance --access public --tag "$DIST_TAG"
 
-      - name: Verify published version
+      - name: Write release summary
+        if: always()
         env:
           VERSION: ${{ steps.meta.outputs.version }}
           DIST_TAG: ${{ steps.meta.outputs.dist_tag }}
+          EXISTS: ${{ steps.state.outputs.exists }}
         run: |
           set -euo pipefail
-          npm view "@yansongda/miniprogram-otp@$VERSION" version dist.tarball dist.integrity
-          npm view "@yansongda/miniprogram-otp" dist-tags --json
           {
             echo "### npm release"
             echo
             echo "- version: \`$VERSION\`"
             echo "- dist-tag: \`$DIST_TAG\`"
+            echo "- publish: $([ \"$EXISTS\" = \"true\" ] && echo 'skipped (version already on npm)' || echo 'executed')"
             echo "- run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            echo
+            echo "npm registry 传播需要数十秒到几分钟；发布后核验请在本地按 release skill Step 10 执行（不要在 publish 后立即 npm view）。"
           } >> "$GITHUB_STEP_SUMMARY"
