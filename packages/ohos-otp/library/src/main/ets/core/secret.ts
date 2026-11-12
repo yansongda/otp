@@ -5,9 +5,10 @@
  * 刻意不实现 toString()：避免 String() / 模板字符串把密钥明文带入日志或 UI；
  * 脱敏由 toJSON() 承担 —— JSON.stringify 会调用它，而 private 只是编译期约束。
  */
+
+import { requireRandom } from "./crypto";
 import { otpFail } from "./errors";
 import { decode, decodeStrict, encode } from "./internal/base32";
-import { requireRandom } from "./crypto";
 import type { ParseOptions } from "./options";
 
 export class Secret {

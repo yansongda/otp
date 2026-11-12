@@ -24,7 +24,7 @@ const HEADER =
 const checkOnly = process.argv.includes("--check");
 
 function isExcluded(rel) {
-  return EXCLUDED.some((dir) => rel === dir || rel.startsWith(dir + "/"));
+  return EXCLUDED.some((dir) => rel === dir || rel.startsWith(`${dir}/`));
 }
 
 async function listTsFiles(dir) {

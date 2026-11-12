@@ -4,8 +4,8 @@
  */
 import { describe, expect, it } from "bun:test";
 import { OtpError } from "../../src/errors";
-import { PureJsHmac } from "../../src/pure-js/pure-js-hmac";
 import { hmac } from "../../src/pure-js/hmac";
+import { PureJsHmac } from "../../src/pure-js/pure-js-hmac";
 import { sha1 } from "../../src/pure-js/sha1";
 import { sha256 } from "../../src/pure-js/sha256";
 import { sha512 } from "../../src/pure-js/sha512";

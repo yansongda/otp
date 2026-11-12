@@ -2,12 +2,10 @@
  * TOTP（RFC 6238）公开类。默认 provider 经 requireHmac() 取用。
  * 所有时间入口（含显式传入 timestamp）统一叠加 clockOffsetMs。
  */
-import { otpFail } from "./errors";
+
 import { type HmacProvider, requireHmac } from "./crypto";
-import {
-  isValidAlgorithm,
-  isValidDigits,
-} from "./internal/digits";
+import { otpFail } from "./errors";
+import { isValidAlgorithm, isValidDigits } from "./internal/digits";
 import {
   type EngineParams,
   generate as engineGenerate,
@@ -38,7 +36,8 @@ export class TOTP {
    */
   constructor(options: TotpOptions, provider?: HmacProvider) {
     const secret = Secret.fromBase32(options.secret);
-    const algorithm = options.algorithm === undefined ? "SHA1" : options.algorithm;
+    const algorithm =
+      options.algorithm === undefined ? "SHA1" : options.algorithm;
     const digits = options.digits === undefined ? 6 : options.digits;
     const period = options.period === undefined ? 30 : options.period;
     const t0 = options.t0 === undefined ? 0 : options.t0;

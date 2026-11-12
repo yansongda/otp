@@ -2,8 +2,8 @@
  * Secret：规范化 / 字节视图 / 随机生成（注册表）/ toJSON 脱敏。
  */
 import { afterEach, describe, expect, it } from "bun:test";
-import { decode } from "../../src/internal/base32";
 import { registerRandom, reset } from "../../src/crypto";
+import { decode } from "../../src/internal/base32";
 import { installPureJsHmac } from "../../src/pure-js/pure-js-hmac";
 import { Secret } from "../../src/secret";
 import { expectCode } from "./helpers";

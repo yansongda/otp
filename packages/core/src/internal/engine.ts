@@ -2,8 +2,9 @@
  * 编排层：counter → code 全链路（纯函数，接收注入 provider，零平台依赖）。
  * 取模只在 digits.format 做一次；verify 扫完全部候选后才返回首个命中 delta（恒定时间）。
  */
-import { otpFail } from "../errors";
+
 import type { HmacProvider } from "../crypto";
+import { otpFail } from "../errors";
 import { isSafeCounter, toBytes } from "./counter";
 import { format as formatDigits } from "./digits";
 import { constantTimeEquals } from "./time-step";
@@ -20,11 +21,7 @@ export function generate(
   params: EngineParams,
   counter: number,
 ): string {
-  const digest = provider.sign(
-    params.algorithm,
-    params.key,
-    toBytes(counter),
-  );
+  const digest = provider.sign(params.algorithm, params.key, toBytes(counter));
   return formatDigits(truncateApply(digest), params.digits);
 }
 

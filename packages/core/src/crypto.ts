@@ -8,17 +8,11 @@
 import { otpFail } from "./errors";
 
 /** 单参哈希函数（消息 → 摘要）。 */
-export interface HashFunction {
-  (message: Uint8Array): Uint8Array;
-}
+export type HashFunction = (message: Uint8Array) => Uint8Array;
 
 /** HMAC 抽象接口（algorithm 为字符串，ArkTS 可直接实现）。 */
 export interface HmacProvider {
-  sign(
-    algorithm: string,
-    key: Uint8Array,
-    message: Uint8Array,
-  ): Uint8Array;
+  sign(algorithm: string, key: Uint8Array, message: Uint8Array): Uint8Array;
 }
 
 /** 随机数抽象接口。 */

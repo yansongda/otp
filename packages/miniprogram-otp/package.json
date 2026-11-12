@@ -15,9 +15,9 @@
     "LICENSE"
   ],
   "scripts": {
-    "lint": "biome check",
-    "lint:fix": "biome check --fix",
-    "lint:fix:unsafe": "biome check --fix --unsafe",
+    "lint": "biome check src tests scripts",
+    "lint:fix": "biome check --fix src tests scripts",
+    "lint:fix:unsafe": "biome check --fix --unsafe src tests scripts",
     "typecheck": "tsc --noEmit",
     "test": "bun test tests",
     "test:coverage": "bun test --coverage",

@@ -9,13 +9,13 @@
 
 ## 2. 分层与不变量
 
-| 层 | 位置 | 约束 |
-|---|---|---|
-| 共享实现 | `packages/core/src/**` | 现代 TS；**跨边界公开签名只用基础类型**（ArkTS 不支持字面量类型/as const） |
-| 纯 JS 兜底 crypto | `packages/core/src/pure-js/**` | 仅 miniprogram 引用；ohos 不得 import |
-| 平台类型层 | `packages/miniprogram-otp/src/{types,errors}.ts`、`packages/ohos-otp/library/src/main/ets/{OtpOptions,OtpError}.ets` | 各自最强类型：TS 字面量联合 / ArkTS enum |
-| 平台 crypto | `packages/miniprogram-otp/src/index.ts`（注册 pure-js）、`packages/ohos-otp/library/src/main/ets/internal/CryptoSource.ets` | ohos 唯一 `@kit` 导入点 |
-| 生成副本 | `packages/ohos-otp/library/src/main/ets/core/**` | **禁止手改**；由 `bun run sync:core` 生成 |
+| 层                | 位置                                                                                                                        | 约束                                                                       |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| 共享实现          | `packages/core/src/**`                                                                                                      | 现代 TS；**跨边界公开签名只用基础类型**（ArkTS 不支持字面量类型/as const） |
+| 纯 JS 兜底 crypto | `packages/core/src/pure-js/**`                                                                                              | 仅 miniprogram 引用；ohos 不得 import                                      |
+| 平台类型层        | `packages/miniprogram-otp/src/{types,errors}.ts`、`packages/ohos-otp/library/src/main/ets/{OtpOptions,OtpError}.ets`        | 各自最强类型：TS 字面量联合 / ArkTS enum                                   |
+| 平台 crypto       | `packages/miniprogram-otp/src/index.ts`（注册 pure-js）、`packages/ohos-otp/library/src/main/ets/internal/CryptoSource.ets` | ohos 唯一 `@kit` 导入点                                                    |
+| 生成副本          | `packages/ohos-otp/library/src/main/ets/core/**`                                                                            | **禁止手改**；由 `bun run sync:core` 生成                                  |
 
 1. **core 是唯一实现**：算法/门面/URI/错误码只改 core，禁止在平台包内复制实现。
 2. **错误跨层靠工厂**：core 只 `otpFail(code)`；平台 barrel 注册 `setErrorFactory`，公开 `OtpError` 由平台拥有。

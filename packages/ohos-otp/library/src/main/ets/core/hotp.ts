@@ -2,13 +2,11 @@
 /**
  * HOTP（RFC 4226）公开类。默认 provider 经 requireHmac() 取用。
  */
+
+import { type HmacProvider, requireHmac } from "./crypto";
 import { otpFail } from "./errors";
 import { isSafeCounter } from "./internal/counter";
-import { type HmacProvider, requireHmac } from "./crypto";
-import {
-  isValidAlgorithm,
-  isValidDigits,
-} from "./internal/digits";
+import { isValidAlgorithm, isValidDigits } from "./internal/digits";
 import {
   type EngineParams,
   generate as engineGenerate,
@@ -32,7 +30,8 @@ export class HOTP {
    */
   constructor(options: HotpOptions, provider?: HmacProvider) {
     const secret = Secret.fromBase32(options.secret);
-    const algorithm = options.algorithm === undefined ? "SHA1" : options.algorithm;
+    const algorithm =
+      options.algorithm === undefined ? "SHA1" : options.algorithm;
     const digits = options.digits === undefined ? 6 : options.digits;
     const counter = options.counter === undefined ? 0 : options.counter;
     const minSecretBits =

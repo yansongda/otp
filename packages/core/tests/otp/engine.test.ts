@@ -4,8 +4,8 @@
  */
 import { describe, expect, it } from "bun:test";
 import { decode } from "../../src/internal/base32";
-import { PureJsHmac } from "../../src/pure-js/pure-js-hmac";
 import { generate, verify } from "../../src/internal/engine";
+import { PureJsHmac } from "../../src/pure-js/pure-js-hmac";
 import { expectCode } from "./helpers";
 import { DIGITS7_SHA1, RFC4226_SHA1_6DIGIT, SEEDS } from "./vectors";
 

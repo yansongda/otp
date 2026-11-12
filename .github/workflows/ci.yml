@@ -1,0 +1,86 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bun:
+    name: core + miniprogram (lint/typecheck/test/build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # core -> ohos library 的生成副本必须与唯一源码一致
+      - name: Sync core check
+        run: bun run sync:core:check
+
+      - name: Lint core + scripts
+        run: bun run lint
+
+      - name: Lint miniprogram
+        run: bun run --filter '@yansongda/miniprogram-otp' lint
+
+      - name: Type check
+        run: bun run typecheck
+
+      - name: Tests (core + miniprogram)
+        run: bun run test
+
+      - name: Repository invariants (miniprogram)
+        run: bun run --filter '@yansongda/miniprogram-otp' check:invariants
+
+      - name: Build miniprogram (tsdown bundle)
+        run: bun run --filter '@yansongda/miniprogram-otp' build
+
+      - name: Dist smoke test
+        run: bun run --filter '@yansongda/miniprogram-otp' smoke:dist
+
+      - name: Package contents
+        working-directory: packages/miniprogram-otp
+        run: npm pack --dry-run
+
+  compat-latest:
+    name: Bun latest compatibility (non-blocking)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Bun latest
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Sync core check
+        run: bun run sync:core:check
+
+      - name: Tests
+        run: bun run test
+
+      - name: Build miniprogram
+        run: bun run --filter '@yansongda/miniprogram-otp' build
