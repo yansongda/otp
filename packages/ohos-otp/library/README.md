@@ -1,0 +1,203 @@
+# @yansongda/otp
+
+RFC 4226 (HOTP) and RFC 6238 (TOTP) one-time password library for ArkTS (HarmonyOS).
+
+> **Compatibility**: Requires `compatibleSdkVersion >= 6.0.0(20)`.
+
+## Features
+
+- RFC 4226 HOTP and RFC 6238 TOTP
+- SHA1 / SHA256 / SHA512 (`OtpAlgorithm`, RFC 6238 §1.2)
+- 6 / 7 / 8 digit codes (RFC 4226 §5.3)
+- Drift-window verification (`VerifyOptions.window`) and clock-offset calibration (`syncClockOffset`)
+- `Secret` normalization, validation, random generation and `toJSON()` redaction
+- `otpauth://` URI parse and build (`OTPAuthURI`)
+- Unified error model: `OtpError` with `OtpErrorCode`
+- Synchronous API, zero runtime dependencies (system `@kit.CryptoArchitectureKit` only)
+
+## Install
+
+```bash
+ohpm install @yansongda/otp
+```
+
+## Quick start
+
+```ets
+import { TOTP, HOTP, Secret, OTPAuthURI, OtpError } from '@yansongda/otp';
+
+// ---- TOTP: SHA1 / 6 digits / 30s period by default ----
+const totp = new TOTP({ secret: 'JBSWY3DPEHPK3PXP' });
+
+const code: string = totp.generate();        // current 6-digit code
+const remaining: number = totp.remaining();  // seconds until the window expires (1..30)
+const progress: number = totp.progress();    // window progress (0..1)
+
+// Verify with a drift window of 1 step; returns the drift delta, or null when no window matches
+const delta: number | null = totp.verify(code, { window: 1 });
+if (delta !== null) {
+  totp.syncClockOffset(delta);               // align the local clock with the token source (RFC 6238 §6)
+}
+
+// Serialize to / restore from an otpauth:// URI
+const uri: string = totp.toURI();
+const restored: TOTP = TOTP.fromURI(uri);
+
+// ---- HOTP: counter-based (RFC 4226) ----
+const hotp = new HOTP({ secret: 'JBSWY3DPEHPK3PXP', counter: 0 });
+const hotpCode: string = hotp.generate();
+const hotpDelta: number | null = hotp.verify(hotpCode, { window: 5 });
+// On a hit, persist the next counter (RFC 4226 §7.4 anti-replay): counter = base + delta + 1
+// (the library never advances the instance counter for you)
+
+// ---- Secret helpers ----
+const secret = Secret.fromBase32('JBSWY3DPEHPK3PXP');
+// opt-in strict parsing: reject non-canonical base32 tails (throws INVALID_BASE32_PADDING)
+const strictSecret = Secret.fromBase32('JBSWY3DPEHPK3PXP', { strict: true });
+const randomSecret = Secret.generate();      // 20 bytes = 160 bits (RFC 4226 §4 R6 recommendation)
+const b32: string = secret.toBase32();       // normalized uppercase, no padding
+const bits: number = secret.bitLength;       // 80 for this 10-byte key
+
+// ---- Error handling: all failures throw OtpError ----
+try {
+  new TOTP({ secret: 'JBSWY3DPEHPK3PXP', digits: 5 }); // invalid digits
+} catch (e) {
+  if (e instanceof OtpError) {
+    const code = e.code;                     // e.g. 'INVALID_DIGITS' (one of OtpErrorCode)
+  }
+}
+```
+
+## API
+
+### Options
+
+| Type | Field | Default |
+|---|---|---|
+| `HmacOptions` | `secret: string` (required, base32, lenient parse) | — |
+| | `algorithm?: OtpAlgorithm` | `SHA1` |
+| | `digits?: number` (6 / 7 / 8 only) | `6` |
+| | `minSecretBits?: number` | `0` (not enforced) |
+| `TotpOptions` | `period?: number` (seconds) | `30` |
+| | `t0?: number` (seconds) | `0` |
+| | `clockOffsetMs?: number` | `0` |
+| | `issuer?` / `account?: string` (used by `toURI()`) | empty |
+| `HotpOptions` | `counter?: number` | `0` |
+| | `issuer?` / `account?: string` (used by `toURI()`) | empty |
+| `VerifyOptions` | `timestamp?: number` (epoch ms, TOTP only) | `Date.now()` |
+| | `counter?: number` (HOTP only) | constructor counter |
+| | `window?: number` (steps) | `0` (strict) |
+
+### Classes and methods
+
+| API | Description |
+|---|---|
+| `new TOTP(options: TotpOptions)` | Construct a TOTP; options are validated synchronously, invalid input throws `OtpError` |
+| `totp.generate(timestampMs?: number): string` | Generate the code for now (or the given time); zero-padded `digits` characters |
+| `totp.verify(token: string, options?: VerifyOptions): number \| null` | Constant-time comparison; returns the drift delta (`0` = current step, `-1` = previous step) or `null` |
+| `totp.remaining(timestampMs?: number): number` | Whole seconds left in the current window, `[1, period]` |
+| `totp.progress(timestampMs?: number): number` | Progress of the current window, `[0, 1)` |
+| `totp.syncClockOffset(delta: number): void` | Calibrate the clock toward the token source: `clockOffsetMs += delta * period * 1000` (delta = token counter − local counter) |
+| `totp.clockOffsetMs: number` | Current clock offset in milliseconds |
+| `totp.toURI(): string` / `TOTP.fromURI(uri: string): TOTP` | Serialize to / restore from an `otpauth://totp/...` URI |
+| `new HOTP(options: HotpOptions)` | Construct a HOTP |
+| `hotp.generate(counter?: number): string` | Generate the code (default: constructor counter) |
+| `hotp.verify(token: string, options?: VerifyOptions): number \| null` | Constant-time comparison; returns the counter offset or `null` |
+| `hotp.toURI(): string` / `HOTP.fromURI(uri: string): HOTP` | Serialize to / restore from an `otpauth://hotp/...` URI |
+| `Secret.fromBase32(s: string, options?: ParseOptions): Secret` | Build from a base32 string (default lenient: case / whitespace / padding; `{ strict: true }` also requires a canonical tail) |
+| `Secret.fromBytes(bytes: Uint8Array): Secret` | Build from raw bytes (copied) |
+| `Secret.generate(bytes: number = 20): Secret` | Generate a random secret via the registered random source |
+| `secret.toBase32(): string` | Normalized uppercase base32 without padding |
+| `secret.bytes` / `secret.byteLength` / `secret.bitLength` | Strength introspection (bytes are a copy) |
+| `secret.toJSON(): string` | Redaction hook — returns `'[REDACTED]'` under `JSON.stringify` |
+| `OTPAuthURI.parse(uri: string, options?: ParseOptions): OtpAuthParams` | Parse an `otpauth://` URI (unknown query params are ignored; `{ strict: true }` validates the secret tail) |
+| `OTPAuthURI.build(params: OtpAuthParams): string` | Build a canonical `otpauth://` URI |
+| `interface ParseOptions { strict?: boolean }` | Shared parsing options for `Secret.fromBase32` / `OTPAuthURI.parse`; defaults to lenient |
+| `enum OtpAlgorithm { SHA1, SHA256, SHA512 }` | Algorithm enum (string values) |
+| `enum OtpType { TOTP = 'totp', HOTP = 'hotp' }` | URI type enum (string values) |
+| `class OtpError extends Error { readonly code: OtpErrorCode }` | Unified error model; branch on `code` |
+
+### Strict base32 parsing
+
+`{ strict: true }` (shared by `Secret.fromBase32` and `OTPAuthURI.parse`) rejects only text that canonical base32 cannot produce. It is evaluated **after** the library's own normalization, so case, whitespace and trailing `=` are still tolerated:
+
+| Input (after normalization) | `len % 8` | Default | `{ strict: true }` |
+|---|---|---|---|
+| `JBSWY3DPEHPK3PXP` (16 chars) | 0 | OK | OK |
+| `MY` / `MZXQ` / `MZXW6` / `MZXW6YQ` (RFC 4648 §10) | 2/4/5/7 | OK | OK |
+| `MB` / `MZXR` / `MZXW7` / `MZXW6YT` (non-zero padding bits) | 2/4/5/7 | silently re-encoded (`MA` …) | `INVALID_BASE32_PADDING` |
+| `A` / `AAA` / `MZXW6Y` (impossible tail length) | 1/3/6 | `SECRET_TOO_SHORT` / OK / OK | `INVALID_BASE32_PADDING` |
+| `AB1` (illegal character) | 3 | `INVALID_BASE32_CHAR` | `INVALID_BASE32_CHAR` (checked first) |
+
+Use it at provisioning boundaries to reject truncated or hand-edited secrets instead of silently canonicalizing them. The judgment is equivalent to `encode(decode(normalized)) === normalized` (decode zero-fills missing bits).
+
+## RFC compliance
+
+- **RFC 4226 §4 R6 — secret length**: RFC recommends at least 128 bits (160 bits preferred). This library enforces nothing by default (`minSecretBits` defaults to `0`) because many existing backend keys are only 80 bits (10 bytes). Set `minSecretBits: 128` explicitly to enforce the recommendation. The `Secret.bitLength` getter lets you introspect strength.
+- **RFC 4226 §5.3 — 6 / 7 / 8 digits**: `digits` accepts only 6, 7 or 8; anything else throws `INVALID_DIGITS`.
+- **RFC 6238 §4.2 — T beyond 32 bits**: the time-step counter is computed with safe integer arithmetic (up to 2^53-1); the official RFC 6238 vectors up to `T = 20000000000` are covered by the test suite.
+- **RFC 6238 §5.2 — 30s step and network latency**: the default period is 30 seconds. RFC 6238 §5.2 expects at most one time step of network latency — `verify` defaults to `window: 0` (strict, secure by default); pass `window: 1` to reproduce a server-side acceptance window.
+- **RFC 6238 §6 — resynchronization**: `verify` returns the drift delta and `syncClockOffset(delta)` applies it (`+=`), so the validating side tracks the token source's clock drift, per RFC 6238 §6 "adjusted with the recorded drift".
+- **RFC 6238 §1.2 — algorithms**: SHA1 is the interoperability default that every implementation must support; SHA256/SHA512 are optional. This library supports all three.
+- **RFC 4226 §7.3 — throttling**: throttling (failed-attempt back-off / lockout) is the responsibility of the validating server and is **not provided** by this library.
+
+## Error handling and troubleshooting
+
+All failures throw `OtpError` with a fixed `code` (string). Messages never contain the secret, token or key material. The table below covers all 18 codes of `OtpErrorCode` (exported via the barrel). `NOT_IMPLEMENTED` is a reserved internal placeholder with no throw site in the library — normal usage never encounters it.
+
+| `OtpErrorCode` | Symptom | Root cause | Action |
+|---|---|---|---|
+| `EMPTY_SECRET` | Construction / URI parse throws, secret is empty | Missing or empty secret | Provide a non-empty base32 secret |
+| `INVALID_BASE32_CHAR` | Secret contains an illegal character | Character outside the base32 alphabet | Use only `A–Z` and `2–7` |
+| `SECRET_TOO_SHORT` | Secret decodes to less than 1 byte | Base32 string too short | Provide at least 8 characters (1 byte) |
+| `INVALID_BASE32_PADDING` | Only with `{ strict: true }`: the secret is not canonical base32 | Tail length ∉ `{0,2,4,5,7}`, or the last character's padding bits are non-zero | Re-encode with `secret.toBase32()`; or drop `strict` to keep the legacy lenient behavior |
+| `SECRET_TOO_WEAK` | `minSecretBits` check fails | `secret.bitLength < minSecretBits` | Use a stronger key or lower `minSecretBits` |
+| `INVALID_ALGORITHM` | Algorithm is not accepted | Not SHA1 / SHA256 / SHA512 | Use one of the three supported algorithms |
+| `INVALID_DIGITS` | Digits is not accepted | Not 6 / 7 / 8 | Use 6, 7 or 8 |
+| `INVALID_PERIOD` | Period is not accepted | Not a positive integer | Use a positive integer number of seconds |
+| `INVALID_T0` | `t0` is not accepted | Not a non-negative integer | Use a non-negative integer (seconds) |
+| `INVALID_COUNTER` | Counter is not accepted | Not a non-negative integer, or exceeds 2^53-1 | Use a valid counter within `[0, 2^53-1]` |
+| `INVALID_TIMESTAMP` | Timestamp is not accepted | Not a positive finite number (or `clockOffsetMs` not finite) | Use a valid epoch-millisecond timestamp |
+| `INVALID_WINDOW` | Window / delta is not accepted | Not a non-negative integer (`syncClockOffset` requires an integer) | Use a valid integer |
+| `INVALID_TOKEN` | Token format is invalid | Not all digits, or length ≠ `digits` | Validate user input before calling `verify` |
+| `CRYPTO_FAILED` | Crypto call fails at runtime | Platform `cryptoFramework` error | Check system capability, retry; the error message is fixed and never leaks key material |
+| `CRYPTO_NOT_INITIALIZED` | Crypto registry is not registered | You imported public classes via a deep path without injecting a provider, so the default registration never ran | Import through the package barrel (`@yansongda/otp`) so `installCryptoDefaults()` runs automatically |
+| `INVALID_OTPAUTH_URI` | URI prefix is invalid | Not starting with `otpauth://` (case-insensitive) | Provide a valid `otpauth://` URI |
+| `UNSUPPORTED_OTPAUTH_TYPE` | URI type is unsupported | Type is not `totp` / `hotp` | Use `totp` or `hotp` |
+| NOT_IMPLEMENTED | (never thrown) | Reserved internal placeholder | No action needed |
+
+## Testing status
+
+- **Local unit tests (Local Test) cover the kit-free pipeline**: Base32, counter/truncate/digits primitives, time-step math, the OTP engine, `Secret`, `OTPAuthURI` and the `HOTP`/`TOTP` public classes — all with injected test fixtures (a fake HMAC provider and a fake random source). The full RFC 4226 Appendix D (10 vectors) and RFC 6238 Appendix B (18 vectors) suites pass.
+- **Real-crypto path is covered on device (not on PC)**: HarmonyOS Local Test cannot execute the real system crypto — `@kit.CryptoArchitectureKit` imports fine but calls return empty data. That path (`CryptoFrameworkHmac` / `CryptoFrameworkRandom`) plus the **barrel registration chain** (`Index.ets` → `installCryptoDefaults()`) is therefore covered by the `ohosTest` device suite (`CryptoAdapter.test.ets`, 37 cases) and needs a device/emulator. **On a HarmonyOS emulator that suite runs all green: `Tests run: 37, Failure: 0, Error: 0, Pass: 37`** — 3 HMAC digests, the full RFC 4226 Appendix D / RFC 6238 Appendix B vector sets, and the default-provider path with no fixtures injected.
+- No coverage figures are claimed for paths not exercised by the local suite.
+
+## Known limitations
+
+- **Counter ≤ 2^53-1**: ArkTS `number` has a 53-bit exact-integer range. `2^53-1` steps × 30 s ≈ 8.5 × 10⁹ years, unreachable in practice, so no BigInt support is provided; counters beyond the limit throw `INVALID_COUNTER`.
+- **`otpauth://` is not an RFC**: it follows the Google Authenticator Key URI Format, an industry de-facto standard registered with IANA as Provisional #13829.
+- **Unknown query parameters are ignored** when parsing URIs (maximizes interoperability).
+- **Secret redaction is a safety net, not a license to log**: `Secret.toJSON()` returns `'[REDACTED]'` so `JSON.stringify` never leaks the key, but you must still never hand a secret to logs or analytics.
+- **Not provided**: Steam Guard, SHA224 / SHA384 / SM3, BigInt / full 64-bit counters, throttling (RFC 4226 §7.3, a server-side concern), QR rendering or scanning.
+- **Strict verification by default**: `verify` uses `window: 0`; a token from an adjacent step returns `null` unless you pass an explicit window.
+- **No window limit**: verify performs 2w+1 HMAC computations for window w (each re-creates SymKey/Mac); keep w small (typically ≤ 1-2). The library does not cap it.
+
+## Security notes
+
+- **No `@security/no-unsafe-mac` exemption is used.** This library deliberately uses HMAC — it is the algorithm mandated by RFC 6238 §1.2 for TOTP (and RFC 4226 for HOTP) — and no lint-supression comment is added to hide that usage.
+- Token comparison is constant-time (XOR accumulation, no early exit), and `verify` scans the whole window before returning.
+- Error messages are fixed strings; they never contain secrets, tokens or derived keys.
+
+## Pre-release checklist
+
+- [x] All four release files are non-empty: `oh-package.json5`, `README.md`, `CHANGELOG.md`, `LICENSE` — verified present inside the HAR package (`package/README.md`, `package/README-cn.md`, `package/CHANGELOG.md`, `package/LICENSE`)
+- [x] `README.md` contains the install command `ohpm install @yansongda/otp`
+- [x] `CHANGELOG.md` contains the current version number (kept in sync with `oh-package.json5`; neither README repeats the literal)
+- [x] `dependencies` is empty (`{}`) — zero runtime dependencies
+- [x] `ohpm prepublish <har>` passes locally (exit 0; note: it validates archive format and `oh-package.json5` metadata, not the four-file set)
+- [x] Local test coverage: 90.3% lines / 89.2% branches / 87.5% functions (report at `library/.test/default/outputs/test/reports/`); `internal/CryptoSource.ets` and `HmacProvider.ets` real-crypto paths are covered by the device-side `ohosTest` (not runnable on PC; device suite green 37/37)
+- [ ] Publish gate (manual, needs OHPM account + key): `ohpm publish <har>` — a published version cannot be overwritten or re-used, publish a new version instead
+
+## License
+
+MIT — see [LICENSE](LICENSE).
