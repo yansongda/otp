@@ -15,11 +15,17 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const CORE_SRC = join(ROOT, "packages/core/src");
+/** ohos 不需要纯 JS 兜底 crypto；且 hvigor 会编译模块内全部 .ts，必须排除以免进 HAR。 */
+const EXCLUDED = ["pure-js"];
 const TARGET = join(ROOT, "packages/ohos-otp/library/src/main/ets/core");
 const HEADER =
   "// AUTO-GENERATED from packages/core/src/{rel}. DO NOT EDIT. Run: bun run sync:core\n";
 
 const checkOnly = process.argv.includes("--check");
+
+function isExcluded(rel) {
+  return EXCLUDED.some((dir) => rel === dir || rel.startsWith(dir + "/"));
+}
 
 async function listTsFiles(dir) {
   const out = [];
@@ -29,7 +35,10 @@ async function listTsFiles(dir) {
     if (entry.isDirectory()) {
       out.push(...(await listTsFiles(full)));
     } else if (entry.isFile() && entry.name.endsWith(".ts")) {
-      out.push(full);
+      const rel = relative(CORE_SRC, full);
+      if (!isExcluded(rel)) {
+        out.push(full);
+      }
     }
   }
   return out;
