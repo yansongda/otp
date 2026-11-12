@@ -1,6 +1,6 @@
 {
   "name": "@yansongda/miniprogram-otp",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "RFC 4226/6238 HOTP and TOTP library for WeChat Mini Program (SHA1/SHA256/SHA512, OTPAuth URI, drift window)",
   "type": "commonjs",
   "main": "dist/index.js",
