@@ -4,25 +4,27 @@
 
 ## 1. 项目定位
 
-- `library/` = HAR 库 **`@yansongda/otp` v1.1.0**：RFC 4226 HOTP + RFC 6238 TOTP（SHA1/SHA256/SHA512，6/7/8 位，otpauth URI，漂移窗口，时钟偏移校准，可选严格 base32 解析）。零运行时依赖。
+- 本目录是 monorepo 的 `packages/ohos-otp`；`library/` = HAR 库 **`@yansongda/otp` v1.1.0**：RFC 4226 HOTP + RFC 6238 TOTP（SHA1/SHA256/SHA512，6/7/8 位，otpauth URI，漂移窗口，时钟偏移校准，可选严格 base32 解析）。零运行时依赖。
+- **实现全部来自 `packages/core`（唯一源码）**，经 `bun run sync:core` 生成为 `library/src/main/ets/core/**`；本包只保留薄壳、平台类型层与 crypto 实现。
 - `entry/` = 消费方 smoke demo（仅依赖 barrel，**不参与** HAR 打包）。
 - 兼容性：`compatibleSdkVersion 6.0.0(20)`（API 12–19 工程无法消费，README 已声明）。
 - 现状：本地单测 265 全绿 / 覆盖率 lines 90.65%；设备端 `ohosTest` 37/37；RFC 向量 10/10 + 18/18；`ohpm prepublish` 通过。已发布至 OHPM（当前版本以 `library/oh-package.json5` 为准）。
 
 ## 2. 分层与不变量（**改动必须遵守**）
 
-| 层 | 文件 | 允许依赖 |
+| 层 | 位置 | 约束 |
 |---|---|---|
-| 纯算法核心 | `internal/{Base32,Counter,Truncate,Digits,TimeStep,OtpEngine}.ets` | `OtpError`、`OtpOptions`、`HmacProvider`（仅类型） |
-| 解析/规范化 | `OTPAuthURI.ets`、`Secret.ets` | 纯核心 + `OtpError` + `HmacProvider`（RandomSource 接口） |
-| kit-free 解耦层 | `internal/HmacProvider.ets` | 仅 `OtpError`/`OtpOptions` |
-| kit-only 实现层 | `internal/CryptoSource.ets` | `@kit.CryptoArchitectureKit` + kit-free 层 |
-| 公开封装 | `HOTP.ets`、`TOTP.ets` | 以上，**不得引用 kit-only 层** |
-| 出口 | `Index.ets` | 公开符号 + `CryptoSource`（仅注册用） |
+| 共享实现 | `library/src/main/ets/core/**`（**sync-core 生成，禁止手改**） | 现代 TS；跨边界签名只用基础类型 |
+| 薄壳 | `{HOTP,TOTP,Secret,OTPAuthURI}.ets`、`internal/{Base32,Counter,Digits,TimeStep,Truncate,OtpEngine,HmacProvider}.ets` | 只做 re-export；OTPAuthURI 额外做一次类型投影 |
+| 平台类型层 | `OtpOptions.ets`（enum + extends core DTO）、`OtpError.ets`（enum + 错误码映射） | 保留 ArkTS 严格类型 |
+| kit-only 实现层 | `internal/CryptoSource.ets` | `@kit.CryptoArchitectureKit` + `core/crypto` |
+| 出口 | `Index.ets` | 注册 crypto + 注册错误工厂 + 公开符号 |
 
 1. **`internal/CryptoSource.ets` 是全库唯一 `@kit` 导入点**：新增任何系统 API 调用都必须落在该文件；验证 `grep -rn "@kit\." library/src/main/ets/ library/Index.ets` 只应命中它。
-2. **`internal/HmacProvider.ets` 必须 kit-free**：ArkTS 的 `import` 静态且传递，公开类一旦经它间接引入 kit，本地单测会在**模块加载期**整体失败（不是少数用例失败）。
-3. **`internal/*` 不进 barrel**：`Index.ets` 只导出 `OtpError`/`OtpErrorCode`/DTO/`Secret`/`HOTP`/`TOTP`/`OTPAuthURI`；测试经深路径 import。
+2. **core 副本与外层薄壳必须 kit-free**：ArkTS 的 `import` 静态且传递，薄壳一旦间接引入 kit，本地单测会在**模块加载期**整体失败。
+3. **core 副本禁止手改**：改动只能改 `packages/core`（唯一源码），再跑 `bun run sync:core`；CI 用 `sync:core:check` 拦漂移。
+4. **`pure-js/` 不同步**：hvigor 会编译模块内**全部** `.ts`（未 import 的也会进 abc），所以 `scripts/sync-core.mjs` 排除 `pure-js` 与 `pure-js.ts`；ohos 不得 import 这两个入口。
+5. **core 不进 barrel**：`Index.ets` 只导出 `OtpError`/`OtpErrorCode`/DTO/`Secret`/`HOTP`/`TOTP`/`OTPAuthURI`；测试经薄壳深路径 import。
 4. **取模只在 `Digits.format` 发生一次**；`Truncate` 只截断（`& 0x7f`，31 位非负）。
 5. **secret 绝不外泄**：库内零 `console.*`/`hilog`；`OtpError` 消息为固定文案；`Secret` 刻意不实现 `toString()`，脱敏靠 `toJSON()` → `'[REDACTED]'`。
 6. **`verify` 恒定时间**：窗口内**扫完所有候选**后才返回首个命中 delta，禁止加早退优化。
@@ -76,7 +78,7 @@ node scripts/ci/check-invariants.mjs   # 仓库不变量守卫（10 项）
 | `src/test/` | PC Local Test（kit-free 可跑） | 纯算法核心全链路 + 公开类（注入 `HmacFixture`/`RandomFixture`）+ RFC 黄金向量 |
 | `src/ohosTest/` | 设备/模拟器 | 真实 `CryptoFrameworkHmac`、barrel 注册链路、默认 provider（**不注入 fixture**） |
 
-- 新算法逻辑必须先在 `src/test` 覆盖（PC 可跑）；涉及真实 crypto 的断言只能放 `src/ohosTest`。
+- 新算法逻辑只改 `packages/core` 并补 core 测试；`src/test` 的 265 条经薄壳直接测 core（断言不变），涉及真实 crypto 的断言只能放 `src/ohosTest`。
 - 向量唯一来源：`src/test/vectors/RfcVectors.ets`——**逐字照抄，禁止自行推导或补算**；期望值不得由被测实现反推（自证）。
 - Local Test 环境下 cryptoFramework 返回空数据（`doFinalSync()` 的 DataBlob `len=0`），是环境限制而非缺陷；不要在 PC 用例里断言真实 digest。
 - 测试文件禁止 `expect(true)` 占位；`it(` 计数不得下降。

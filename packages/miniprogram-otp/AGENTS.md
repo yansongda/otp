@@ -5,24 +5,23 @@
 
 ## 1. 项目定位
 
-- 本仓库是独立 npm 包 **`@yansongda/miniprogram-otp` v1.0.0**：RFC 4226 HOTP + RFC 6238 TOTP（SHA1/SHA256/SHA512，6/7/8 位，otpauth URI，漂移窗口，时钟校准，可选严格 base32）。
+- 本目录是 monorepo 的 `packages/miniprogram-otp`，发布 npm 包 **`@yansongda/miniprogram-otp`**：RFC 4226 HOTP + RFC 6238 TOTP（SHA1/SHA256/SHA512，6/7/8 位，otpauth URI，漂移窗口，时钟校准，可选严格 base32）。
+- **实现全部来自 `packages/core`（唯一源码）**；本包只保留平台类型层、纯 JS crypto 注册、barrel + 类型桥。
 - 目标运行时：微信小程序（CommonJS）；同时可用于 Node / Bun / 现代打包器。
-- 零运行时依赖；`dependencies` 必须保持 `{}`。
-- 源码 TypeScript；`tsc` 输出 `dist/`（CJS + `.d.ts`）；微信只消费 `dist/index.js`。
+- 零运行时依赖；`dependencies` 必须保持 `{}`（`@yansongda/otp-core` 只允许出现在 `devDependencies`）。
+- 构建：`tsdown` 把 core 源码内联为单文件 `dist/index.js`（CJS）+ 单文件 `dist/index.d.ts`；微信只消费 `dist/index.js`。
 
 ## 2. 分层与不变量（**改动必须遵守**）
 
-| 层         | 文件                                                                | 允许依赖                             |
-| ---------- | ------------------------------------------------------------------- | ------------------------------------ |
-| 纯算法核心 | `src/internal/{base32,counter,digits,engine,time-step,truncate}.ts` | `errors` / `options` / provider 类型 |
-| HMAC / SHA | `src/internal/{hmac,sha1,sha256,sha512}.ts`                         | 纯函数，无平台                       |
-| 解耦层     | `src/internal/crypto-provider.ts`                                   | 接口 + 注册表，不调平台              |
-| 实现层     | `src/internal/crypto-source.ts`                                     | 唯一注册默认 HMAC 的文件             |
-| 公开封装   | `src/{secret,hotp,totp,otpauth-uri}.ts`                             | 纯核心 + provider 接口               |
-| 出口       | `src/index.ts`                                                      | 公开符号 + `crypto-source`（仅注册） |
+| 层 | 位置 | 允许依赖 |
+| --- | --- | --- |
+| 共享实现 | `../core/src/**`（唯一源码，本包只消费） | 零平台能力 |
+| 平台类型层 | `src/types.ts`（const 对象 + 字面量联合 + 严格 DTO）、`src/errors.ts`（公开 OtpError / 18 码） | 无 |
+| 平台 provider | `src/index.ts` 导入时注册 `installPureJsHmac()` + `setErrorFactory()` | `@yansongda/otp-core/pure-js` |
+| 出口 | `src/index.ts`（公开符号 + 构造签名类型桥） | 以上 |
 
-1. **`src/index.ts` 是唯一公开入口**：导入时幂等调用 `installCryptoDefaults()`；`internal/*` 不得从 barrel 导出。
-2. **源码零平台调用**：不得出现 `wx.*`、`console.*`、`node:` 内置模块；平台随机数由使用方通过 `wx.getRandomValues` + `Secret.fromBytes` 提供。
+1. **`src/index.ts` 是唯一公开入口**：导入时幂等调用 `installPureJsHmac()` 与 `setErrorFactory()`；core 内部模块不得从 barrel 深导出。
+2. **平台层零平台调用**（core 已是零平台）：本包不得出现 `wx.*`、`console.*`、`node:` 内置模块；平台随机数由使用方通过 `wx.getRandomValues` + `Secret.fromBytes` 提供。
 3. **禁止 BigInt**：SHA-512 使用 hi/lo 半字，老设备兼容。
 4. **secret 绝不外泄**：错误消息固定文案；`Secret` 刻意不实现 `toString()`；`toJSON()` 返回 `[REDACTED]`。
 5. **`verify` 恒定时间**：窗口内扫完所有候选后才返回首个命中 delta，禁止早退优化。
@@ -59,10 +58,9 @@ Bun 版本固定于 `.bun-version`（当前 `1.4.4`）。主 CI 通过 `bun-vers
 
 ## 4. 测试策略
 
-- `tests/otp/`：Bun 测试，覆盖 RFC 4226 / 6238 / 4648 向量、哈希/HMAC 向量、错误码、strict base32、URI、时钟校准与随机注入。
-- 向量唯一来源：`tests/otp/vectors.ts`。**逐字复制自 OHOS `RfcVectors.ets` 与 FIPS/RFC 官方向量，禁止自行推导或补算**。
-- 新增逻辑必须先补单测；测试数量不得下降（`scripts/ci/check-invariants.mjs` 有基线）。
-- `tests/otp/` 不在 `tsconfig.build.json` 内；`tsconfig.json` 负责 typecheck。
+- **算法测试在 `packages/core`（242 条）**：RFC 4226 / 6238 / 4648 向量、哈希/HMAC 向量、错误码、strict base32、URI、时钟校准与随机注入。向量唯一来源 `packages/core/tests/otp/vectors.ts`，**逐字复制自 OHOS `RfcVectors.ets` 与 FIPS/RFC 官方向量，禁止自行推导或补算**。
+- 本包只保留 `tests/platform.test.ts`（9 条）：注册链路、错误工厂、类型桥、公开 API 契约。新增平台逻辑必须补测；测试数量不得下降（`scripts/ci/check-invariants.mjs` 基线 9/1）。
+- 算法逻辑变更只改 `packages/core` + 其测试，**禁止在本包复制实现**。
 - 微信真机 / 开发者工具“构建 npm”冒烟仍是人工门槛，CI 无法覆盖。
 
 ## 5. 代码约定
