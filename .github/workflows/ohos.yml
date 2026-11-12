@@ -18,12 +18,22 @@
 #   Previewer 启动即永久阻塞（该次 run 在 `UnitTestArkTS` 编译成功后静默挂到 60 分钟被 kill）。
 #   macOS runner 具备窗口服务，同一 CLI 版本已由 didi/dimina 跑通 `hvigorw test -p coverage=true`。
 #   公开仓库使用标准托管 runner 免费，因此没有理由为省成本留在 Linux。
-name: ci
+name: ohos-ci
 
 on:
   push:
     branches: [main]
+    paths:
+      - "packages/ohos-otp/**"
+      - "packages/core/**"
+      - "scripts/**"
+      - ".github/workflows/ohos.yml"
   pull_request:
+    paths:
+      - "packages/ohos-otp/**"
+      - "packages/core/**"
+      - "scripts/**"
+      - ".github/workflows/ohos.yml"
   workflow_dispatch:
 
 permissions:
@@ -50,6 +60,10 @@ jobs:
     runs-on: macos-15
 
     timeout-minutes: 60
+
+    defaults:
+      run:
+        working-directory: packages/ohos-otp
 
     steps:
       - name: Checkout
@@ -321,7 +335,7 @@ jobs:
           name: ohos-otp-ci
           if-no-files-found: error
           path: |
-            library/build/default/outputs/default/library.har
-            library/.test/default/intermediates/test/coverage_data/test_result.txt
-            library/.test/default/outputs/test/reports/
-            entry/build/default/outputs/default/*.hap
+            packages/ohos-otp/library/build/default/outputs/default/library.har
+            packages/ohos-otp/library/.test/default/intermediates/test/coverage_data/test_result.txt
+            packages/ohos-otp/library/.test/default/outputs/test/reports/
+            packages/ohos-otp/entry/build/default/outputs/default/*.hap

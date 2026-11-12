@@ -42,7 +42,17 @@ ohos 构建/测试见 `packages/ohos-otp/AGENTS.md`（DevEco SDK + hvigor 命令
 - `git push`、`npm publish`、`ohpm publish`、创建/修改 git remote 一律需人工明确授权。
 - 不允许自动合并 PR。
 
-## 5. 文档
+## 5. 发布 tag 约定（monorepo）
+
+| 包                           | tag                  | 触发                                        | 发布动作                               |
+| ---------------------------- | -------------------- | ------------------------------------------- | -------------------------------------- |
+| `@yansongda/miniprogram-otp` | `miniprogram-vX.Y.Z` | `.github/workflows/release-miniprogram.yml` | OIDC `npm publish`（版本已存在则跳过） |
+| `@yansongda/otp`（ohos HAR） | `ohos-vX.Y.Z`        | 人工                                        | `ohpm publish`（人工闸门，不经 CI）    |
+
+- CI：`.github/workflows/ci.yml`（core + miniprogram，ubuntu；含 `sync:core:check`）、`.github/workflows/ohos.yml`（macos-15 + 华为 CLI，路径过滤 `packages/ohos-otp/**` + `packages/core/**`）、`.github/workflows/guard.yml`（ohos 不变量，秒级）。
+- 包内不再有 `.github/workflows/`（GitHub 只识别仓库根）。
+
+## 6. 文档
 
 - 本仓库根 `README.md`：结构与命令。
 - 设计结论：`packages/ohos-otp/docs/ohos-otp-lib-rfc.md`（历史）+ 后续 core 设计文档。

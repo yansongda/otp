@@ -23,13 +23,13 @@ Agent 负责：分析真实 diff、写 CHANGELOG、跑 `release:check`、建 rel
 | --------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | 包              | npm 公开包 `@yansongda/miniprogram-otp`（scoped，`publishConfig.access: "public"`）                                               |
 | 包入口          | `main: dist/index.js`、`types: dist/index.d.ts`、`miniprogram: dist`                                                              |
-| 测试 CI         | `.github/workflows/ci.yml`：push `main`、PR、tag `v*`；Bun 版本由 `.bun-version` 固定（当前 `1.4.4`），另有非阻塞 `compat-latest` |
-| 发布 CI         | `.github/workflows/release.yml`：push tag `v*` → tag/version 校验 → `release:check` → 版本已存在则跳过 → OIDC `npm publish`       |
+| 测试 CI         | `.github/workflows/ci.yml`：push `main`、PR、tag `miniprogram-v*`；Bun 版本由 `.bun-version` 固定（当前 `1.4.4`），另有非阻塞 `compat-latest` |
+| 发布 CI         | `.github/workflows/release-miniprogram.yml`：push tag `miniprogram-v*` → tag/version 校验 → `release:check` → 版本已存在则跳过 → OIDC `npm publish`       |
 | 发布鉴权        | GitHub OIDC Trusted Publishing（`id-token: write`）；仓库不保存 `NPM_TOKEN`；首次发布除外                                         |
 | 发布前守卫      | release.yml 运行 `bun run release:check`；本地手动发布仍由 `prepublishOnly` → `release:check` 兜底                                |
 | `release:check` | invariants + lint + typecheck + test + build + dist smoke + `npm pack --dry-run`                                                  |
 | GitHub Release  | 手动 `gh release create`；notes 由真实 diff 清单生成，不用 `--generate-notes`                                                     |
-| tag 命名        | `vX.Y.Z`，必须与 `package.json` 的 `version` 逐字符一致                                                                           |
+| tag 命名        | `miniprogram-vX.Y.Z`，必须与 `package.json` 的 `version` 逐字符一致                                                                           |
 | dist-tag        | 稳定版 `latest`；版本含 `-` 时用 `next`                                                                                           |
 | README          | 不写版本号；发版不改 README 的安装命令                                                                                            |
 | 首次发布        | 若 `npm view @yansongda/miniprogram-otp version` 返回 404，按「首次发布特例」处理                                                 |
@@ -76,7 +76,7 @@ gh run list --workflow=ci.yml --limit 1  # 最新 main CI 必须 success
   → release PR（默认）
   → 人工合并
   → pull main + 核对 version
-  → annotated tag vX.Y.Z
+  → annotated tag miniprogram-vX.Y.Z
   → 用户授权 push tag（会触发 release.yml 发布 npm）
   → release.yml: tag/version 校验 → release:check → OIDC npm publish
   → tag CI / release workflow success
@@ -107,13 +107,13 @@ git diff "$BASE"..HEAD -- src/ tests/ package.json README.md README-cn.md CHANGE
 向用户呈现：
 
 ```text
-自 vX.Y.Z（或首次发布）以来的改动：
+自 miniprogram-vX.Y.Z（或首次发布）以来的改动：
 - 代码：<src/ 要点>
 - 测试/CI：<要点>
 - 文档/包元数据：<要点>
 - 是否 BREAKING：<有/无>
 
-建议版本：vX.Y.Z（理由：…）
+建议版本：miniprogram-vX.Y.Z（理由：…）
 确认？或直接给版本号。
 ```
 
@@ -225,13 +225,13 @@ bun run test:coverage   # 当前 lines 覆盖率约 98.7%
 ```bash
 git checkout -b release/vX.Y.Z
 git add package.json CHANGELOG.md
-git commit -m "chore(release): vX.Y.Z"
+git commit -m "chore(release): miniprogram-vX.Y.Z"
 git push origin release/vX.Y.Z      # 需当次 push 授权
-gh pr create --base main --title "chore(release): vX.Y.Z" --body "## 发版 vX.Y.Z
+gh pr create --base main --title "chore(release): miniprogram-vX.Y.Z" --body "## 发版 miniprogram-vX.Y.Z
 
 - CHANGELOG 已按真实 diff 更新
 - 本地 release:check 全绿
-- 合并后由人工打 tag vX.Y.Z 并执行 npm publish"
+- 合并后由人工打 tag miniprogram-vX.Y.Z 并执行 npm publish"
 ```
 
 **STOP A。** 对用户说：
@@ -260,7 +260,7 @@ gh run list --workflow=ci.yml --limit 1 --json conclusion,headSha --jq '.[0]'
 ### Step 6：打 annotated tag 并核对
 
 ```bash
-TAG=vX.Y.Z
+TAG=miniprogram-vX.Y.Z
 VER=${TAG#v}
 test "$(node -p 'require("./package.json").version')" = "$VER" || {
   echo "tag/version 不一致"; exit 1;
@@ -270,17 +270,17 @@ git show "$TAG" --stat | head -20
 git describe --tags --abbrev=0   # 应为 $TAG
 ```
 
-**铁律**：tag 名 = `v` + `package.json` 的 `version`，逐字符一致。
+**铁律**：tag 名 = `miniprogram-v` + `package.json` 的 `version`，逐字符一致。
 
 ### Step 7：展示 summary，等待 push 授权
 
 ```text
-## Release Summary: vX.Y.Z
+## Release Summary: miniprogram-vX.Y.Z
 
 - 版本：package.json = X.Y.Z
-- tag：vX.Y.Z（annotated，指向 <commit>）
+- tag：miniprogram-vX.Y.Z（annotated，指向 <commit>）
 - 本地验收：release:check 全绿
-- 待执行：git push origin vX.Y.Z
+- 待执行：git push origin miniprogram-vX.Y.Z
 - push 后：tag 触发 ci.yml（main + compat-latest）与 release.yml（OIDC npm publish）
 - 首次发布：必须先本地手动 npm publish，再推 tag（见「首次发布特例」）
 ```
@@ -289,7 +289,7 @@ git describe --tags --abbrev=0   # 应为 $TAG
 
 ### Step 8：push tag（获授权后，自动触发 npm publish）
 
-**push tag 会触发 `.github/workflows/release.yml` 并发布 npm。** 因此 push tag 的授权必须明确告知用户这一点；用户当次说「push / 推送 / 执行」后，才执行：
+**push tag 会触发 `.github/workflows/release-miniprogram.yml` 并发布 npm。** 因此 push tag 的授权必须明确告知用户这一点；用户当次说「push / 推送 / 执行」后，才执行：
 
 ```bash
 git push origin main          # 仅当 main 有本地未推提交；PR 流程通常已同步
@@ -364,7 +364,7 @@ tar -tzf yansongda-miniprogram-otp-X.Y.Z.tgz | sort | head -40
 Notes 来源：Step 2.1 的 `diff-inventory.md`，不是 commit message / 既有 CHANGELOG 文本。
 
 ```bash
-TAG=vX.Y.Z
+TAG=miniprogram-vX.Y.Z
 VER=${TAG#v}
 INV=$(ls -t "docs/evidence"/*-release-v$VER/diff-inventory.md 2>/dev/null | head -1)
 test -n "$INV" || { echo "缺少 Step 2.1 清单，先补做"; exit 1; }
@@ -445,7 +445,7 @@ release.yml 已使用 OIDC，仓库不需要 `NPM_TOKEN`；但 npm 包需要完�
 
 | 情况                               | 处理                                                                                   |
 | ---------------------------------- | -------------------------------------------------------------------------------------- |
-| tag 打错，尚未 push                | `git tag -d vX.Y.Z`，修正后重打                                                        |
+| tag 打错，尚未 push                | `git tag -d miniprogram-vX.Y.Z`，修正后重打                                                        |
 | tag 已 push，尚未 publish          | 删除远端 tag（需授权）→ 修正 → 从 Step 4 重走                                          |
 | tag/version 不一致                 | 删除本地/远端 tag，改 `package.json` 走 PR 后重打                                      |
 | tag CI 失败                        | 修问题，删远端 tag（授权）后重走；不要带失败 tag 发布                                  |
@@ -479,9 +479,9 @@ release.yml 已使用 OIDC，仓库不需要 `NPM_TOKEN`；但 npm 包需要完�
 | diff→清单        | `docs/evidence/.../diff-inventory.md`（gitignored）                               | 无需                                      |
 | 版本同步         | 改 `package.json` + `CHANGELOG.md`；`git grep <旧版本>`                           | 无需                                      |
 | 发布验收         | `bun run release:check`                                                           | 无需                                      |
-| PR               | `chore(release): vX.Y.Z` → `gh pr create`                                         | push 分支需授权；合并人工                 |
-| tag              | `git tag -a vX.Y.Z` + `git show`                                                  | 无需（本地）                              |
-| push tag         | `git push origin vX.Y.Z` → 触发 release.yml OIDC publish                          | **需当次授权，并告知会自动发布 npm**      |
+| PR               | `chore(release): miniprogram-vX.Y.Z` → `gh pr create`                                         | push 分支需授权；合并人工                 |
+| tag              | `git tag -a miniprogram-vX.Y.Z` + `git show`                                                  | 无需（本地）                              |
+| push tag         | `git push origin miniprogram-vX.Y.Z` → 触发 release.yml OIDC publish                          | **需当次授权，并告知会自动发布 npm**      |
 | 手动 npm publish | 仅首次发布 / OIDC 兜底：`npm publish --access public`                             | **需单独当次授权**                        |
 | workflow 核验    | `gh run view <run-id> --log`、`npm view`、dist-tags                               | 无需                                      |
 | 本地核验         | `npm view`、临时安装、`npm pack` 查产物                                           | 无需                                      |
@@ -489,8 +489,8 @@ release.yml 已使用 OIDC，仓库不需要 `NPM_TOKEN`；但 npm 包需要完�
 
 ## 相关文件（真相来源）
 
-- `.github/workflows/ci.yml`：main / PR / tag `v*` 的测试定义；Bun 版本见 `.bun-version`
-- `.github/workflows/release.yml`：tag `v*` 触发 OIDC npm publish；版本已存在时跳过 publish
+- `.github/workflows/ci.yml`：main / PR / tag `miniprogram-v*` 的测试定义；Bun 版本见 `.bun-version`
+- `.github/workflows/release-miniprogram.yml`：tag `miniprogram-v*` 触发 OIDC npm publish；版本已存在时跳过 publish
 - `package.json`：`version`、`files`、`main`、`types`、`miniprogram`、`prepublishOnly`
 - `scripts/ci/check-invariants.mjs`：仓库不变量（含版本 ↔ CHANGELOG、发布脚本、`.bun-version`）
 - `scripts/ci/smoke-dist.mjs`：构建产物冒烟

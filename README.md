@@ -24,6 +24,11 @@ bun run test
 bun run check                # 全量本地检查
 ```
 
+## 发布 tag
+
+- miniprogram：`miniprogram-vX.Y.Z`（与 `packages/miniprogram-otp/package.json` 一致）→ 触发 OIDC npm 发布。
+- ohos：`ohos-vX.Y.Z`（与 `packages/ohos-otp/library/oh-package.json5` 一致）→ 人工 `ohpm publish`。
+
 ## 发布边界
 
 - `git push` / `npm publish` / `ohpm publish` 均需人工明确授权。

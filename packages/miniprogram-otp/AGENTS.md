@@ -83,10 +83,10 @@ Bun 版本固定于 `.bun-version`（当前 `1.4.4`）。主 CI 通过 `bun-vers
 ## 7. 发版
 
 - 完整流程见 `.agents/skills/release/SKILL.md`。
-- 三道闸门：版本号用户确认；`git push` 当次授权（**push tag 会触发 release.yml OIDC 发布 npm**）；首次发布 / OIDC 兜底的手动 `npm publish` 需单独授权。
+- 三道闸门：版本号用户确认；`git push` 当次授权（**push tag 会触发 release-miniprogram.yml OIDC 发布 npm**）；首次发布 / OIDC 兜底的手动 `npm publish` 需单独授权。
 - 发版前统一跑 `bun run release:check`（invariants + lint + typecheck + test + build + dist smoke + pack dry-run）。
-- tag 必须是 annotated `vX.Y.Z`，且与 `package.json` 的 `version` 逐字符一致。
-- `.github/workflows/release.yml`：push tag `v*` 触发 OIDC `npm publish`；版本已存在时跳过 publish，避免重跑 403。
+- tag 必须是 annotated `miniprogram-vX.Y.Z`，且与 `package.json` 的 `version` 逐字符一致（monorepo 与 ohos 的 `ohos-vX.Y.Z` 区分）。
+- `.github/workflows/release-miniprogram.yml`：push tag `miniprogram-v*` 触发 OIDC `npm publish`；版本已存在时跳过 publish，避免重跑 403。
 - 首次发布 npm 包尚不存在，必须先本地 `npm publish` 并在 npm 包设置配置 Trusted Publisher，再推 tag；见 release skill「首次发布特例」。
 - `docs/evidence/` 已被 gitignore，用于放 diff 清单与 release notes 草稿。
 

@@ -250,11 +250,11 @@ check("禁止重新引入第三方 OTP / vendor 产物", () => {
 });
 
 check(".bun-version 固定且 CI 使用版本文件", () => {
-  const version = readText(".bun-version").trim();
+  const version = readText("../../.bun-version").trim();
   if (!/^\d+\.\d+\.\d+$/.test(version)) {
     throw new Error(`.bun-version 格式非法：${JSON.stringify(version)}`);
   }
-  const ci = readText(".github/workflows/ci.yml");
+  const ci = readText("../../.github/workflows/ci.yml");
   if (!/bun-version-file:\s*\.bun-version/.test(ci)) {
     throw new Error("主 CI 未使用 bun-version-file: .bun-version");
   }
@@ -264,7 +264,7 @@ check(".bun-version 固定且 CI 使用版本文件", () => {
   return `Bun ${version} + latest compat`;
 });
 
-check("发布脚本、release skill 与 release.yml 存在", () => {
+check("发布脚本、release skill 与 release-miniprogram.yml 存在", () => {
   const pkg = JSON.parse(readText("package.json"));
   const scripts = pkg.scripts || {};
   for (const key of [
@@ -290,28 +290,30 @@ check("发布脚本、release skill 与 release.yml 存在", () => {
   if (!/docs\/evidence\//.test(readText(".gitignore"))) {
     throw new Error(".gitignore 未忽略 docs/evidence/");
   }
-  const release = readText(".github/workflows/release.yml");
-  if (!/tags:\s*\["v\*"\]/.test(release)) {
-    throw new Error("release.yml 必须由 tag v* 触发");
+  const release = readText("../../.github/workflows/release-miniprogram.yml");
+  if (!/tags:\s*\["miniprogram-v\*"\]/.test(release)) {
+    throw new Error("release-miniprogram.yml 必须由 tag miniprogram-v* 触发");
   }
   if (!/id-token:\s*write/.test(release)) {
-    throw new Error("release.yml 缺少 id-token: write（OIDC）");
+    throw new Error("release-miniprogram.yml 缺少 id-token: write（OIDC）");
   }
   if (!/npm publish[^\n]*--provenance/.test(release)) {
-    throw new Error("release.yml 缺少 npm publish --provenance");
+    throw new Error("release-miniprogram.yml 缺少 npm publish --provenance");
   }
   if (!/npm publish[^\n]*--ignore-scripts/.test(release)) {
     throw new Error(
-      "release.yml 的 npm publish 必须带 --ignore-scripts（避免重复 prepublishOnly）",
+      "release-miniprogram.yml 的 npm publish 必须带 --ignore-scripts（避免重复 prepublishOnly）",
     );
   }
   if (!/release:check/.test(release)) {
-    throw new Error("release.yml 必须在发布前运行 release:check");
+    throw new Error("release-miniprogram.yml 必须在发布前运行 release:check");
   }
   if (/NPM_TOKEN|NODE_AUTH_TOKEN/.test(release)) {
-    throw new Error("release.yml 不得使用 NPM_TOKEN / NODE_AUTH_TOKEN");
+    throw new Error(
+      "release-miniprogram.yml 不得使用 NPM_TOKEN / NODE_AUTH_TOKEN",
+    );
   }
-  return "release:check + release skill + release.yml OIDC + evidence ignore";
+  return "release:check + release skill + release-miniprogram.yml OIDC + evidence ignore";
 });
 
 console.log(`\n仓库不变量检查：${toPosix(REPO_ROOT)}\n`);
