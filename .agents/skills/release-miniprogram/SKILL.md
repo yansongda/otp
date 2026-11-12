@@ -28,7 +28,7 @@ Agent 负责：分析真实 diff、写 CHANGELOG、跑 `release:check`、建 rel
 | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 包              | npm 公开包 `@yansongda/miniprogram-otp`（scoped，`publishConfig.access: "public"`）                                                                 |
 | 包入口          | `main: dist/index.js`、`types: dist/index.d.ts`、`miniprogram: dist`                                                                                |
-| 测试 CI         | `.github/workflows/ci.yml`：push `main`、PR、tag `miniprogram-v*`；Bun 版本由 `.bun-version` 固定（当前 `1.4.4`），另有非阻塞 `compat-latest`       |
+| 测试 CI         | `.github/workflows/ci.yml`：push `main`、PR、tag `miniprogram-v*`；Bun 版本由 `.bun-version` 固定，另有非阻塞 `compat-latest`                       |
 | 发布 CI         | `.github/workflows/release-miniprogram.yml`：push tag `miniprogram-v*` → tag/version 校验 → `release:check` → 版本已存在则跳过 → OIDC `npm publish` |
 | 发布鉴权        | GitHub OIDC Trusted Publishing（`id-token: write`）；仓库不保存 `NPM_TOKEN`；首次发布除外                                                           |
 | 发布前守卫      | release-miniprogram.yml 运行 `bun run release:check`；本地手动发布仍由 `prepublishOnly` → `release:check` 兜底                                      |
@@ -213,12 +213,12 @@ npm pack --dry-run
 - 必须包含：`dist/index.js`、`dist/index.d.ts`、README.md、README-cn.md、CHANGELOG.md、LICENSE
 - 不应包含：`src/`、`tests/`、`node_modules/`、`.agents/`、`docs/`
 - `package.json` 的 `miniprogram` 仍为 `dist`
-- 当前包体积约 45 kB（81 files），异常增大时先查 `files`
+- 包体积 / 文件数异常增大时先查 `files` 白名单
 
 可选：
 
 ```bash
-bun run test:coverage   # 当前 lines 覆盖率约 98.7%
+bun run test:coverage   # 可选：查看覆盖率
 ```
 
 任何一道失败都不许继续，修好后从 Step 3 重跑。
@@ -266,7 +266,7 @@ gh run list --workflow=ci.yml --limit 1 --json conclusion,headSha --jq '.[0]'
 
 ```bash
 TAG=miniprogram-vX.Y.Z
-VER=${TAG#v}
+VER=${TAG#miniprogram-v}
 test "$(node -p 'require("./package.json").version')" = "$VER" || {
   echo "tag/version 不一致"; exit 1;
 }
@@ -370,7 +370,7 @@ Notes 来源：Step 2.1 的 `diff-inventory.md`，不是 commit message / 既有
 
 ```bash
 TAG=miniprogram-vX.Y.Z
-VER=${TAG#v}
+VER=${TAG#miniprogram-v}
 INV=$(ls -t "docs/evidence"/*-release-v$VER/diff-inventory.md 2>/dev/null | head -1)
 test -n "$INV" || { echo "缺少 Step 2.1 清单，先补做"; exit 1; }
 NOTES="$(dirname "$INV")/release-notes.md"
@@ -408,7 +408,7 @@ git remote prune origin
 release-miniprogram.yml 要求 npm 包已存在且 Trusted Publisher 已配置，因此**首次发布必须先本地手动完成，再推 tag**：
 
 1. 按 Step 1–3 完成 diff / CHANGELOG / `release:check`；合并发布 PR。
-2. 本地创建 annotated tag `v1.0.0`（先不 push）。
+2. 本地创建 annotated tag `miniprogram-v1.0.0`（先不 push）。
 3. 用户执行本地首发：
 
    ```bash
@@ -425,13 +425,13 @@ release-miniprogram.yml 要求 npm 包已存在且 Trusted Publisher 已配置�
    ```
 5. 在 npm 包设置页配置 Trusted Publisher：
    - Organization/user: `yansongda`
-   - Repository: `miniprogram-otp`
+   - Repository: `otp`（monorepo 仓库名，不是包名）
    - Workflow filename: `release-miniprogram.yml`
    - Allowed actions: 勾选 **`npm publish`**
 6. push tag（需当次授权）：
 
    ```bash
-   git push origin v1.0.0
+   git push origin miniprogram-v1.0.0
    ```
 
    release-miniprogram.yml 会跑 `release:check`，发现该版本已在 npm 上 → 跳过 publish；tag CI 正常跑。
