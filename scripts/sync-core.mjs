@@ -9,8 +9,8 @@
  *   node scripts/sync-core.mjs          # 写入副本（带 GENERATED 头）
  *   node scripts/sync-core.mjs --check  # 只校验，不一致则退出码 1（CI 用）
  */
-import { readdir, readFile, writeFile, mkdir, rm } from "node:fs/promises";
-import { join, relative, dirname } from "node:path";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -81,7 +81,9 @@ async function main() {
     console.log(`[sync-core] ok (${files.length} files)`);
     return;
   }
-  console.log(`[sync-core] synced ${files.length} files -> ${relative(ROOT, TARGET)}`);
+  console.log(
+    `[sync-core] synced ${files.length} files -> ${relative(ROOT, TARGET)}`,
+  );
 }
 
 main().catch((error) => {
