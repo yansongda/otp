@@ -1,6 +1,6 @@
 # AGENTS.md —— ohos-otp 工程上下文
 
-> 面向所有在该仓库工作的编码 agent / 协作者。**动手前先读本文件**；设计结论见 `docs/ohos-otp-lib-rfc.md`（与源码冲突时以源码为准）。
+> 面向所有在该包工作的 coding agent / 协作者。**动手前先读本文件**；当前实现以 `packages/core` 源码为准，`docs/ohos-otp-lib-rfc.md` 是 v1.1.0 及以前的历史设计文档（与源码冲突时以源码为准）。
 
 ## 1. 项目定位
 
@@ -8,35 +8,35 @@
 - **实现全部来自 `packages/core`（唯一源码）**，经 `bun run sync:core` 生成为 `library/src/main/ets/core/**`；本包只保留薄壳、平台类型层与 crypto 实现。
 - `entry/` = 消费方 smoke demo（仅依赖 barrel，**不参与** HAR 打包）。
 - 兼容性：`compatibleSdkVersion 6.0.0(20)`（API 12–19 工程无法消费，README 已声明）。
-- 现状：本地单测 265 全绿 / 覆盖率 lines 90.65%；设备端 `ohosTest` 37/37；RFC 向量 10/10 + 18/18；`ohpm prepublish` 通过。已发布至 OHPM（当前版本以 `library/oh-package.json5` 为准）。
+- 现状：本地单测 266 全绿 / 覆盖率 lines 90.92%；设备端 `ohosTest` 37/37；RFC 向量 10/10 + 18/18；`ohpm prepublish` 通过。已发布至 OHPM（当前版本以 `library/oh-package.json5` 为准）。
 
 ## 2. 分层与不变量（**改动必须遵守**）
 
-| 层 | 位置 | 约束 |
-|---|---|---|
-| 共享实现 | `library/src/main/ets/core/**`（**sync-core 生成，禁止手改**） | 现代 TS；跨边界签名只用基础类型 |
-| 薄壳 | `{HOTP,TOTP,Secret,OTPAuthURI}.ets`、`internal/{Base32,Counter,Digits,TimeStep,Truncate,OtpEngine,HmacProvider}.ets` | 只做 re-export；OTPAuthURI 额外做一次类型投影 |
-| 平台类型层 | `OtpOptions.ets`（enum + extends core DTO）、`OtpError.ets`（enum + 错误码映射） | 保留 ArkTS 严格类型 |
-| kit-only 实现层 | `internal/CryptoSource.ets` | `@kit.CryptoArchitectureKit` + `core/crypto` |
-| 出口 | `Index.ets` | 注册 crypto + 注册错误工厂 + 公开符号 |
+| 层              | 位置                                                                                                                 | 约束                                          |
+| --------------- | -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| 共享实现        | `library/src/main/ets/core/**`（**sync-core 生成，禁止手改**）                                                       | 现代 TS；跨边界签名只用基础类型               |
+| 薄壳            | `{HOTP,TOTP,Secret,OTPAuthURI}.ets`、`internal/{Base32,Counter,Digits,TimeStep,Truncate,OtpEngine,HmacProvider}.ets` | 只做 re-export；OTPAuthURI 额外做一次类型投影 |
+| 平台类型层      | `OtpOptions.ets`（enum + extends core DTO）、`OtpError.ets`（enum + 错误码映射）                                     | 保留 ArkTS 严格类型                           |
+| kit-only 实现层 | `internal/CryptoSource.ets`                                                                                          | `@kit.CryptoArchitectureKit` + `core/crypto`  |
+| 出口            | `Index.ets`                                                                                                          | 注册 crypto + 注册错误工厂 + 公开符号         |
 
 1. **`internal/CryptoSource.ets` 是全库唯一 `@kit` 导入点**：新增任何系统 API 调用都必须落在该文件；验证 `grep -rn "@kit\." library/src/main/ets/ library/Index.ets` 只应命中它。
 2. **core 副本与外层薄壳必须 kit-free**：ArkTS 的 `import` 静态且传递，薄壳一旦间接引入 kit，本地单测会在**模块加载期**整体失败。
 3. **core 副本禁止手改**：改动只能改 `packages/core`（唯一源码），再跑 `bun run sync:core`；CI 用 `sync:core:check` 拦漂移。
 4. **`pure-js/` 不同步**：hvigor 会编译模块内**全部** `.ts`（未 import 的也会进 abc），所以 `scripts/sync-core.mjs` 排除 `pure-js` 与 `pure-js.ts`；ohos 不得 import 这两个入口。
 5. **core 不进 barrel**：`Index.ets` 只导出 `OtpError`/`OtpErrorCode`/DTO/`Secret`/`HOTP`/`TOTP`/`OTPAuthURI`；测试经薄壳深路径 import。
-4. **取模只在 `Digits.format` 发生一次**；`Truncate` 只截断（`& 0x7f`，31 位非负）。
-5. **secret 绝不外泄**：库内零 `console.*`/`hilog`；`OtpError` 消息为固定文案；`Secret` 刻意不实现 `toString()`，脱敏靠 `toJSON()` → `'[REDACTED]'`。
-6. **`verify` 恒定时间**：窗口内**扫完所有候选**后才返回首个命中 delta，禁止加早退优化。
-7. **`library/example/` 随 HAR 发布，不得删除/改名**：hvigor 对 bytecode HAR 的 release 白名单目录名就是 `example`（`RELEASE_HAR_WHITE_LIST_DIR_NAME`），该目录会被原样打进包内 `package/example/`；OHPM「支持文档 / example」的 20 分完全依赖它。里面只放文档（README），不放不参与编译与 lint 的源码。缺失由 `scripts/ci/check-invariants.mjs` 与 CI 的 HAR 内容校验拦截。
+6. **取模只在 `Digits.format` 发生一次**；`Truncate` 只截断（`& 0x7f`，31 位非负）。
+7. **secret 绝不外泄**：库内零 `console.*`/`hilog`；`OtpError` 消息为固定文案；`Secret` 刻意不实现 `toString()`，脱敏靠 `toJSON()` → `'[REDACTED]'`。
+8. **`verify` 恒定时间**：窗口内**扫完所有候选**后才返回首个命中 delta，禁止加早退优化。
+9. **`library/example/` 随 HAR 发布，不得删除/改名**：hvigor 对 bytecode HAR 的 release 白名单目录名就是 `example`（`RELEASE_HAR_WHITE_LIST_DIR_NAME`），该目录会被原样打进包内 `package/example/`；OHPM「支持文档 / example」的 20 分完全依赖它。里面只放文档（README），不放不参与编译与 lint 的源码。缺失由 `scripts/ci/check-invariants.mjs` 与 CI 的 HAR 内容校验拦截。
 
 其他冻结契约：`OtpOptions` 字段名/可选性冻结（v1 起仅允许**新增可选字段**）；`OtpErrorCode` 的 v1 17 个取值冻结（v1.1.0 仅**新增** `INVALID_BASE32_PADDING`，现共 18 个）；全同步 API（`*Sync` 链路）；零运行时依赖。
 
 ## 3. 命令（实测可跑）
 
 ```bash
-# 先设环境：hvigor 需要 DEVECO_SDK_HOME 与可用的 node
-PATH="/Users/yansongda/.nvm/versions/node/v24.20.0/bin:$PATH"
+# 先设环境：hvigor 需要 DEVECO_SDK_HOME 与可用的 node（≥ 20；本机 v26，CI 用工具链自带 node）
+export PATH="$(command -v node >/dev/null && dirname "$(command -v node)"):$PATH"
 DEVECO_SDK_HOME="/Applications/DevEco-Studio.app/Contents/sdk"   # 必须指向 Contents/sdk（父层），不是 sdk/default
 HB=/Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw
 OHPM=/Applications/DevEco-Studio.app/Contents/tools/ohpm/bin/ohpm
@@ -45,7 +45,7 @@ HDC=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony/toolchains/
 
 # 本地单测 + 覆盖率（PC；改算法逻辑后必跑）
 $HB --no-daemon -c modelVersion=6.1.1 test --mode module -p module=library@default -p testType=local -p coverage=true
-#   → Tests run: 265, Pass: 265；覆盖率 lines ≈ 90.65%
+#   → Tests run: 266, Pass: 266；覆盖率 lines ≈ 90.92%
 
 # 库产物（release）
 $HB --no-daemon -c modelVersion=6.1.1 assembleHar --mode module -p module=library@default -p product=default -p buildMode=release
@@ -67,18 +67,18 @@ bash scripts/ci/lint-local.sh          # CodeLinter；exit 4 = 命中 error，0 
 node scripts/ci/check-invariants.mjs   # 仓库不变量守卫（10 项）
 ```
 
-**CI（GitHub Actions）**：`guard.yml` = 不变量守卫（ubuntu-latest，无 SDK，秒级）；`ci.yml` = CodeLinter + PC 单测（覆盖率门槛 88%）+ `assembleHar` + `ohpm prepublish` + entry HAP smoke，产物含 `library.har` 与覆盖率报告。工具链取自社区镜像的华为 command-line-tools（`CLI_VERSION` 与归档 sha256 钉在 workflow 里，升级走显式 PR）；**跑在 `macos-15`，因为 local test 要起 Previewer（见 §8）**。本地无 SDK 时用上面两条脚本 + `bash scripts/ci/lint-local.sh` 复现 lint 与守卫。**CI 不执行 `ohpm publish` / `git push`**（§7 人工闸门）。
+**CI（GitHub Actions，workflow 均在仓库根 `.github/workflows/`）**：`guard.yml` = 不变量守卫（ubuntu-latest，无 SDK，秒级）；`ohos.yml` = CodeLinter + PC 单测（覆盖率门槛 88%）+ `assembleHar` + `ohpm prepublish` + entry HAP smoke，产物含 `library.har` 与覆盖率报告。工具链取自社区镜像的华为 command-line-tools（`CLI_VERSION` 与归档 sha256 钉在 workflow 里，升级走显式 PR）；**跑在 `macos-15`，因为 local test 要起 Previewer（见 §8）**。本地无 SDK 时用上面两条脚本 + `bash scripts/ci/lint-local.sh` 复现 lint 与守卫。**CI 不执行 `ohpm publish` / `git push`**（§7 人工闸门）。
 
 **hvigor 并发**：同一时刻只跑一个 hvigor 任务（工程级锁），并行 agent 需串行放行。
 
 ## 4. 测试策略（**禁止用 mock 冒充真实验证**）
 
-| 目录 | 环境 | 覆盖 |
-|---|---|---|
-| `src/test/` | PC Local Test（kit-free 可跑） | 纯算法核心全链路 + 公开类（注入 `HmacFixture`/`RandomFixture`）+ RFC 黄金向量 |
-| `src/ohosTest/` | 设备/模拟器 | 真实 `CryptoFrameworkHmac`、barrel 注册链路、默认 provider（**不注入 fixture**） |
+| 目录            | 环境                           | 覆盖                                                                             |
+| --------------- | ------------------------------ | -------------------------------------------------------------------------------- |
+| `src/test/`     | PC Local Test（kit-free 可跑） | 纯算法核心全链路 + 公开类（注入 `HmacFixture`/`RandomFixture`）+ RFC 黄金向量    |
+| `src/ohosTest/` | 设备/模拟器                    | 真实 `CryptoFrameworkHmac`、barrel 注册链路、默认 provider（**不注入 fixture**） |
 
-- 新算法逻辑只改 `packages/core` 并补 core 测试；`src/test` 的 265 条经薄壳直接测 core（断言不变），涉及真实 crypto 的断言只能放 `src/ohosTest`。
+- 新算法逻辑只改 `packages/core` 并补 core 测试；`src/test` 的 266 条经薄壳直接测 core（断言不变），涉及真实 crypto 的断言只能放 `src/ohosTest`。
 - 向量唯一来源：`src/test/vectors/RfcVectors.ets`——**逐字照抄，禁止自行推导或补算**；期望值不得由被测实现反推（自证）。
 - Local Test 环境下 cryptoFramework 返回空数据（`doFinalSync()` 的 DataBlob `len=0`），是环境限制而非缺陷；不要在 PC 用例里断言真实 digest。
 - 测试文件禁止 `expect(true)` 占位；`it(` 计数不得下降。
@@ -87,18 +87,18 @@ node scripts/ci/check-invariants.mjs   # 仓库不变量守卫（10 项）
 
 - 缩进 2 空格、单引号、无 Tab；注释用中文，只写「为什么 / 约束 / RFC 依据 / ArkTS 陷阱」，不逐行复述代码。
 - 不引入运行时依赖（含测试期第三方算法库）；`dependencies` 必须保持 `{}`。
-- 错误一律 `throw new OtpError(code, FIXED_MESSAGE)`；不得新增错误码，也不得改已有码的字符串值。
+- core 内部错误一律 `otpFail(code)`（由平台工厂注入公开错误类）；平台层（`OtpError` / `CryptoSource`）用 `throw new OtpError(code, FIXED_MESSAGE)`。不得新增错误码，也不得改已有码的字符串值。
 - ArkTS 注意：位运算是 32 位有符号（大整数须 high/low 拆分）；不用 `padStart`；不假设 `URLSearchParams` 可用；`JSON.stringify` 会调用 `toJSON()`。
 - lint：`code-linter.json5` 里 `@security/no-unsafe-mac` 保留 warn 是**有意的策略保留**（RFC 6238 §1.2 互操作依据）；不放宽规则、不加 disable 注释。注意 2026-10-02 实测：全库扫描 0 缺陷——算法名经参数传入而非字面量，该规则当前不触发；CI 用 `-e error`，因此不会被它卡住。
 
 ## 6. 文档职责
 
-| 路径 | 用途 | 是否入库 |
-|---|---|---|
-| `docs/ohos-otp-lib-rfc.md` | **设计结论唯一入库文档**（背景/架构/契约/向量/验证结果/不做清单） | ✅ |
-| `docs/implementation/`、`docs/evidence/`、`docs/learning/` | 执行计划、验证证据、共享知识（过程产物） | ❌ 已 gitignore，本地保留 |
-| `library/README.md`（英文，必交）/ `README-cn.md` | 使用说明、错误码故障排查表、覆盖边界声明 | ✅ |
-| `library/CHANGELOG.md` | **必须含当前版本号** | ✅ |
+| 路径                                                       | 用途                                                                                                              | 是否入库                  |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| `docs/ohos-otp-lib-rfc.md`                                 | **v1.1.0 及以前的历史设计文档**（背景/契约/向量/验证结果）；当前共享 core 架构见根 `AGENTS.md` 与 `packages/core` | ✅                        |
+| `docs/implementation/`、`docs/evidence/`、`docs/learning/` | 执行计划、验证证据、共享知识（过程产物）                                                                          | ❌ 已 gitignore，本地保留 |
+| `library/README.md`（英文，必交）/ `README-cn.md`          | 使用说明、错误码故障排查表、覆盖边界声明                                                                          | ✅                        |
+| `library/CHANGELOG.md`                                     | **必须含当前版本号**                                                                                              | ✅                        |
 
 ## 7. 发布流程（人工闸门）
 

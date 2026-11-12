@@ -1,8 +1,7 @@
 /**
  * HMAC（RFC 2104）通用实现：哈希函数与块大小由调用方注入（纯函数，无平台依赖）。
  *
- * 与 ohos-otp 一致：默认实现的算法名经参数传入而非字面量，
- * 避免平台 lint 对 HMAC 用法产生误报。
+ * 默认实现的算法名经参数传入而非字面量，避免平台 lint 对 HMAC 用法产生误报。
  */
 export type HashFunction = (message: Uint8Array) => Uint8Array;
 

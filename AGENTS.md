@@ -67,4 +67,4 @@ ohos 构建/测试见 `packages/ohos-otp/AGENTS.md`（DevEco SDK + hvigor 命令
 ## 6. 文档
 
 - 本仓库根 `README.md`：结构与命令。
-- 设计结论：`packages/ohos-otp/docs/ohos-otp-lib-rfc.md`（历史）+ 后续 core 设计文档。
+- 设计结论：当前架构以本文件 + 两个包内 `AGENTS.md` + `packages/core` 源码为准；`packages/ohos-otp/docs/ohos-otp-lib-rfc.md` 是 v1.1.0 及以前的历史设计文档。

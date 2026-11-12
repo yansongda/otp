@@ -13,8 +13,9 @@
 - `otpauth://` URI 解析与生成、`TOTP.fromURI` / `HOTP.fromURI`
 - 统一 `OtpError` 与 18 个冻结错误码
 - 纯 JS HMAC / SHA，零运行时依赖，TypeScript 类型声明
-- 新增 tag `v*` 触发的 OIDC 发布 workflow（`release.yml`）：tag/version 校验、`release:check`、已发布版本跳过、npm provenance
-- Bun 测试 242 项、不变量守卫、构建产物冒烟、GitHub Actions CI
+- 新增 tag `miniprogram-v*` 触发的 OIDC 发布 workflow（`.github/workflows/release-miniprogram.yml`）：tag/version 校验、`release:check`、已发布版本跳过、npm provenance
+- 实现收敛到 monorepo 共享 core（`packages/core`）；`tsdown` 输出单文件 CJS + 单文件 d.ts，发布物自包含
+- core 测试 242 项 + 平台契约测试 9 项、不变量守卫、构建产物冒烟、GitHub Actions CI
 
 ### Compatibility
 

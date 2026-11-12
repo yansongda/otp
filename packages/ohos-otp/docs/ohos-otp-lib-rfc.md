@@ -4,6 +4,7 @@
 > **作者**：DeepSeek V4.1 Flash + yansongda
 > **状态**：已实现并验证（验证结果见附录 B；版本沿革见 `library/CHANGELOG.md`）
 > **代码事实来源**：`library/`（源码即契约，本文件与其冲突时以源码为准）
+> **历史文档**：本文描述 ohos-otp v1.1.0 及以前的 ArkTS 单体实现。monorepo 重构后，协议实现位于 `packages/core`，ohos 包只是薄壳 + 平台类型层 + crypto provider；当前架构见根 `AGENTS.md`。
 
 ---
 
@@ -385,7 +386,7 @@ export enum OtpErrorCode {
 
 **本库的设计立场：库内零日志、零上报、零埋点**（避免 secret 泄漏面、避免与宿主日志策略冲突、避免成为三方库的隐私风险点）。可观测性通过「可分类的错误码 + README 故障排查表」交付给宿主。
 
-- **错误分类**（宿主可据此打点）：`OtpError.code` 共 17 个枚举值（见 §3.5；README 故障排查表覆盖 16 个对外码），宿主若需上报，只需上报 `code` 字符串，**禁止上报 secret/token**。
+- **错误分类**（宿主可据此打点）：`OtpError.code` 共 18 个枚举值（见 §3.5；README 故障排查表覆盖全部 18 行，`NOT_IMPLEMENTED` 为预留占位），宿主若需上报，只需上报 `code` 字符串，**禁止上报 secret/token**。
 - **强度自省**：`Secret.bitLength` / `byteLength` 供宿主在账户导入时做一次性合规检查（例如提示「该密钥低于 RFC 4226 建议的 128 bit」）。
 - **漂移可观测**：`verify()` 返回的 delta 是宿主的可观测信号——持续非 0 说明设备时钟漂移，宿主可据此提示或调用 `syncClockOffset`。建议宿主指标：`otpVerifyDeltaHistogram`（按绝对值分布）、`otpVerifyFailureRate`（null 占比）。
 - **README 故障排查表**：`错误码 → 现象 → 根因 → 处置`（例：`CRYPTO_NOT_INITIALIZED` → 深路径导入后调用报错 → 未经 barrel 导入或未注入 provider → 改从 `@yansongda/otp` 导入）。

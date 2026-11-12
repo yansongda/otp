@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 本地跑 CodeLinter —— 与 CI（.github/workflows/ci.yml 的 CodeLinter step）同一引擎、同一组参数。
+# 本地跑 CodeLinter —— 与 CI（仓库根 .github/workflows/ohos.yml 的 CodeLinter step）同一引擎、同一组参数。
 #
 # 优先用华为 command-line-tools 里的官方 codelinter（与 CI 完全一致）；
 # 本机只装了 DevEco Studio 时，回落到 IDE 内置的同一引擎（参数相同，实测可用）。

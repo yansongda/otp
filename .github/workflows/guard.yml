@@ -1,4 +1,4 @@
-# ohos 仓库不变量守卫：不需要 HarmonyOS SDK，几秒钟跑完。
+# ohos 包不变量守卫：不需要 HarmonyOS SDK，几秒钟跑完。
 #
 # 与 ci.yml 分开：真构建要先下载约 2GB 工具链，把「顺手加个 console.log / 删掉一个用例」
 # 这类问题挡在更便宜的一层。

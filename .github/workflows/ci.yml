@@ -1,3 +1,5 @@
+# monorepo 主 CI（ubuntu）：core + miniprogram 的 lint / typecheck / tests / build / smoke。
+# ohos 的真构建在 ohos.yml（macos-15 + 华为 CLI）；秒级不变量守卫在 guard.yml。
 name: ci
 
 on:

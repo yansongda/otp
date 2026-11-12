@@ -1,6 +1,7 @@
 ---
+
 name: release-miniprogram
-description: "@yansongda/miniprogram-otp 本仓库发版流程（首次发布 / bump version / 写 CHANGELOG / 打 tag / npm publish / GitHub Release / 发布核验 / 回滚）。用户说发版、发布新版本、release、publish、打 tag、建 Release 时使用。"
+description: "@yansongda/miniprogram-otp（monorepo packages/miniprogram-otp）发版流程（首次发布 / bump version / 写 CHANGELOG / 打 tag / npm publish / GitHub Release / 发布核验 / 回滚）。用户说发版、发布新版本、release、publish、打 tag、建 Release 时使用。"
 ---
 
 # Release：@yansongda/miniprogram-otp
@@ -23,20 +24,20 @@ Agent 负责：分析真实 diff、写 CHANGELOG、跑 `release:check`、建 rel
 
 > 改 CI / package.json / 发布方式后，必须回来更新本表。
 
-| 环节            | 事实                                                                                                                              |
-| --------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| 包              | npm 公开包 `@yansongda/miniprogram-otp`（scoped，`publishConfig.access: "public"`）                                               |
-| 包入口          | `main: dist/index.js`、`types: dist/index.d.ts`、`miniprogram: dist`                                                              |
-| 测试 CI         | `.github/workflows/ci.yml`：push `main`、PR、tag `miniprogram-v*`；Bun 版本由 `.bun-version` 固定（当前 `1.4.4`），另有非阻塞 `compat-latest` |
-| 发布 CI         | `.github/workflows/release-miniprogram.yml`：push tag `miniprogram-v*` → tag/version 校验 → `release:check` → 版本已存在则跳过 → OIDC `npm publish`       |
-| 发布鉴权        | GitHub OIDC Trusted Publishing（`id-token: write`）；仓库不保存 `NPM_TOKEN`；首次发布除外                                         |
-| 发布前守卫      | release.yml 运行 `bun run release:check`；本地手动发布仍由 `prepublishOnly` → `release:check` 兜底                                |
-| `release:check` | invariants + lint + typecheck + test + build + dist smoke + `npm pack --dry-run`                                                  |
-| GitHub Release  | 手动 `gh release create`；notes 由真实 diff 清单生成，不用 `--generate-notes`                                                     |
-| tag 命名        | `miniprogram-vX.Y.Z`，必须与 `package.json` 的 `version` 逐字符一致                                                                           |
-| dist-tag        | 稳定版 `latest`；版本含 `-` 时用 `next`                                                                                           |
-| README          | 不写版本号；发版不改 README 的安装命令                                                                                            |
-| 首次发布        | 若 `npm view @yansongda/miniprogram-otp version` 返回 404，按「首次发布特例」处理                                                 |
+| 环节            | 事实                                                                                                                                                |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 包              | npm 公开包 `@yansongda/miniprogram-otp`（scoped，`publishConfig.access: "public"`）                                                                 |
+| 包入口          | `main: dist/index.js`、`types: dist/index.d.ts`、`miniprogram: dist`                                                                                |
+| 测试 CI         | `.github/workflows/ci.yml`：push `main`、PR、tag `miniprogram-v*`；Bun 版本由 `.bun-version` 固定（当前 `1.4.4`），另有非阻塞 `compat-latest`       |
+| 发布 CI         | `.github/workflows/release-miniprogram.yml`：push tag `miniprogram-v*` → tag/version 校验 → `release:check` → 版本已存在则跳过 → OIDC `npm publish` |
+| 发布鉴权        | GitHub OIDC Trusted Publishing（`id-token: write`）；仓库不保存 `NPM_TOKEN`；首次发布除外                                                           |
+| 发布前守卫      | release-miniprogram.yml 运行 `bun run release:check`；本地手动发布仍由 `prepublishOnly` → `release:check` 兜底                                      |
+| `release:check` | invariants + lint + typecheck + test + build + dist smoke + `npm pack --dry-run`                                                                    |
+| GitHub Release  | 手动 `gh release create`；notes 由真实 diff 清单生成，不用 `--generate-notes`                                                                       |
+| tag 命名        | `miniprogram-vX.Y.Z`，必须与 `package.json` 的 `version` 逐字符一致                                                                                 |
+| dist-tag        | 稳定版 `latest`；版本含 `-` 时用 `next`                                                                                                             |
+| README          | 不写版本号；发版不改 README 的安装命令                                                                                                              |
+| 首次发布        | 若 `npm view @yansongda/miniprogram-otp version` 返回 404，按「首次发布特例」处理                                                                   |
 
 ## When to Use
 
@@ -60,11 +61,11 @@ gh run list --workflow=ci.yml --limit 1  # 最新 main CI 必须 success
 
 ### 三道闸门
 
-| 闸门                     | 谁决定                               | Agent 行为                                                            |
-| ------------------------ | ------------------------------------ | --------------------------------------------------------------------- |
-| 版本号                   | 用户确认或指定                       | 给建议 + 理由，等待确认                                               |
-| `git push`（分支 / tag） | 用户当次明确说「push / 推送 / 执行」 | 展示命令，等待授权；**必须说明 push tag 会触发 release.yml 发布 npm** |
-| 手动 `npm publish`       | 用户当次明确授权                     | 仅用于首次发布 / OIDC 不可用时的兜底；展示命令后等待授权              |
+| 闸门                     | 谁决定                               | Agent 行为                                                                        |
+| ------------------------ | ------------------------------------ | --------------------------------------------------------------------------------- |
+| 版本号                   | 用户确认或指定                       | 给建议 + 理由，等待确认                                                           |
+| `git push`（分支 / tag） | 用户当次明确说「push / 推送 / 执行」 | 展示命令，等待授权；**必须说明 push tag 会触发 release-miniprogram.yml 发布 npm** |
+| 手动 `npm publish`       | 用户当次明确授权                     | 仅用于首次发布 / OIDC 不可用时的兜底；展示命令后等待授权                          |
 
 「完成」「处理一下」「惯例上要 push/publish」都不构成授权；上一轮会话的授权不延续到本轮。
 
@@ -81,8 +82,8 @@ gh run list --workflow=ci.yml --limit 1  # 最新 main CI 必须 success
   → 人工合并
   → pull main + 核对 version
   → annotated tag miniprogram-vX.Y.Z
-  → 用户授权 push tag（会触发 release.yml 发布 npm）
-  → release.yml: tag/version 校验 → release:check → OIDC npm publish
+  → 用户授权 push tag（会触发 release-miniprogram.yml 发布 npm）
+  → release-miniprogram.yml: tag/version 校验 → release:check → OIDC npm publish
   → tag CI / release workflow success
   → 发布后核验
   → 生成 notes + GitHub Release
@@ -285,7 +286,7 @@ git describe --tags --abbrev=0   # 应为 $TAG
 - tag：miniprogram-vX.Y.Z（annotated，指向 <commit>）
 - 本地验收：release:check 全绿
 - 待执行：git push origin miniprogram-vX.Y.Z
-- push 后：tag 触发 ci.yml（main + compat-latest）与 release.yml（OIDC npm publish）
+- push 后：tag 触发 ci.yml（main + compat-latest）与 release-miniprogram.yml（OIDC npm publish）
 - 首次发布：必须先本地手动 npm publish，再推 tag（见「首次发布特例」）
 ```
 
@@ -303,11 +304,11 @@ git push origin "$TAG"        # 不要用 --tags，避免带上陈旧 tag
 等待发布 workflow：
 
 ```bash
-gh run list --workflow=release.yml --limit 1
+gh run list --workflow=release-miniprogram.yml --limit 1
 gh run watch <run-id> --exit-status
 ```
 
-release.yml 行为：
+release-miniprogram.yml 行为：
 
 1. 校验 tag ↔ `package.json` version；
 2. 跑 `bun run release:check`；
@@ -404,52 +405,57 @@ git remote prune origin
 
 触发条件：`npm view @yansongda/miniprogram-otp version` 返回 404。
 
-release.yml 要求 npm 包已存在且 Trusted Publisher 已配置，因此**首次发布必须先本地手动完成，再推 tag**：
+release-miniprogram.yml 要求 npm 包已存在且 Trusted Publisher 已配置，因此**首次发布必须先本地手动完成，再推 tag**：
 
 1. 按 Step 1–3 完成 diff / CHANGELOG / `release:check`；合并发布 PR。
 2. 本地创建 annotated tag `v1.0.0`（先不 push）。
 3. 用户执行本地首发：
+
    ```bash
    npm login          # 用户亲自输入凭据；agent 不接触 token / OTP
    npm whoami
    npm publish --access public
    ```
+
    `prepublishOnly` 会再跑一次 `release:check`。
 4. 核验：
+
    ```bash
    npm view @yansongda/miniprogram-otp version   # 必须等于首发版本
    ```
 5. 在 npm 包设置页配置 Trusted Publisher：
    - Organization/user: `yansongda`
    - Repository: `miniprogram-otp`
-   - Workflow filename: `release.yml`
+   - Workflow filename: `release-miniprogram.yml`
    - Allowed actions: 勾选 **`npm publish`**
 6. push tag（需当次授权）：
+
    ```bash
    git push origin v1.0.0
    ```
-   release.yml 会跑 `release:check`，发现该版本已在 npm 上 → 跳过 publish；tag CI 正常跑。
+
+   release-miniprogram.yml 会跑 `release:check`，发现该版本已在 npm 上 → 跳过 publish；tag CI 正常跑。
 7. 按 Step 11 创建 GitHub Release。
 
-> 若先 push tag 再手动发布，release.yml 会在 `Check npm package state` 步骤报「包不存在」并失败。这是预期的首次发布保护。
+> 若先 push tag 再手动发布，release-miniprogram.yml 会在 `Check npm package state` 步骤报「包不存在」并失败。这是预期的首次发布保护。
 
 ## OIDC 配置 checklist（npm 侧）
 
-release.yml 已使用 OIDC，仓库不需要 `NPM_TOKEN`；但 npm 包需要完成一次配置：
+release-miniprogram.yml 已使用 OIDC，仓库不需要 `NPM_TOKEN`；但 npm 包需要完成一次配置：
 
-1. npm 包设置 → Trusted Publisher：`yansongda` / `miniprogram-otp` / `release.yml`，允许 `npm publish`；
+1. npm 包设置 → Trusted Publisher：`yansongda` / `otp` / `release-miniprogram.yml`，允许 `npm publish`；
 2. workflow 已有 `permissions: id-token: write`，发布命令为
    `npm publish --ignore-scripts --provenance --access public --tag <latest|next>`；
-3. 要求 npm CLI ≥ 11.5.1、Node ≥ 22.14（release.yml 用 Node 24）；
+3. 要求 npm CLI ≥ 11.5.1、Node ≥ 22.14（release-miniprogram.yml 用 Node 24）；
 4. 新配置的 Trusted Publisher 需在 **2 天内**完成一次成功发布，否则配置过期，只能删除重建；
 5. 若 publish 报 `ENEEDAUTH` / `Unable to authenticate`，逐项核对 workflow 文件名大小写、仓库名、`package.json` 的 `repository.url`、Allowed actions 是否允许 `npm publish`；
-6. 失败重跑优先用 `gh run rerun <run-id>`；版本已存在时 release.yml 会跳过 publish，不会 403。
+6. 失败重跑优先用 `gh run rerun <run-id>`；版本已存在时 release-miniprogram.yml 会跳过 publish，不会 403。
 
 ## 异常与回滚
 
 | 情况                               | 处理                                                                                   |
 | ---------------------------------- | -------------------------------------------------------------------------------------- |
-| tag 打错，尚未 push                | `git tag -d miniprogram-vX.Y.Z`，修正后重打                                                        |
+| tag 打错，尚未 push                | `git tag -d miniprogram-vX.Y.Z`，修正后重打                                            |
 | tag 已 push，尚未 publish          | 删除远端 tag（需授权）→ 修正 → 从 Step 4 重走                                          |
 | tag/version 不一致                 | 删除本地/远端 tag，改 `package.json` 走 PR 后重打                                      |
 | tag CI 失败                        | 修问题，删远端 tag（授权）后重走；不要带失败 tag 发布                                  |
@@ -461,18 +467,18 @@ release.yml 已使用 OIDC，仓库不需要 `NPM_TOKEN`；但 npm 包需要完�
 
 ## Anti-Patterns & Rationalizations
 
-| 借口                                         | 事实                                                                |
-| -------------------------------------------- | ------------------------------------------------------------------- |
-| 「用户说发版 = 授权 push」                   | 发版 ≠ push；push 必须当次授权                                      |
-| 「push tag 只是打标签，不等于发布」          | release.yml 会 OIDC publish；授权前必须明确告知                     |
-| 「用户说发版 = 授权手动 npm publish」        | 首次发布 / 兜底 publish 不可逆；必须单独当次授权                    |
-| 「PR CI 绿了，可以自动合并」                 | 永不自动合并；等人工合并后告知                                      |
-| 「CHANGELOG 抄 commit message 更快」         | commit message 会漏/夸大；唯一依据是 diff                           |
-| 「Release notes 用 `--generate-notes` 省事」 | 它汇总 commit/PR，不是代码 diff；禁止                               |
-| 「tag 先推，版本号之后再看」                 | tag/version 不一致会污染永久历史                                    |
-| 「本地 release:check 跑过，tag CI 可跳」     | tag CI 是发布前最后一道自动验证，必须等 success                     |
-| 「publish 失败就重推同一个 tag」             | 先 `gh run rerun`；workflow 发现版本已存在会跳过 publish            |
-| 「token 写进 .npmrc 方便」                   | release.yml 用 OIDC；仓库不保存 token；本地首发用 `npm login` + 2FA |
+| 借口                                         | 事实                                                                            |
+| -------------------------------------------- | ------------------------------------------------------------------------------- |
+| 「用户说发版 = 授权 push」                   | 发版 ≠ push；push 必须当次授权                                                  |
+| 「push tag 只是打标签，不等于发布」          | release-miniprogram.yml 会 OIDC publish；授权前必须明确告知                     |
+| 「用户说发版 = 授权手动 npm publish」        | 首次发布 / 兜底 publish 不可逆；必须单独当次授权                                |
+| 「PR CI 绿了，可以自动合并」                 | 永不自动合并；等人工合并后告知                                                  |
+| 「CHANGELOG 抄 commit message 更快」         | commit message 会漏/夸大；唯一依据是 diff                                       |
+| 「Release notes 用 `--generate-notes` 省事」 | 它汇总 commit/PR，不是代码 diff；禁止                                           |
+| 「tag 先推，版本号之后再看」                 | tag/version 不一致会污染永久历史                                                |
+| 「本地 release:check 跑过，tag CI 可跳」     | tag CI 是发布前最后一道自动验证，必须等 success                                 |
+| 「publish 失败就重推同一个 tag」             | 先 `gh run rerun`；workflow 发现版本已存在会跳过 publish                        |
+| 「token 写进 .npmrc 方便」                   | release-miniprogram.yml 用 OIDC；仓库不保存 token；本地首发用 `npm login` + 2FA |
 
 ## Quick Reference
 
@@ -483,9 +489,9 @@ release.yml 已使用 OIDC，仓库不需要 `NPM_TOKEN`；但 npm 包需要完�
 | diff→清单        | `docs/evidence/.../diff-inventory.md`（gitignored）                               | 无需                                      |
 | 版本同步         | 改 `package.json` + `CHANGELOG.md`；`git grep <旧版本>`                           | 无需                                      |
 | 发布验收         | `bun run release:check`                                                           | 无需                                      |
-| PR               | `chore(release): miniprogram-vX.Y.Z` → `gh pr create`                                         | push 分支需授权；合并人工                 |
-| tag              | `git tag -a miniprogram-vX.Y.Z` + `git show`                                                  | 无需（本地）                              |
-| push tag         | `git push origin miniprogram-vX.Y.Z` → 触发 release.yml OIDC publish                          | **需当次授权，并告知会自动发布 npm**      |
+| PR               | `chore(release): miniprogram-vX.Y.Z` → `gh pr create`                             | push 分支需授权；合并人工                 |
+| tag              | `git tag -a miniprogram-vX.Y.Z` + `git show`                                      | 无需（本地）                              |
+| push tag         | `git push origin miniprogram-vX.Y.Z` → 触发 release-miniprogram.yml OIDC publish  | **需当次授权，并告知会自动发布 npm**      |
 | 手动 npm publish | 仅首次发布 / OIDC 兜底：`npm publish --access public`                             | **需单独当次授权**                        |
 | workflow 核验    | `gh run view <run-id> --log`、`npm view`、dist-tags                               | 无需                                      |
 | 本地核验         | `npm view`、临时安装、`npm pack` 查产物                                           | 无需                                      |

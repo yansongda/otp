@@ -1,8 +1,8 @@
 # @yansongda/miniprogram-otp
 
-A zero-dependency RFC 4226 / RFC 6238 HOTP and TOTP library for **WeChat Mini Program**, written in TypeScript and published as CommonJS.
+A zero-dependency RFC 4226 / RFC 6238 HOTP and TOTP library for **WeChat Mini Program**, published as CommonJS.
 
-The public API, error model and algorithm behavior mirror the ArkTS library [`@yansongda/otp`](https://github.com/yansongda/otp/tree/main/packages/ohos-otp/library) (functional parity with `ohos-otp/library` v1.1.0), while the implementation is adapted to the Mini Program runtime: pure-JS HMAC/SHA and no synchronous CSPRNG assumption.
+The protocol implementation comes from this monorepo's shared, platform-agnostic core (`packages/core`). This package adds the WeChat runtime layer — a pure-JS HMAC/SHA provider (no synchronous CSPRNG assumption) and the TypeScript public types. Its public API and error model are aligned with the HarmonyOS package [`@yansongda/otp`](https://github.com/yansongda/otp/tree/main/packages/ohos-otp/library).
 
 ## Features
 
@@ -210,12 +210,13 @@ The Mini Program has no WebCrypto / SubtleCrypto. HMAC-SHA1/256/512 are implemen
 - No Steam Guard, SHA224/SHA384/SM3, BigInt counters, throttling (RFC 4226 §7.3 is a server responsibility), QR rendering or scanning.
 - Pure-JS HMAC is slower than native crypto; this library targets client-side code generation, not bulk server verification.
 
-## Compatibility with ohos-otp
+## Shared core and platform differences
 
-- Public API, DTO field names, 18 error codes and RFC behavior are aligned with `ohos-otp/library` v1.1.0.
+- Public API, DTO field names, 18 error codes and RFC behavior are aligned with the HarmonyOS package (`@yansongda/otp` v1.1.0).
+- Both packages consume `packages/core`; only the type layer and crypto provider differ.
 - `OtpAlgorithm` is a `const` object plus string union instead of an ArkTS `enum`, so both `"SHA1"` and `OtpAlgorithm.SHA1` work.
 - `OtpError` additionally sets `name` and `Object.setPrototypeOf`, so `instanceof` survives ES5 downleveling in WeChat.
-- HMAC is pure JS instead of `@kit.CryptoArchitectureKit`.
+- HMAC is the shared pure-JS provider (`packages/core/src/pure-js`), not `@kit.CryptoArchitectureKit`.
 - Random source is not registered by default; see above.
 
 ## Development
@@ -224,8 +225,8 @@ The Mini Program has no WebCrypto / SubtleCrypto. HMAC-SHA1/256/512 are implemen
 bun install
 bun run lint              # biome check
 bun run typecheck         # tsc --noEmit
-bun test                  # Bun tests
-bun run build             # tsc -> dist (CommonJS + d.ts)
+bun test                  # platform contract tests
+bun run build             # tsdown -> dist (single-file CommonJS + single-file d.ts)
 bun run check:invariants  # repository invariants
 bun run smoke:dist        # require dist and verify RFC vectors
 bun run release:check     # full pre-release gate (includes npm pack --dry-run)

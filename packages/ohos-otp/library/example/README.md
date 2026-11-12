@@ -1,5 +1,7 @@
 # Example — `@yansongda/otp`
 
+> The implementation lives in the monorepo's shared core (`packages/core`); this directory only contains usage examples shipped with the HAR.
+
 Copy-paste snippets for the most common flows. The complete API surface, options and the
 error-code troubleshooting table live in the package `README.md` (`library/README.md`).
 

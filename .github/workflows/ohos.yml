@@ -48,7 +48,7 @@ env:
   # 升级 SDK 是一个显式 PR（同时要改下面的 sha256）。
   CLI_VERSION: '6.1.1.280'
   CLI_MIRROR: https://github.com/ErBWs/ohos-sdk/releases/download
-  # 覆盖率门槛（当前 90.11%，留一点合理浮动）
+  # 覆盖率门槛（当前 90.92%，留一点合理浮动）
   COVERAGE_MIN_LINES: '88'
 
 jobs:

@@ -1,24 +1,24 @@
 # AGENTS.md —— miniprogram-otp 工程上下文
 
 > 面向所有在该仓库工作的编码 agent / 协作者。**动手前先读本文件**。
-> 设计基线：`ohos-otp/library` v1.1.0（ArkTS）与 `yansongda-application/wechat/miniprogram/totp/src/otp`（TS）。
+> 设计基线：公开 API / 错误模型与 `packages/ohos-otp/library` v1.1.0 对齐；实现来自 `packages/core`（唯一源码）。
 
 ## 1. 项目定位
 
 - 本目录是 monorepo 的 `packages/miniprogram-otp`，发布 npm 包 **`@yansongda/miniprogram-otp`**：RFC 4226 HOTP + RFC 6238 TOTP（SHA1/SHA256/SHA512，6/7/8 位，otpauth URI，漂移窗口，时钟校准，可选严格 base32）。
 - **实现全部来自 `packages/core`（唯一源码）**；本包只保留平台类型层、纯 JS crypto 注册、barrel + 类型桥。
 - 目标运行时：微信小程序（CommonJS）；同时可用于 Node / Bun / 现代打包器。
-- 零运行时依赖；`dependencies` 必须保持 `{}`（`@yansongda/otp-core` 只允许出现在 `devDependencies`）。
+- 零运行时依赖；`dependencies` 必须保持 `{}`。`@yansongda/otp-core` 不是依赖：通过 `tsconfig.paths` + `tsdown.alias` 指向 monorepo 源码，不会出现在发布物元数据里。
 - 构建：`tsdown` 把 core 源码内联为单文件 `dist/index.js`（CJS）+ 单文件 `dist/index.d.ts`；微信只消费 `dist/index.js`。
 
 ## 2. 分层与不变量（**改动必须遵守**）
 
-| 层 | 位置 | 允许依赖 |
-| --- | --- | --- |
-| 共享实现 | `../core/src/**`（唯一源码，本包只消费） | 零平台能力 |
-| 平台类型层 | `src/types.ts`（const 对象 + 字面量联合 + 严格 DTO）、`src/errors.ts`（公开 OtpError / 18 码） | 无 |
-| 平台 provider | `src/index.ts` 导入时注册 `installPureJsHmac()` + `setErrorFactory()` | `@yansongda/otp-core/pure-js` |
-| 出口 | `src/index.ts`（公开符号 + 构造签名类型桥） | 以上 |
+| 层            | 位置                                                                                           | 允许依赖                                                      |
+| ------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| 共享实现      | `../core/src/**`（唯一源码，本包只消费）                                                       | 零平台能力                                                    |
+| 平台类型层    | `src/types.ts`（const 对象 + 字面量联合 + 严格 DTO）、`src/errors.ts`（公开 OtpError / 18 码） | 无                                                            |
+| 平台 provider | `src/index.ts` 导入时注册 `installPureJsHmac()` + `setErrorFactory()`                          | `@yansongda/otp-core/pure-js`（paths + alias 解析，非包依赖） |
+| 出口          | `src/index.ts`（公开符号 + 构造签名类型桥）                                                    | 以上                                                          |
 
 1. **`src/index.ts` 是唯一公开入口**：导入时幂等调用 `installPureJsHmac()` 与 `setErrorFactory()`；core 内部模块不得从 barrel 深导出。
 2. **平台层零平台调用**（core 已是零平台）：本包不得出现 `wx.*`、`console.*`、`node:` 内置模块；平台随机数由使用方通过 `wx.getRandomValues` + `Secret.fromBytes` 提供。
@@ -43,9 +43,9 @@ bun install
 bun run lint              # biome check（格式 + lint + import 组织）
 bun run lint:fix          # biome check --fix
 bun run typecheck         # tsc --noEmit
-bun test                  # 全部 Bun 测试（tests/）
+bun test                  # 平台契约测试（tests/）
 bun run test:coverage     # Bun 覆盖率
-bun run build             # tsc -> dist（CJS + d.ts）
+bun run build             # tsdown -> dist（单文件 CJS + 单文件 d.ts）
 bun run check:invariants  # 仓库不变量守卫（零依赖 node 脚本）
 bun run smoke:dist        # require dist 并验证 RFC 向量
 bun run release:check     # 发版前全量检查（含 npm pack --dry-run）
@@ -78,7 +78,7 @@ Bun 版本固定于 `.bun-version`（当前 `1.4.4`）。主 CI 通过 `bun-vers
 - `prepublishOnly` → `release:check`（guard / lint / typecheck / test / build / smoke / pack）；发布前必须通过。
 - 包名固定 `@yansongda/miniprogram-otp`；修改包名属于设计性变更，需确认。
 - 父仓库 `yansongda-application/wechat/miniprogram/totp` 不在本仓库编辑范围；迁移父仓库属于独立任务。
-- 与 `ohos-otp/library` 对齐时，以公开 API / 错误码 / 行为为准；实现细节允许按 TypeScript / 微信运行时调整。
+- 与 ohos 包的公开 API / 错误码 / 行为对齐；算法实现统一在 `packages/core`，本包不再复制。
 
 ## 7. 发版
 

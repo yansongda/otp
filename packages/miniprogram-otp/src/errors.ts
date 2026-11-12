@@ -1,7 +1,7 @@
 /**
  * 统一错误模型：错误码（18 个，字符串值）+ OtpError。
  *
- * 与 ohos-otp 的 OtpError.ets 保持逐字一致：错误码取值冻结，v1 起仅允许新增；
+ * 错误码取值与 ohos 包 / core 保持一致：18 个码冻结，v1 起仅允许新增；
  * 消息文案固定，绝不包含 secret / token / 派生密钥等用户输入。
  */
 export const OtpErrorCode = {

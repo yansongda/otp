@@ -1,8 +1,8 @@
 # @yansongda/miniprogram-otp
 
-面向 **微信小程序** 的零依赖 RFC 4226 / RFC 6238 HOTP / TOTP 库，使用 TypeScript 编写，发布为 CommonJS。
+面向 **微信小程序** 的零依赖 RFC 4226 / RFC 6238 HOTP / TOTP 库，发布为 CommonJS。
 
-公开 API、错误模型与算法行为对齐 ArkTS 库 [`@yansongda/otp`](https://github.com/yansongda/otp/tree/main/packages/ohos-otp/library)（功能对齐 `ohos-otp/library` v1.1.0），实现按小程序运行时适配：纯 JS HMAC/SHA，不假设存在同步 CSPRNG。
+协议实现来自本 monorepo 的共享 core（`packages/core`）；本包只补微信运行时层——纯 JS HMAC/SHA provider（不假设存在同步 CSPRNG）与 TypeScript 公开类型。公开 API 与错误模型对齐鸿蒙包 [`@yansongda/otp`](https://github.com/yansongda/otp/tree/main/packages/ohos-otp/library)。
 
 ## 特性
 
@@ -210,12 +210,13 @@ wx.getRandomValues({
 - 不提供 Steam Guard、SHA224/SHA384/SM3、BigInt counter、throttling（RFC 4226 §7.3 属服务端职责）、二维码渲染 / 扫码。
 - 纯 JS HMAC 比系统 crypto 慢；本库面向端内算码，不用于服务端批量校验。
 
-## 与 ohos-otp 的兼容性
+## 共享 core 与平台差异
 
-- 公开 API、DTO 字段名、18 个错误码与 RFC 行为对齐 `ohos-otp/library` v1.1.0。
+- 公开 API、DTO 字段名、18 个错误码与 RFC 行为对齐鸿蒙包（`@yansongda/otp` v1.1.0）。
+- 两个包都消费 `packages/core`；差异只在类型层与 crypto provider。
 - `OtpAlgorithm` 在 TS 侧为 `const` 对象 + 字符串联合，而不是 ArkTS `enum`；`"SHA1"` 与 `OtpAlgorithm.SHA1` 都可用。
 - `OtpError` 额外设置 `name` 与 `Object.setPrototypeOf`，保证微信 ES5 降级后 `instanceof` 可靠。
-- HMAC 为纯 JS，不使用 `@kit.CryptoArchitectureKit`。
+- HMAC 使用共享的纯 JS provider（`packages/core/src/pure-js`），不使用 `@kit.CryptoArchitectureKit`。
 - 默认不注册随机源；见上。
 
 ## 开发
@@ -224,8 +225,8 @@ wx.getRandomValues({
 bun install
 bun run lint              # biome check
 bun run typecheck         # tsc --noEmit
-bun test                  # Bun tests
-bun run build             # tsc -> dist（CommonJS + d.ts）
+bun test                  # 平台契约测试
+bun run build             # tsdown -> dist（单文件 CommonJS + 单文件 d.ts）
 bun run check:invariants  # 仓库不变量
 bun run smoke:dist        # require dist 并验证 RFC 向量
 bun run release:check     # 发版前全量检查（含 npm pack --dry-run）

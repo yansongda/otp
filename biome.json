@@ -9,7 +9,15 @@
       "packages/miniprogram-otp/scripts/**/*",
       "scripts/**/*",
       "*.json",
-      "*.md"
+      "*.md",
+      "packages/miniprogram-otp/AGENTS.md",
+      "packages/miniprogram-otp/README.md",
+      "packages/miniprogram-otp/README-cn.md",
+      "packages/ohos-otp/AGENTS.md",
+      "packages/ohos-otp/library/README.md",
+      "packages/ohos-otp/library/README-cn.md",
+      "packages/ohos-otp/library/example/README.md",
+      ".agents/skills/**/*.md"
     ],
     "ignoreUnknown": false
   },

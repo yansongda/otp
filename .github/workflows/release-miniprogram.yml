@@ -1,3 +1,5 @@
+# 由 tag miniprogram-v* 触发；OIDC Trusted Publishing 发布 npm，仓库不保存任何 registry token。
+# 发布前跑 release:check；版本已在 npm 上则跳过 publish（可安全重跑）。
 name: release-miniprogram
 
 on:
