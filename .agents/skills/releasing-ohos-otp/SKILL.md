@@ -22,7 +22,7 @@ description: 用于发布 @yansongda/otp 新版本到 OHPM 时——bump 版本�
 | 1   | 落版      | 版本唯一来源是 `library/oh-package.json5`；`CHANGELOG.md` 写出 `## <ver> - <YYYY-MM-DD>`；**README（含预发布清单）不写版本字面量**（见 Red flags），只需保证与 `oh-package.json5` 一致 |
 | 2   | 本地预检  | 不变量守卫 9/9 → CodeLinter 0 缺陷 → local test 全绿 → `assembleHar` → 产物自检 → `prepublish succeed`                                                                                 |
 | 3   | 分支 + PR | 本仓库是 **squash** 合并；PR 由人工合并，agent 不合并                                                                                                                                  |
-| 4   | tag       | `git tag -a v<ver> -m "v<ver>" <merge-commit>`；推送需人工授权                                                                                                                         |
+| 4   | tag       | `git tag -a ohos-v<ver> -m "ohos-v<ver>" <merge-commit>`（tag 与根 `AGENTS.md` §5 的 `ohos-vX.Y.Z` 一致，勿用裸 `v<ver>`）；推送需人工授权                                             |
 | 5   | publish   | **由人在真实终端执行**；agent 只交付命令与核验结论                                                                                                                                     |
 
 ## 产物自检（`AGENTS.md` §3 命令之外的必做项）
