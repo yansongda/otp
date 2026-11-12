@@ -280,9 +280,9 @@ check("发布脚本、release skill 与 release-miniprogram.yml 存在", () => {
   if (!scripts.prepublishOnly.includes("release:check")) {
     throw new Error("prepublishOnly 必须调用 release:check");
   }
-  const skill = readText(".agents/skills/release/SKILL.md");
-  if (!/^name:\s*release\s*$/m.test(skill)) {
-    throw new Error("release skill 缺少 name: release");
+  const skill = readText("../../.agents/skills/release-miniprogram/SKILL.md");
+  if (!/^name:\s*release-miniprogram\s*$/m.test(skill)) {
+    throw new Error("release skill 缺少 name: release-miniprogram");
   }
   if (!/^description:/m.test(skill)) {
     throw new Error("release skill 缺少 description");

@@ -7,6 +7,18 @@
 - monorepo：`packages/core` 是**唯一实现源码**；两个平台包只保留平台类型层、crypto 实现与 barrel。
 - `packages/core` 不对外发布；`packages/miniprogram-otp` 发 npm；`packages/ohos-otp/library` 发 ohpm HAR。
 
+## 1.1 指令 / skill 索引（子包内容不会自动加载）
+
+Pi 只自动加载本文件（cwd 及其祖先的 context file）；子包 AGENTS 与 skill 需按下表主动读取。
+
+| 范围            | 文件                                          | 何时读                               |
+| --------------- | --------------------------------------------- | ------------------------------------ |
+| monorepo 总则   | `AGENTS.md`（本文件）                         | 始终（自动加载）                     |
+| 微信小程序包    | `packages/miniprogram-otp/AGENTS.md`          | 改该包 / 发 npm 版前                 |
+| 鸿蒙 HAR 包     | `packages/ohos-otp/AGENTS.md`                 | 改该包 / 构建 / 发 ohpm 版前         |
+| npm 发版 skill  | `.agents/skills/release-miniprogram/SKILL.md` | 发布 `@yansongda/miniprogram-otp` 时 |
+| ohpm 发版 skill | `.agents/skills/releasing-ohos-otp/SKILL.md`  | 发布 `@yansongda/otp` 时             |
+
 ## 2. 分层与不变量
 
 | 层                | 位置                                                                                                                        | 约束                                                                       |

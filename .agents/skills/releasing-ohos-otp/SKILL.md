@@ -5,6 +5,9 @@ description: 用于发布 @yansongda/otp 新版本到 OHPM 时——bump 版本�
 
 # 发布 @yansongda/otp 到 OHPM
 
+> **路径约定（monorepo）**：本 skill 位于仓库根 `.agents/skills/releasing-ohos-otp/`。
+> 下文所有命令默认在 `packages/ohos-otp` 目录执行；`library/...` 路径相对该目录（先 `cd packages/ohos-otp`）。
+
 ## Overview
 
 **已发布版本不可覆盖、不可删除**——发错只能占用下一个版本号，所以产物自检是最后一道防线。

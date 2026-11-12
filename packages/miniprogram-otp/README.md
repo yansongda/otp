@@ -233,7 +233,7 @@ bun run release:check     # full pre-release gate (includes npm pack --dry-run)
 
 The Bun version is pinned in `.bun-version` (currently `1.4.4`); CI also runs a non-blocking latest-Bun compatibility job. `bun fmt` can format README/JSON files, but the CI source of truth is Biome.
 
-Releases: `.github/workflows/release.yml` publishes to npm on tag `v*` via GitHub OIDC Trusted Publishing. First release is manual; see `.agents/skills/release/SKILL.md`.
+Releases: `.github/workflows/release-miniprogram.yml` publishes to npm on tag `miniprogram-v*` via GitHub OIDC Trusted Publishing. First release is manual; see `.agents/skills/release-miniprogram/SKILL.md`.
 
 ## License
 

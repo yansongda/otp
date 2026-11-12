@@ -1,9 +1,13 @@
 ---
-name: release
+name: release-miniprogram
 description: "@yansongda/miniprogram-otp 本仓库发版流程（首次发布 / bump version / 写 CHANGELOG / 打 tag / npm publish / GitHub Release / 发布核验 / 回滚）。用户说发版、发布新版本、release、publish、打 tag、建 Release 时使用。"
 ---
 
 # Release：@yansongda/miniprogram-otp
+
+> **路径约定（monorepo）**：本 skill 位于仓库根 `.agents/skills/release-miniprogram/`。
+> 下文所有命令默认在 `packages/miniprogram-otp` 目录执行；`docs/evidence/`、`scripts/ci/...`、
+> `src/`、`tests/` 等路径均相对该包目录（先 `cd packages/miniprogram-otp`）。
 
 ## Overview
 
@@ -498,4 +502,4 @@ release.yml 已使用 OIDC，仓库不需要 `NPM_TOKEN`；但 npm 包需要完�
 - `README.md` / `README-cn.md`：不写版本号；安装命令固定
 - `docs/evidence/`：gitignored，放 diff 清单与 notes 草稿
 
-<!-- 本 skill 位于 .agents/skills/release/；编辑后 /reload 生效。 -->
+<!-- 本 skill 位于仓库根 .agents/skills/release-miniprogram/；编辑后 /reload 生效。 -->
