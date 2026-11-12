@@ -2,7 +2,7 @@
 
 A zero-dependency RFC 4226 / RFC 6238 HOTP and TOTP library for **WeChat Mini Program**, written in TypeScript and published as CommonJS.
 
-The public API, error model and algorithm behavior mirror the ArkTS library [`@yansongda/otp`](https://github.com/yansongda/ohos-otp) (functional parity with `ohos-otp/library` v1.1.0), while the implementation is adapted to the Mini Program runtime: pure-JS HMAC/SHA and no synchronous CSPRNG assumption.
+The public API, error model and algorithm behavior mirror the ArkTS library [`@yansongda/otp`](https://github.com/yansongda/otp/tree/main/packages/ohos-otp/library) (functional parity with `ohos-otp/library` v1.1.0), while the implementation is adapted to the Mini Program runtime: pure-JS HMAC/SHA and no synchronous CSPRNG assumption.
 
 ## Features
 

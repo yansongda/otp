@@ -2,7 +2,7 @@
 
 面向 **微信小程序** 的零依赖 RFC 4226 / RFC 6238 HOTP / TOTP 库，使用 TypeScript 编写，发布为 CommonJS。
 
-公开 API、错误模型与算法行为对齐 ArkTS 库 [`@yansongda/otp`](https://github.com/yansongda/ohos-otp)（功能对齐 `ohos-otp/library` v1.1.0），实现按小程序运行时适配：纯 JS HMAC/SHA，不假设存在同步 CSPRNG。
+公开 API、错误模型与算法行为对齐 ArkTS 库 [`@yansongda/otp`](https://github.com/yansongda/otp/tree/main/packages/ohos-otp/library)（功能对齐 `ohos-otp/library` v1.1.0），实现按小程序运行时适配：纯 JS HMAC/SHA，不假设存在同步 CSPRNG。
 
 ## 特性
 

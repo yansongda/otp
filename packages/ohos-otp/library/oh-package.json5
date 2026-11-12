@@ -8,8 +8,8 @@
     "url": "https://yansongda.cn"
   },
   "license": "MIT",
-  "repository": "https://github.com/yansongda/ohos-otp",
-  "homepage": "https://github.com/yansongda/ohos-otp",
+  "repository": "https://github.com/yansongda/otp",
+  "homepage": "https://github.com/yansongda/otp/tree/main/packages/ohos-otp/library",
   "keywords": [
     "otp",
     "totp",

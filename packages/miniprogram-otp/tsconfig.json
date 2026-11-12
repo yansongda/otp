@@ -15,7 +15,11 @@
     "strictPropertyInitialization": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "noEmit": true
+    "noEmit": true,
+    "paths": {
+      "@yansongda/otp-core": ["../core/src/index.ts"],
+      "@yansongda/otp-core/pure-js": ["../core/src/pure-js.ts"]
+    }
   },
   "include": ["src/**/*.ts", "tests/**/*.ts"]
 }

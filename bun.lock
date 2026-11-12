@@ -24,7 +24,6 @@
       "devDependencies": {
         "@biomejs/biome": "^2.6.6",
         "@types/bun": "^1.4.4",
-        "@yansongda/otp-core": "0.1.0",
         "typescript": "^7.0.2",
       },
     },

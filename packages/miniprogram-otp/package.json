@@ -47,11 +47,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/yansongda/miniprogram-otp.git"
+    "url": "git+https://github.com/yansongda/otp.git",
+    "directory": "packages/miniprogram-otp"
   },
-  "homepage": "https://github.com/yansongda/miniprogram-otp",
+  "homepage": "https://github.com/yansongda/otp/tree/main/packages/miniprogram-otp",
   "bugs": {
-    "url": "https://github.com/yansongda/miniprogram-otp/issues"
+    "url": "https://github.com/yansongda/otp/issues"
   },
   "publishConfig": {
     "access": "public"
@@ -59,7 +60,6 @@
   "dependencies": {},
   "devDependencies": {
     "@biomejs/biome": "^2.6.6",
-    "@yansongda/otp-core": "0.1.0",
     "@types/bun": "^1.4.4",
     "typescript": "^7.0.2"
   }
