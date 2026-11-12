@@ -33,9 +33,9 @@ description: 用于发布 @yansongda/otp 新版本到 OHPM 时——发布前 sy
 **禁止手改**（包内 `AGENTS.md` §2 不变量 3）。副本会随 HAR 一起编译，所以副本落后 = 发布物与源码不一致。
 
 ```bash
-bun run sync:core                                                   # 生成副本（幂等，当前 14 个文件）
+bun run sync:core                                                   # 生成副本（幂等）
 git status --porcelain packages/ohos-otp/library/src/main/ets/core  # 期望：无输出
-bun run sync:core:check                                             # 期望：ok (14 files)
+bun run sync:core:check                                             # 期望：ok（文件数与 core 同步集合一致）
 ```
 
 差异处置（**release blocker，不可略过**）：
@@ -67,7 +67,7 @@ tar xOf "$HAR" package/oh-package.json5 | grep '"version"'    # 必须等于待�
 tar tzf "$HAR" | grep -c 'src/test\|ohosTest'                 # 必须为 0
 tar tzf "$HAR" | grep -q '^package/Index.d.ets$'              # 必需：类型入口
 tar tzf "$HAR" | grep -q '^package/example/README.md$'        # 必需：缺失则 OHPM「文档 / example」20 分归零
-tar tzf "$HAR" | wc -l                                        # 参考值 53；与 CI artifact 同源时用于交叉核验
+tar tzf "$HAR" | wc -l                                        # 记录本次条目数（每次构建可能不同），与 CI artifact 同源时用于交叉核验
 # 陈旧性检查：HAR 内打包了 README / README-cn / CHANGELOG / LICENSE，必须与工作区逐字一致
 tar xOf "$HAR" package/README.md    | diff - library/README.md
 tar xOf "$HAR" package/README-cn.md | diff - library/README-cn.md
@@ -120,7 +120,7 @@ curl -sL -o /dev/null -w "%{http_code}\n" \
 | clean clone 直接跑 `hvigor test` 报 `Failed to resolve OhmUrl ... "@ohos/hypium"`（14 条 ArkTS ERROR）                           | 未装 ohpm 依赖：先 `ohpm install --all`（`oh-package-lock.json5` 已有，不需要改版本范围）                                                                                         |
 | `assembleHap`（entry smoke）报 `00308018 Unknown Error` + `Unable to locate a Java Runtime`                                      | 缺 Java：`JAVA_HOME=/Applications/DevEco-Studio.app/Contents/jbr/Contents/Home`；`test` / `assembleHar` 不需要 Java                                                               |
 | 改了 md（README / AGENTS / skill）后 `bun run lint` 报 `Formatter would have printed the following content`（markdown 表格列宽） | biome 覆盖这些 md 并强制对齐表格：`bunx biome check --write <file>` 后重跑 `bun run lint`                                                                                         |
-| 用 nvm / 系统 node 跑 ohpm                                                                                                       | `ohpm` 包装脚本取 `PATH` 里的 `node`；固定用 DevEco 自带 node（实测 `Contents/tools/node` 为 v24.14.1，2026-11-12）                                                               |
+| 用 nvm / 系统 node 跑 ohpm                                                                                                       | `ohpm` 包装脚本取 `PATH` 里的 `node`；固定用 DevEco 自带 node（`Contents/tools/node`），别用 nvm / 系统 node                                                                      |
 | 拿整包 sha256 与人对账                                                                                                           | HAR **字节不可复现**（tar mtime 差异）：清单与包内文件内容一致即可，整包 sha 只当单次构建指纹                                                                                     |
 | `git branch -d` 删 release 分支报 `not fully merged`                                                                             | squash 合并导致分支 tip 不是 main 祖先：先 `git diff <branch> main` 确认零差异，再 `-D`                                                                                           |
 | 发布凭据是 `~/.ssh/id_rsa`（GitHub 身份密钥）                                                                                    | 能发但卫生差：建议改用专用发布密钥（须加密）；**绝不把身份密钥口令写进 `.ohpmrc`**                                                                                                |
@@ -132,5 +132,5 @@ curl -sL -o /dev/null -w "%{http_code}\n" \
 - 因为「registry 查不到」就打算重发同一版本号（可能只是在审核中；先看 publish 收尾输出与 OHPM 控制台）
 - 打算跳过发布前的 `bun run sync:core`（core 是唯一源码，期间任何改动都会漏进发布物）
 - `sync:core` 写出差异后视而不见、或把差异回滚掉再发布（差异要么进本版 CHANGELOG，要么说明这次不该发）
-- 想在设计文档或 README 正文里写具体版本号（版本值只属于 `oh-package.json5` 与 `CHANGELOG.md`）
+- 想在设计文档或 README 正文里写具体版本号（版本值只属于 `oh-package.json5` 与 `CHANGELOG.md`），或写任何会随时间漂移的字面量（工具链版本、文件数、HAR 条目数）
 - 打算替人 push、打 tag、合并 PR，或建议把私钥口令写进配置文件
