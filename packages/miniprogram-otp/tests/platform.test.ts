@@ -72,9 +72,7 @@ describe("platform barrel", () => {
       thrown = error;
     }
     expect(thrown instanceof OtpError).toBe(true);
-    expect((thrown as OtpError).code).toBe(
-      OtpErrorCode.CRYPTO_NOT_INITIALIZED,
-    );
+    expect((thrown as OtpError).code).toBe(OtpErrorCode.CRYPTO_NOT_INITIALIZED);
   });
 
   it("Secret redacts toJSON and hides toString", () => {

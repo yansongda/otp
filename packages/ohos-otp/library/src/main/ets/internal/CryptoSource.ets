@@ -2,22 +2,24 @@
  * kit-only 实现层：cryptoFramework 的 HMAC / 随机源实现。
  *
  * ⚠️ 全库唯一允许 import '@kit.CryptoArchitectureKit' 的文件；
- * 只被 library/Index.ets 值导入（installCryptoDefaults），公开类与 Secret 严禁引用它
+ * 只被 library/Index.ets 值导入（installCryptoDefaults），公开类与 Secret 严禁引用它。
+ * 接口与注册表来自 core/crypto.ts（跨边界签名用基础类型 string）。
  */
 import { cryptoFramework } from '@kit.CryptoArchitectureKit';
+import { HmacProvider, RandomSource, registerHmac, registerRandom } from '../core/crypto';
 import { OtpError, OtpErrorCode } from '../OtpError';
-import { OtpAlgorithm } from '../OtpOptions';
-import { HmacProvider, RandomSource, registerHmac, registerRandom } from './HmacProvider';
 
-/** 将 OtpAlgorithm 映射为 cryptoFramework 的 HMAC 算法名（'SHA1'|'SHA256'|'SHA512'）。 */
-function toMacAlgName(algorithm: OtpAlgorithm): string {
+/** 将算法名映射为 cryptoFramework 的 HMAC 算法名。 */
+function toMacAlgName(algorithm: string): string {
   switch (algorithm) {
-    case OtpAlgorithm.SHA1:
+    case 'SHA1':
       return 'SHA1';
-    case OtpAlgorithm.SHA256:
+    case 'SHA256':
       return 'SHA256';
-    case OtpAlgorithm.SHA512:
+    case 'SHA512':
       return 'SHA512';
+    default:
+      return 'SHA1';
   }
 }
 
@@ -25,11 +27,10 @@ function toMacAlgName(algorithm: OtpAlgorithm): string {
  * cryptoFramework HMAC 实现（同步 *Sync 链路）。
  *
  * 密钥生成器必须用通用 'HMAC' 规格（官方支持 [1, 4096] 字节任意长度密钥）；
- * 严禁用管道符拼接算法名的组合规格（如 'HMAC|SHA1'）——它要求密钥长度恰等于摘要长度，
- * 会拒绝 80 bit（10 字节）的真实 secret。
+ * 严禁用管道符拼接算法名的组合规格（如 'HMAC|SHA1'）——它要求密钥长度恰等于摘要长度。
  */
 export class CryptoFrameworkHmac implements HmacProvider {
-  sign(algorithm: OtpAlgorithm, key: Uint8Array, message: Uint8Array): Uint8Array {
+  sign(algorithm: string, key: Uint8Array, message: Uint8Array): Uint8Array {
     try {
       const gen = cryptoFramework.createSymKeyGenerator('HMAC');
       const symKey = gen.convertKeySync({ data: key });

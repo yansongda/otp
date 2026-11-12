@@ -14,11 +14,12 @@ const SRC_DIR = "src";
 const TESTS_DIR = "tests";
 const BARREL = "src/index.ts";
 const ERRORS = "src/errors.ts";
-const SECRET = "src/secret.ts";
+const SECRET = "../core/src/secret.ts";
 
 const BASELINE = {
-  testDeclarations: 155, // tests/ 下 test()/it() 声明数
-  testFiles: 12,
+  // 算法测试已迁至 packages/core（242 条）；本包只保留平台层契约测试
+  testDeclarations: 9,
+  testFiles: 1,
   errorCodeMembers: 18,
 };
 
@@ -55,7 +56,11 @@ function stripComments(text) {
 }
 
 function sourceFiles() {
-  return listFiles(join(REPO_ROOT, SRC_DIR))
+  // 不变量检查同时覆盖平台层与共享 core（算法实现已移入 packages/core）
+  return [
+    ...listFiles(join(REPO_ROOT, SRC_DIR)),
+    ...listFiles(join(REPO_ROOT, "../core/src")),
+  ]
     .filter((f) => f.endsWith(".ts"))
     .map((f) => toPosix(relative(REPO_ROOT, f)));
 }
@@ -124,15 +129,18 @@ check("barrel 不导出 internal/*", () => {
   return "src/index.ts 为唯一公开入口";
 });
 
-check("barrel 导入并调用 installCryptoDefaults()", () => {
+check("barrel 导入并注册 pure-js provider 与错误工厂", () => {
   const text = readText(BARREL);
   if (
-    !/installCryptoDefaults/.test(text) ||
-    !/installCryptoDefaults\s*\(\s*\)/.test(text)
+    !/installPureJsHmac/.test(text) ||
+    !/installPureJsHmac\s*\(\s*\)/.test(text)
   ) {
-    throw new Error("src/index.ts 未在导入时注册默认 HMAC provider");
+    throw new Error("src/index.ts 未在导入时注册纯 JS HMAC provider");
   }
-  return "默认 provider 零配置注册";
+  if (!/setErrorFactory\s*\(/.test(text)) {
+    throw new Error("src/index.ts 未注册平台错误工厂");
+  }
+  return "provider + 错误工厂零配置注册";
 });
 
 check("Secret 不得实现 toString()", () => {

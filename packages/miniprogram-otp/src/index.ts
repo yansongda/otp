@@ -11,12 +11,12 @@ import {
   OTPAuthURI as CoreOTPAuthURI,
   Secret as CoreSecret,
   TOTP as CoreTOTP,
-  setErrorFactory,
   type HmacProvider,
+  setErrorFactory,
 } from "@yansongda/otp-core";
 import { installPureJsHmac } from "@yansongda/otp-core/pure-js";
-import { OtpError } from "./errors";
 import type { OtpErrorCode } from "./errors";
+import { OtpError } from "./errors";
 import type {
   HotpOptions,
   OtpAuthParams,
@@ -31,7 +31,6 @@ setErrorFactory(
 );
 
 export { OtpError, OtpErrorCode } from "./errors";
-export { OtpAlgorithm, OtpType } from "./types";
 export type {
   HmacOptions,
   HotpOptions,
@@ -40,6 +39,7 @@ export type {
   TotpOptions,
   VerifyOptions,
 } from "./types";
+export { OtpAlgorithm, OtpType } from "./types";
 
 // ---- 类型桥：实例类型复用 core，构造签名收紧到平台 DTO ----
 
