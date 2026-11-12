@@ -7,8 +7,8 @@
     "packages/miniprogram-otp"
   ],
   "scripts": {
-    "sync:core": "node scripts/sync-core.mjs",
-    "sync:core:check": "node scripts/sync-core.mjs --check",
+    "sync:core": "bun scripts/sync-core.mjs",
+    "sync:core:check": "bun scripts/sync-core.mjs --check",
     "lint": "biome check",
     "lint:fix": "biome check --fix",
     "typecheck": "bun run --filter '@yansongda/otp-core' typecheck && bun run --filter '@yansongda/miniprogram-otp' typecheck",
