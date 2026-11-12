@@ -12,8 +12,6 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "strictPropertyInitialization": true,
-    "exactOptionalPropertyTypes": true,
-    "noUncheckedIndexedAccess": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "noEmit": true
