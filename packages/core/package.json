@@ -1,0 +1,15 @@
+{
+  "name": "@yansongda/otp-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test tests"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  }
+}

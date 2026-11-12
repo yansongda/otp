@@ -1,0 +1,23 @@
+{
+  "name": "@yansongda/otp-monorepo",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/core",
+    "packages/miniprogram-otp"
+  ],
+  "scripts": {
+    "sync:core": "node scripts/sync-core.mjs",
+    "sync:core:check": "node scripts/sync-core.mjs --check",
+    "lint": "biome check",
+    "lint:fix": "biome check --fix",
+    "typecheck": "bun run --filter '@yansongda/otp-core' typecheck && bun run --filter '@yansongda/miniprogram-otp' typecheck",
+    "test": "bun test packages/core/tests packages/miniprogram-otp/tests",
+    "check": "bun run sync:core:check && bun run lint && bun run typecheck && bun run test"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.6.6",
+    "tsdown": "^0.23.7",
+    "typescript": "^7.0.2"
+  }
+}

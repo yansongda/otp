@@ -1,0 +1,19 @@
+# ---- Node / Bun ----
+node_modules/
+.bun/
+dist/
+*.log
+.DS_Store
+
+# ---- HarmonyOS / DevEco ----
+**/.hvigor/
+**/oh_modules/
+**/build/
+**/local.properties
+**/BuildProfile.ets
+**/.test/
+**/.preview/
+
+# ---- generated vendored core (ohos) ----
+# 提交策略：初始阶段提交以便 DevEco 直接可用；CI 用 sync:core:check 防漂移
+# packages/ohos-otp/library/src/main/ets/core/
