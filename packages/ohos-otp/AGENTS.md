@@ -4,7 +4,7 @@
 
 ## 1. 项目定位
 
-- 本目录是 monorepo 的 `packages/ohos-otp`；`library/` = HAR 库 **`@yansongda/otp` v1.1.0**：RFC 4226 HOTP + RFC 6238 TOTP（SHA1/SHA256/SHA512，6/7/8 位，otpauth URI，漂移窗口，时钟偏移校准，可选严格 base32 解析）。零运行时依赖。
+- 本目录是 monorepo 的 `packages/ohos-otp`；`library/` = HAR 库 **`@yansongda/otp`**：RFC 4226 HOTP + RFC 6238 TOTP（SHA1/SHA256/SHA512，6/7/8 位，otpauth URI，漂移窗口，时钟偏移校准，可选严格 base32 解析）。零运行时依赖。
 - **实现全部来自 `packages/core`（唯一源码）**，经 `bun run sync:core` 生成为 `library/src/main/ets/core/**`；本包只保留薄壳、平台类型层与 crypto 实现。
 - `entry/` = 消费方 smoke demo（仅依赖 barrel，**不参与** HAR 打包）。
 - 兼容性：`compatibleSdkVersion 6.0.0(20)`（API 12–19 工程无法消费，README 已声明）。
