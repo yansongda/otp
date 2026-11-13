@@ -272,9 +272,9 @@ export default function otpEngineTest() {
       expect(() => { verify(fixture, p6, '287082', 1, 1.5); }).assertThrowError('INVALID_WINDOW');
     });
     it('verify_windowExceedsCap', 0, () => {
-      // 上限 MAX_VERIFY_WINDOW = 10：11 拒绝、10 合法
+      // 上限 MAX_VERIFY_WINDOW = 10：11 拒绝。
+      // 「10 合法」只在 core 测试断言：本地 fixture 是黄金表，不覆盖 ±10 个候选。
       expect(() => { verify(fixture, p6, '287082', 1, 11); }).assertThrowError('INVALID_WINDOW');
-      expect(verify(fixture, p6, '287082', 1, 10)).assertEqual(0);
     });
 
     // ── fixture 未命中必须抛错（绝不返回零值数组）──

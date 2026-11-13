@@ -105,11 +105,11 @@ export default function hotpTest() {
     });
 
     it('verify_windowExceedsCap_throws', 0, () => {
-      // 上限 MAX_VERIFY_WINDOW = 10（HOTP/TOTP 共用）：11 拒绝、10 合法
+      // 上限 MAX_VERIFY_WINDOW = 10（HOTP/TOTP 共用）：11 拒绝。
+      // 「10 合法」只在 core 测试断言：本地 fixture 是黄金表，不覆盖 ±10 个候选。
       expectThrowsCode(() => {
         new HOTP({ secret: SECRET, counter: 1 }, fixture).verify('287082', { window: 11 });
       }, OtpErrorCode.INVALID_WINDOW);
-      expect(new HOTP({ secret: SECRET, counter: 1 }, fixture).verify('287082', { window: 10 })).assertEqual(0);
     });
 
     // ── 构造期即抛错（统一约束）──

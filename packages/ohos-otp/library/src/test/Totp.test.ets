@@ -157,12 +157,12 @@ export default function totpTest() {
       expect(t.verify('359152', { timestamp: 59000 })).assertEqual(0);
     });
     it('verify_windowExceedsCap_throws', 0, () => {
-      // 上限 MAX_VERIFY_WINDOW = 10 步：11 拒绝、10 合法（防外部 window 放大成计算炸弹）
+      // 上限 MAX_VERIFY_WINDOW = 10 步：11 拒绝。
+      // 「10 合法」只在 core 测试断言：本地 fixture 是黄金表，不覆盖 ±10 个候选。
       const t: TOTP = new TOTP({ secret: S1, digits: 6 }, fixture);
       expectThrowsCode(() => {
         t.verify('287082', { timestamp: 59000, window: 11 });
       }, OtpErrorCode.INVALID_WINDOW);
-      expect(t.verify('287082', { timestamp: 59000, window: 10 })).assertEqual(0);
     });
 
     // ── syncClockOffset 双场景（先推导再断言）──
