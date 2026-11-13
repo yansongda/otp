@@ -14,7 +14,7 @@ The protocol implementation comes from this monorepo's shared, platform-agnostic
 - `otpauth://` URI parsing and generation (`OTPAuthURI`, `TOTP.fromURI`, `HOTP.fromURI`)
 - `Secret` normalization, validation, byte/bit introspection and `toJSON()` redaction
 - Optional strict Base32 parsing (`{ strict: true }`)
-- Unified `OtpError` model with 18 frozen string error codes
+- Unified `OtpError` model with 20 frozen string error codes (`OtpErrorCode` is re-exported from the shared core)
 - Zero runtime dependencies
 - TypeScript declarations included
 
@@ -154,26 +154,28 @@ try {
 
 All failures throw `OtpError` with a fixed `code`. Messages never contain secrets, tokens or derived keys.
 
-| Code                       | Meaning                                                                  |
-| -------------------------- | ------------------------------------------------------------------------ |
-| `EMPTY_SECRET`             | Missing or empty secret                                                  |
-| `INVALID_BASE32_CHAR`      | Character outside the Base32 alphabet                                    |
-| `INVALID_BASE32_PADDING`   | Strict mode: non-canonical tail length or non-zero tail bits             |
-| `SECRET_TOO_SHORT`         | Decoded secret is shorter than one byte                                  |
-| `SECRET_TOO_WEAK`          | `minSecretBits` check failed                                             |
-| `INVALID_ALGORITHM`        | Not SHA1 / SHA256 / SHA512                                               |
-| `INVALID_DIGITS`           | Not 6 / 7 / 8                                                            |
-| `INVALID_PERIOD`           | Period is not a positive integer                                         |
-| `INVALID_T0`               | `t0` is not a non-negative integer                                       |
-| `INVALID_COUNTER`          | Counter is not an integer in `[0, 2^53-1]`                               |
-| `INVALID_TIMESTAMP`        | Timestamp is not a positive finite number, or clock offset is not finite |
-| `INVALID_WINDOW`           | Window or delta is not a non-negative integer                            |
-| `INVALID_TOKEN`            | Token is not numeric or its length differs from `digits`                 |
-| `CRYPTO_FAILED`            | Internal HMAC failure; no key material is leaked                         |
-| `CRYPTO_NOT_INITIALIZED`   | No provider registered; import the package barrel                        |
-| `INVALID_OTPAUTH_URI`      | URI does not start with `otpauth://` (case-insensitive)                  |
-| `UNSUPPORTED_OTPAUTH_TYPE` | Type is not `totp` / `hotp`                                              |
-| `NOT_IMPLEMENTED`          | Internal placeholder; never thrown by normal use                         |
+| Code                       | Meaning                                                                                   |
+| -------------------------- | ----------------------------------------------------------------------------------------- |
+| `EMPTY_SECRET`             | Missing or empty secret                                                                   |
+| `INVALID_BASE32_CHAR`      | Character outside the Base32 alphabet                                                     |
+| `INVALID_BASE32_PADDING`   | Strict mode: non-canonical tail length or non-zero tail bits                              |
+| `SECRET_TOO_SHORT`         | Decoded secret is shorter than one byte                                                   |
+| `SECRET_TOO_WEAK`          | `minSecretBits` check failed (strength only)                                              |
+| `INVALID_SECRET_LENGTH`    | `Secret.generate(bytes)` bytes is not an integer in `[1, 4096]`                           |
+| `INVALID_ALGORITHM`        | Not SHA1 / SHA256 / SHA512                                                                |
+| `INVALID_DIGITS`           | Not 6 / 7 / 8                                                                             |
+| `INVALID_PERIOD`           | Period is not a positive integer                                                          |
+| `INVALID_T0`               | `t0` is not a non-negative integer                                                        |
+| `INVALID_COUNTER`          | Counter is not an integer in `[0, 2^53-1]`                                                |
+| `INVALID_TIMESTAMP`        | Timestamp is not a finite number `>= 0` (epoch 0 is valid)                                |
+| `INVALID_CLOCK_OFFSET`     | `clockOffsetMs` not finite, or `syncClockOffset` delta non-integer / overflow             |
+| `INVALID_WINDOW`           | Window is not an integer in `[0, 1000]`                                                   |
+| `INVALID_TOKEN`            | Token is not numeric or its length differs from `digits`                                  |
+| `CRYPTO_FAILED`            | Internal HMAC failure; no key material is leaked                                          |
+| `CRYPTO_NOT_INITIALIZED`   | No provider registered; import the package barrel                                         |
+| `INVALID_OTPAUTH_URI`      | URI does not start with `otpauth://` (case-insensitive)                                   |
+| `UNSUPPORTED_OTPAUTH_TYPE` | Type is not `totp` / `hotp` (parse and build)                                             |
+| `NOT_IMPLEMENTED`          | Reserved fallback for an error code the platform cannot map (never thrown by the library) |
 
 ## WeChat-specific limitations
 
@@ -206,13 +208,13 @@ The Mini Program has no WebCrypto / SubtleCrypto. HMAC-SHA1/256/512 are implemen
 - Counter is limited to `2^53-1` because JavaScript numbers cannot represent larger integers exactly.
 - `otpauth://` is a Google Authenticator de-facto standard (IANA Provisional #13829), not an RFC.
 - Unknown URI query parameters are ignored for interoperability.
-- `verify()` defaults to `window: 0`; pass `window: 1` to tolerate the one-step network delay described by RFC 6238 §5.2.
+- `verify()` defaults to `window: 0`; pass `window: 1` to tolerate the one-step network delay described by RFC 6238 §5.2. The window is capped at `1000` steps (`INVALID_WINDOW` beyond it) so externally supplied values cannot be turned into an HMAC computation bomb.
 - No Steam Guard, SHA224/SHA384/SM3, BigInt counters, throttling (RFC 4226 §7.3 is a server responsibility), QR rendering or scanning.
 - Pure-JS HMAC is slower than native crypto; this library targets client-side code generation, not bulk server verification.
 
 ## Shared core and platform differences
 
-- Public API, DTO field names, 18 error codes and RFC behavior are aligned with the HarmonyOS package (`@yansongda/otp` v1.1.0).
+- Public API, DTO field names, 20 error codes and RFC behavior are aligned with the HarmonyOS package (`@yansongda/otp` v1.1.0).
 - Both packages consume `packages/core`; only the type layer and crypto provider differ.
 - `OtpAlgorithm` is a `const` object plus string union instead of an ArkTS `enum`, so both `"SHA1"` and `OtpAlgorithm.SHA1` work.
 - `OtpError` additionally sets `name` and `Object.setPrototypeOf`, so `instanceof` survives ES5 downleveling in WeChat.

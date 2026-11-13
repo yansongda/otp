@@ -14,7 +14,7 @@
 - `otpauth://` URI 解析与生成（`OTPAuthURI`、`TOTP.fromURI`、`HOTP.fromURI`）
 - `Secret` 规范化、校验、字节/位数自省与 `toJSON()` 脱敏
 - 可选严格 Base32 解析（`{ strict: true }`）
-- 统一 `OtpError` 与 18 个冻结字符串错误码
+- 统一 `OtpError` 与 20 个冻结字符串错误码（`OtpErrorCode` 由共享 core 复用）
 - 零运行时依赖
 - 自带 TypeScript 类型声明
 
@@ -154,26 +154,28 @@ try {
 
 一切失败均抛 `OtpError`，消息为固定文案，绝不包含 secret、token 或派生密钥。
 
-| 错误码                     | 含义                                       |
-| -------------------------- | ------------------------------------------ |
-| `EMPTY_SECRET`             | secret 缺失或为空                          |
-| `INVALID_BASE32_CHAR`      | 字符不在 Base32 字母表                     |
-| `INVALID_BASE32_PADDING`   | strict：尾长非规范或填充位非 0             |
-| `SECRET_TOO_SHORT`         | 解码后不足 1 字节                          |
-| `SECRET_TOO_WEAK`          | `minSecretBits` 校验失败                   |
-| `INVALID_ALGORITHM`        | 非 SHA1 / SHA256 / SHA512                  |
-| `INVALID_DIGITS`           | 非 6 / 7 / 8                               |
-| `INVALID_PERIOD`           | 周期不是正整数                             |
-| `INVALID_T0`               | `t0` 不是非负整数                          |
-| `INVALID_COUNTER`          | counter 不在 `[0, 2^53-1]`                 |
-| `INVALID_TIMESTAMP`        | 时间戳不是正有限数，或 clockOffset 非有限  |
-| `INVALID_WINDOW`           | window / delta 不是非负整数                |
-| `INVALID_TOKEN`            | token 非纯数字或长度不等于 digits          |
-| `CRYPTO_FAILED`            | 内部 HMAC 失败；不泄漏密钥                 |
-| `CRYPTO_NOT_INITIALIZED`   | 未注册 provider；应从包 barrel 导入        |
-| `INVALID_OTPAUTH_URI`      | URI 不以 `otpauth://` 开头（大小写不敏感） |
-| `UNSUPPORTED_OTPAUTH_TYPE` | 类型不是 `totp` / `hotp`                   |
-| `NOT_IMPLEMENTED`          | 内部预留，正常使用不会遇到                 |
+| 错误码                     | 含义                                                           |
+| -------------------------- | -------------------------------------------------------------- |
+| `EMPTY_SECRET`             | secret 缺失或为空                                              |
+| `INVALID_BASE32_CHAR`      | 字符不在 Base32 字母表                                         |
+| `INVALID_BASE32_PADDING`   | strict：尾长非规范或填充位非 0                                 |
+| `SECRET_TOO_SHORT`         | 解码后不足 1 字节                                              |
+| `SECRET_TOO_WEAK`          | `minSecretBits` 校验失败（仅强度问题）                         |
+| `INVALID_SECRET_LENGTH`    | `Secret.generate(bytes)` 的 bytes 非 [1,4096] 整数             |
+| `INVALID_ALGORITHM`        | 非 SHA1 / SHA256 / SHA512                                      |
+| `INVALID_DIGITS`           | 非 6 / 7 / 8                                                   |
+| `INVALID_PERIOD`           | 周期不是正整数                                                 |
+| `INVALID_T0`               | `t0` 不是非负整数                                              |
+| `INVALID_COUNTER`          | counter 不在 `[0, 2^53-1]`                                     |
+| `INVALID_TIMESTAMP`        | 时间戳不是 ≥0 的有限数（epoch 0 合法）                         |
+| `INVALID_CLOCK_OFFSET`     | `clockOffsetMs` 非有限，或 `syncClockOffset` delta 非整数/溢出 |
+| `INVALID_WINDOW`           | window 不是 [0, 1000] 内的整数                                 |
+| `INVALID_TOKEN`            | token 非纯数字或长度不等于 digits                              |
+| `CRYPTO_FAILED`            | 内部 HMAC 失败；不泄漏密钥                                     |
+| `CRYPTO_NOT_INITIALIZED`   | 未注册 provider；应从包 barrel 导入                            |
+| `INVALID_OTPAUTH_URI`      | URI 不以 `otpauth://` 开头（大小写不敏感）                     |
+| `UNSUPPORTED_OTPAUTH_TYPE` | 类型不是 `totp` / `hotp`（parse 与 build）                     |
+| `NOT_IMPLEMENTED`          | 平台无法映射错误码时的兜底（库内不抛出）                       |
 
 ## 微信小程序限制
 
@@ -206,7 +208,7 @@ wx.getRandomValues({
 - counter 上限为 `2^53-1`（JavaScript number 精确整数上限）。
 - `otpauth://` 不是 RFC，而是 Google Authenticator 事实标准（IANA Provisional #13829）。
 - URI 未知 query 参数会被忽略，以最大化互操作。
-- `verify()` 默认 `window: 0`；需要容忍 RFC 6238 §5.2 的一步网络延迟时显式传 `window: 1`。
+- `verify()` 默认 `window: 0`；需要容忍 RFC 6238 §5.2 的一步网络延迟时显式传 `window: 1`。window 上限 1000 步（超出抛 `INVALID_WINDOW`），避免外部传入的 window 被放大成 HMAC 计算炸弹。
 - 不提供 Steam Guard、SHA224/SHA384/SM3、BigInt counter、throttling（RFC 4226 §7.3 属服务端职责）、二维码渲染 / 扫码。
 - 纯 JS HMAC 比系统 crypto 慢；本库面向端内算码，不用于服务端批量校验。
 

@@ -13,12 +13,12 @@
 
 ## 2. 分层与不变量（**改动必须遵守**）
 
-| 层            | 位置                                                                                           | 允许依赖                                                      |
-| ------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| 共享实现      | `../core/src/**`（唯一源码，本包只消费）                                                       | 零平台能力                                                    |
-| 平台类型层    | `src/types.ts`（const 对象 + 字面量联合 + 严格 DTO）、`src/errors.ts`（公开 OtpError / 18 码） | 无                                                            |
-| 平台 provider | `src/index.ts` 导入时注册 `installPureJsHmac()` + `setErrorFactory()`                          | `@yansongda/otp-core/pure-js`（paths + alias 解析，非包依赖） |
-| 出口          | `src/index.ts`（公开符号 + 构造签名类型桥）                                                    | 以上                                                          |
+| 层            | 位置                                                                                                     | 允许依赖                                                      |
+| ------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| 共享实现      | `../core/src/**`（唯一源码，本包只消费）                                                                 | 零平台能力                                                    |
+| 平台类型层    | `src/types.ts`（const 对象 + 字面量联合 + 严格 DTO）、`src/errors.ts`（公开 OtpError；码表从 core 复用） | 无                                                            |
+| 平台 provider | `src/index.ts` 导入时注册 `installPureJsHmac()` + `setErrorFactory()`                                    | `@yansongda/otp-core/pure-js`（paths + alias 解析，非包依赖） |
+| 出口          | `src/index.ts`（公开符号 + 构造签名类型桥）                                                              | 以上                                                          |
 
 1. **`src/index.ts` 是唯一公开入口**：导入时幂等调用 `installPureJsHmac()` 与 `setErrorFactory()`；core 内部模块不得从 barrel 深导出。
 2. **平台层零平台调用**（core 已是零平台）：本包不得出现 `wx.*`、`console.*`、`node:` 内置模块；平台随机数由使用方通过 `wx.getRandomValues` + `Secret.fromBytes` 提供。
@@ -26,13 +26,13 @@
 4. **secret 绝不外泄**：错误消息固定文案；`Secret` 刻意不实现 `toString()`；`toJSON()` 返回 `[REDACTED]`。
 5. **`verify` 恒定时间**：窗口内扫完所有候选后才返回首个命中 delta，禁止早退优化。
 6. **取模只在 `internal/digits.ts` 发生一次**；`truncate` 只做 `& 0x7f`（31 位非负）。
-7. **错误码冻结**：`OtpErrorCode` 恰为 18 个；v1 起仅允许新增，不得改已有字符串值。
-8. **DTO 冻结**：`HmacOptions` / `TotpOptions` / `HotpOptions` / `VerifyOptions` / `OtpAuthParams` 字段名与可选性仅允许新增可选字段。
+7. **错误码唯一来源是 core**：`src/errors.ts` 只保留平台 `OtpError`，`OtpErrorCode` 必须从 `@yansongda/otp-core` 复用（守卫脚本禁止再声明码表）；码集合现为 20 个，v1 起仅允许新增，不得改已有字符串值。
+8. **DTO 冻结**：`HmacOptions` / `TotpOptions` / `HotpOptions` / `VerifyOptions` / `OtpAuthParams` 字段名与可选性仅允许新增可选字段；`HOTP.verify` / `TOTP.verify` 在类型桥里分别收窄为 `HotpVerifyOptions` / `TotpVerifyOptions`（core 会静默忽略对方的字段）。
 
 其他有意差异（相对 OHOS）：
 
 - `OtpAlgorithm` 用 `const` 对象 + 联合类型，不用 `enum`；`"SHA1"` 与 `OtpAlgorithm.SHA1` 都可赋值。
-- `OtpError` 额外设置 `name` 与 `Object.setPrototypeOf`，保证微信 ES5 降级后 `instanceof` 可靠。
+- `OtpError` 设置 `name`，且**仅在原型退化为 `Error.prototype` 时**（微信 ES5 降级）执行 `Object.setPrototypeOf`：无条件重设会把子类实例的原型改回基类（`instanceof` 子类失效、原型方法丢失）。
 - HMAC 为纯 JS，不使用系统 crypto。
 - 默认不注册随机源；`Secret.generate()` 在微信端抛 `CRYPTO_NOT_INITIALIZED`。
 

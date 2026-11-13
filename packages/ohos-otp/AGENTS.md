@@ -30,7 +30,7 @@
 8. **`verify` 恒定时间**：窗口内**扫完所有候选**后才返回首个命中 delta，禁止加早退优化。
 9. **`library/example/` 随 HAR 发布，不得删除/改名**：hvigor 对 bytecode HAR 的 release 白名单目录名就是 `example`（`RELEASE_HAR_WHITE_LIST_DIR_NAME`），该目录会被原样打进包内 `package/example/`；OHPM「支持文档 / example」的 20 分完全依赖它。里面只放文档（README），不放不参与编译与 lint 的源码。缺失由 `scripts/ci/check-invariants.mjs` 与 CI 的 HAR 内容校验拦截。
 
-其他冻结契约：`OtpOptions` 字段名/可选性冻结（v1 起仅允许**新增可选字段**）；`OtpErrorCode` 的 v1 17 个取值冻结（v1.1.0 仅**新增** `INVALID_BASE32_PADDING`，现共 18 个）；全同步 API（`*Sync` 链路）；零运行时依赖。
+其他冻结契约：`OtpOptions` 字段名/可选性冻结（v1 起仅允许**新增可选字段**）；`OtpErrorCode` 取值冻结、仅允许**新增**（v1 17 个 → v1.1.0 新增 `INVALID_BASE32_PADDING` → 现新增 `INVALID_SECRET_LENGTH` / `INVALID_CLOCK_OFFSET`，共 20 个），枚举必须与 core 逐项一致（`check-invariants.mjs` 对拍）；全同步 API（`*Sync` 链路）；零运行时依赖。
 
 ## 3. 命令（实测可跑）
 
@@ -87,7 +87,7 @@ node scripts/ci/check-invariants.mjs   # 仓库不变量守卫（10 项）
 
 - 缩进 2 空格、单引号、无 Tab；注释用中文，只写「为什么 / 约束 / RFC 依据 / ArkTS 陷阱」，不逐行复述代码。
 - 不引入运行时依赖（含测试期第三方算法库）；`dependencies` 必须保持 `{}`。
-- core 内部错误一律 `otpFail(code)`（由平台工厂注入公开错误类）；平台层（`OtpError` / `CryptoSource`）用 `throw new OtpError(code, FIXED_MESSAGE)`。不得新增错误码，也不得改已有码的字符串值。
+- 错误一律经 `otpFail(code)` 抛出（由平台工厂注入公开错误类）——core 与平台 `CryptoSource` 都是这一条路径，禁止绕开工厂直接 `new OtpError(...)`；`OtpError.ets` 只实现类与 `asOtpErrorCode` 映射。错误码仅允许新增，不得改已有字符串值，新增时必须同步枚举、映射、core 码表与守卫基线。
 - ArkTS 注意：位运算是 32 位有符号（大整数须 high/low 拆分）；不用 `padStart`；不假设 `URLSearchParams` 可用；`JSON.stringify` 会调用 `toJSON()`。
 - lint：`code-linter.json5` 里 `@security/no-unsafe-mac` 保留 warn 是**有意的策略保留**（RFC 6238 §1.2 互操作依据）；不放宽规则、不加 disable 注释。注意 2026-10-02 实测：全库扫描 0 缺陷——算法名经参数传入而非字面量，该规则当前不触发；CI 用 `-e error`，因此不会被它卡住。
 
