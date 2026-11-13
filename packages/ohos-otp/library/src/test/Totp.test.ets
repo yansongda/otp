@@ -156,6 +156,14 @@ export default function totpTest() {
       expect(t.clockOffsetMs).assertEqual(30000);
       expect(t.verify('359152', { timestamp: 59000 })).assertEqual(0);
     });
+    it('verify_windowExceedsCap_throws', 0, () => {
+      // 上限 MAX_VERIFY_WINDOW = 10 步：11 拒绝、10 合法（防外部 window 放大成计算炸弹）
+      const t: TOTP = new TOTP({ secret: S1, digits: 6 }, fixture);
+      expectThrowsCode(() => {
+        t.verify('287082', { timestamp: 59000, window: 11 });
+      }, OtpErrorCode.INVALID_WINDOW);
+      expect(t.verify('287082', { timestamp: 59000, window: 10 })).assertEqual(0);
+    });
 
     // ── syncClockOffset 双场景（先推导再断言）──
     it('syncClockOffset_closure_slowLocal', 0, () => {
@@ -261,6 +269,23 @@ export default function totpTest() {
     });
     it('ctor_clockOffsetInfinity_throws', 0, () => {
       expectThrowsCode(() => { new TOTP({ secret: S1, clockOffsetMs: Infinity }, fixture); }, OtpErrorCode.INVALID_CLOCK_OFFSET);
+    });
+    it('ctor_clockOffsetFraction_throws', 0, () => {
+      // 小数毫秒偏移无意义：构造期即拒绝，避免运行时以 INVALID_COUNTER 暴露
+      expectThrowsCode(() => { new TOTP({ secret: S1, clockOffsetMs: 0.5 }, fixture); }, OtpErrorCode.INVALID_CLOCK_OFFSET);
+    });
+    it('ctor_clockOffsetUnsafe_throws', 0, () => {
+      expectThrowsCode(() => { new TOTP({ secret: S1, clockOffsetMs: 1e300 }, fixture); }, OtpErrorCode.INVALID_CLOCK_OFFSET);
+    });
+    it('ctor_periodUnsafe_throws', 0, () => {
+      // 秒数必须是安全整数：超大周期语义上等同配置错误
+      expectThrowsCode(() => { new TOTP({ secret: S1, period: 1e300 }, fixture); }, OtpErrorCode.INVALID_PERIOD);
+    });
+    it('timeInputs_fractionOrUnsafe_throws', 0, () => {
+      // 时间戳必须是非负安全整数（小数毫秒无意义）
+      const t: TOTP = new TOTP({ secret: S1, digits: 6 }, fixture);
+      expectThrowsCode(() => { t.generate(1.5); }, OtpErrorCode.INVALID_TIMESTAMP);
+      expectThrowsCode(() => { t.generate(1e300); }, OtpErrorCode.INVALID_TIMESTAMP);
     });
     it('ctor_minSecretBits128_80bit_throws', 0, () => {
       // 80 bit secret（10 字节 JBSWY3DPEHPK3PXP）< 128 → SECRET_TOO_WEAK

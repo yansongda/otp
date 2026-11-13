@@ -101,19 +101,57 @@ describe("engine", () => {
   });
 
   it("verify_windowExceedsCap_throws", () => {
-    // 上限 1000 步：防止外部 window 放大成 HMAC 计算炸弹
+    // 上限 MAX_VERIFY_WINDOW = 10 步：防止外部 window 放大成 HMAC 计算炸弹
     expectCode(
-      () => verify(provider, params6, "287082", 1, 1001),
+      () => verify(provider, params6, "287082", 1, 11),
       "INVALID_WINDOW",
     );
-    expect(verify(provider, params6, "287082", 1, 1000)).toBe(0);
+    expect(verify(provider, params6, "287082", 1, 10)).toBe(0);
   });
 
   it("generate_providerFailure_normalizedToCryptoFailed", () => {
-    // 自定义 provider 抛出的任意值必须收敛为 CRYPTO_FAILED，不得穿透原始错误类型
+    // 非 OtpError 的任意值必须收敛为 CRYPTO_FAILED，不得穿透原始错误类型
     const broken = {
       sign(): Uint8Array {
         throw new Error("native hmac exploded");
+      },
+    };
+    expectCode(() => generate(broken, params6, 0), "CRYPTO_FAILED");
+  });
+
+  it("generate_providerOtpError_passesThrough", () => {
+    // 平台/core 的 OtpError（name 固定）属“已知错误”：保留精确码并原样上抛
+    const providerError = new Error("INVALID_ALGORITHM");
+    providerError.name = "OtpError";
+    const broken = {
+      sign(): Uint8Array {
+        throw providerError;
+      },
+    };
+    let thrown: unknown = null;
+    try {
+      generate(broken, params6, 0);
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBe(providerError);
+  });
+
+  it("generate_providerNonError_normalizedToCryptoFailed", () => {
+    // provider 抛字符串 / null 等非 Error 值同样收敛
+    const broken = {
+      sign(): Uint8Array {
+        throw "boom";
+      },
+    };
+    expectCode(() => generate(broken, params6, 0), "CRYPTO_FAILED");
+  });
+
+  it("generate_providerWrongReturnType_normalizedToCryptoFailed", () => {
+    // provider 违反返回值契约（非 Uint8Array）→ CRYPTO_FAILED，不越界读
+    const broken = {
+      sign(): Uint8Array {
+        return null as unknown as Uint8Array;
       },
     };
     expectCode(() => generate(broken, params6, 0), "CRYPTO_FAILED");

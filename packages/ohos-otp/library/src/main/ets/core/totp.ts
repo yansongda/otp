@@ -17,7 +17,7 @@ import {
   progress as timeStepProgress,
   step as timeStepStep,
 } from "./internal/time-step";
-import type { AlgorithmName, TotpOptions, VerifyOptions } from "./options";
+import type { AlgorithmName, TotpOptions, TotpVerifyOptions } from "./options";
 import { DEFAULT_CLOCK_OFFSET_MS, DEFAULT_PERIOD, DEFAULT_T0 } from "./options";
 import { OTPAuthURI } from "./otpauth-uri";
 import type { Secret } from "./secret";
@@ -47,13 +47,14 @@ export class TOTP {
         ? DEFAULT_CLOCK_OFFSET_MS
         : options.clockOffsetMs;
 
-    if (!Number.isInteger(period) || period <= 0) {
+    if (!Number.isSafeInteger(period) || period <= 0) {
       otpFail("INVALID_PERIOD");
     }
-    if (!Number.isInteger(t0) || t0 < 0) {
+    if (!Number.isSafeInteger(t0) || t0 < 0) {
       otpFail("INVALID_T0");
     }
-    if (!Number.isFinite(clockOffsetMs)) {
+    if (!Number.isSafeInteger(clockOffsetMs)) {
+      // 小数 / NaN / Infinity / 超安全整数：偏移无意义，构造期即拒绝
       otpFail("INVALID_CLOCK_OFFSET");
     }
 
@@ -95,16 +96,16 @@ export class TOTP {
   }
 
   /**
-   * 恒定时间比对；window 缺省 0、上限 1000、timestamp 缺省当前时刻（叠加偏移）。
+   * 恒定时间比对；window 缺省 0、上限 MAX_VERIFY_WINDOW（10）、timestamp 缺省当前时刻（叠加偏移）。
    * 返回命中窗口相对当前步的偏移 delta，未命中 null。
    */
-  verify(token: string, options?: VerifyOptions): number | null {
-    const baseTs =
-      options === undefined || options.timestamp === undefined
-        ? Date.now()
-        : options.timestamp;
+  verify(token: string, options?: TotpVerifyOptions): number | null {
     const counter = timeStepStep(
-      baseTs + this._clockOffsetMs,
+      this.effectiveTs(
+        options === undefined || options.timestamp === undefined
+          ? undefined
+          : options.timestamp,
+      ),
       this._t0,
       this._period,
     );
@@ -131,12 +132,12 @@ export class TOTP {
 
   /**
    * 时钟偏移校准（单参数，单位 = 时间步）：clockOffsetMs += delta * period * 1000。
-   * delta 必须为整数，可为负（本地偏快时回调）；累加结果必须是安全整数。
+   * delta 必须为安全整数，可为负（本地偏快时回调）；累加结果必须是安全整数。
    * 闭环不变量：verify(token, w) 命中 delta 后，syncClockOffset(delta) 使同一时刻的
    * verify(token, 0) 命中 delta = 0（依据 RFC 6238 §6）。
    */
   syncClockOffset(delta: number): void {
-    if (!Number.isInteger(delta)) {
+    if (!Number.isSafeInteger(delta)) {
       otpFail("INVALID_CLOCK_OFFSET");
     }
     const next = this._clockOffsetMs + delta * this._period * 1000;

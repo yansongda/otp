@@ -17,11 +17,15 @@ export { HOTP } from "./hotp";
 export type {
   HmacOptions,
   HotpOptions,
+  HotpVerifyOptions,
   OtpAuthParams,
   ParseOptions,
   TotpOptions,
+  TotpVerifyOptions,
   VerifyOptions,
 } from "./options";
+/** 漂移窗口上限随 barrel 导出：调用方做输入预校验时不得再硬编码 1000 / 10。 */
+export { MAX_VERIFY_WINDOW } from "./options";
 export { OTPAuthURI } from "./otpauth-uri";
 export { Secret } from "./secret";
 export { TOTP } from "./totp";

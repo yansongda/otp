@@ -44,10 +44,15 @@ export class Secret {
    * 未注入 RandomSource 时本方法抛 CRYPTO_NOT_INITIALIZED。
    */
   static generate(bytes = 20): Secret {
-    if (!Number.isInteger(bytes) || bytes < 1 || bytes > 4096) {
+    if (!Number.isSafeInteger(bytes) || bytes < 1 || bytes > 4096) {
       otpFail("INVALID_SECRET_LENGTH");
     }
-    return new Secret(new Uint8Array(requireRandom().random(bytes)));
+    const generated = requireRandom().random(bytes);
+    if (generated.length !== bytes) {
+      // 随机源违反长度契约：静默接受会让密钥强度与调用方预期不符
+      otpFail("CRYPTO_FAILED");
+    }
+    return new Secret(new Uint8Array(generated));
   }
 
   /** 字节视图：返回拷贝，外部改动不影响内部。 */

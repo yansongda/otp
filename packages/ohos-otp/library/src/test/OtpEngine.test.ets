@@ -271,6 +271,11 @@ export default function otpEngineTest() {
       // window=1.5 不满足整数 → INVALID_WINDOW
       expect(() => { verify(fixture, p6, '287082', 1, 1.5); }).assertThrowError('INVALID_WINDOW');
     });
+    it('verify_windowExceedsCap', 0, () => {
+      // 上限 MAX_VERIFY_WINDOW = 10：11 拒绝、10 合法
+      expect(() => { verify(fixture, p6, '287082', 1, 11); }).assertThrowError('INVALID_WINDOW');
+      expect(verify(fixture, p6, '287082', 1, 10)).assertEqual(0);
+    });
 
     // ── fixture 未命中必须抛错（绝不返回零值数组）──
     it('fixture_miss_throws', 0, () => {

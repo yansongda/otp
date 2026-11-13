@@ -43,8 +43,15 @@ export interface HotpOptions extends CoreHotpOptions {
   algorithm?: OtpAlgorithm;
 }
 
-/** verify 校验选项（字段与 core 一致，直接复用）。 */
-export { VerifyOptions } from './core/options';
+/** verify 校验选项（按类收窄，字段与 core 一致，直接复用）。 */
+export {
+  HotpVerifyOptions,
+  TotpVerifyOptions,
+  VerifyOptions
+} from './core/options';
+
+/** verify 漂移窗口上限（单位 = 时间步，双向；超限抛 INVALID_WINDOW）。 */
+export { MAX_VERIFY_WINDOW } from './core/options';
 
 /** 解析选项（字段与 core 一致，直接复用）。 */
 export { ParseOptions } from './core/options';

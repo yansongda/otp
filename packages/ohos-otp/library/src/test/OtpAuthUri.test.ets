@@ -142,6 +142,20 @@ export default function otpAuthUriTest() {
         OtpErrorCode.INVALID_COUNTER);
     });
 
+    it('parse_failUnsafeCounter', 0, () => {
+      // > 2^53-1 的 counter 会丢精度：与 build / HOTP 构造器同口径拒绝
+      expectThrowsCode(() => OTPAuthURI.parse(
+        'otpauth://hotp/alice?secret=JBSWY3DPEHPK3PXP&counter=9007199254740993'),
+        OtpErrorCode.INVALID_COUNTER);
+    });
+
+    it('parse_failUnsafePeriod', 0, () => {
+      // period 必须是正安全整数
+      expectThrowsCode(() => OTPAuthURI.parse(
+        'otpauth://totp/alice?secret=JBSWY3DPEHPK3PXP&period=1e300'),
+        OtpErrorCode.INVALID_PERIOD);
+    });
+
     it('parse_strictAcceptsCanonicalSecret', 0, () => {
       // 大小写/空白等归一化仍容忍，其余字段行为不变
       const p: OtpAuthParams = OTPAuthURI.parse(

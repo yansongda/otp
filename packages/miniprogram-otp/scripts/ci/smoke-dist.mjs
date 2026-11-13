@@ -22,6 +22,7 @@ assert.equal(pkg.dependencies && Object.keys(pkg.dependencies).length, 0);
 const m = require(entry);
 const expected = [
   "HOTP",
+  "MAX_VERIFY_WINDOW",
   "OTPAuthURI",
   "OtpAlgorithm",
   "OtpError",
@@ -60,7 +61,9 @@ assert.throws(
 assert.equal(m.OtpErrorCode.INVALID_BASE32_PADDING, "INVALID_BASE32_PADDING");
 assert.equal(m.OtpErrorCode.INVALID_SECRET_LENGTH, "INVALID_SECRET_LENGTH");
 assert.equal(m.OtpErrorCode.INVALID_CLOCK_OFFSET, "INVALID_CLOCK_OFFSET");
-assert.equal(Object.keys(m.OtpErrorCode).length, 20);
+assert.equal(m.OtpErrorCode.INVALID_MIN_SECRET_BITS, "INVALID_MIN_SECRET_BITS");
+assert.equal(Object.keys(m.OtpErrorCode).length, 21);
+assert.equal(m.MAX_VERIFY_WINDOW, 10);
 
 // 错误码唯一来源是 core：新增码必须自动出现在产物里，平台无需再抄一份
 assert.throws(
@@ -73,7 +76,26 @@ assert.throws(
   (e) =>
     e instanceof m.OtpError && e.code === m.OtpErrorCode.INVALID_SECRET_LENGTH,
 );
+assert.throws(
+  () => new m.TOTP({ secret: "JBSWY3DPEHPK3PXP", clockOffsetMs: 0.5 }),
+  (e) =>
+    e instanceof m.OtpError && e.code === m.OtpErrorCode.INVALID_CLOCK_OFFSET,
+);
+assert.throws(
+  () => new m.TOTP({ secret: "JBSWY3DPEHPK3PXP", minSecretBits: Number.NaN }),
+  (e) =>
+    e instanceof m.OtpError &&
+    e.code === m.OtpErrorCode.INVALID_MIN_SECRET_BITS,
+);
+assert.throws(
+  () =>
+    new m.TOTP({ secret: "JBSWY3DPEHPK3PXP" }).verify("287082", {
+      timestamp: 59000,
+      window: 11,
+    }),
+  (e) => e instanceof m.OtpError && e.code === m.OtpErrorCode.INVALID_WINDOW,
+);
 
 console.log(
-  "dist smoke OK: 8 exports, RFC 4226/6238 vectors, URI, errors, redaction",
+  "dist smoke OK: 9 exports, RFC 4226/6238 vectors, URI, errors, redaction",
 );

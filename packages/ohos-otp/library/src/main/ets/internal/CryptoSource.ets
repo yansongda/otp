@@ -21,8 +21,8 @@ function toMacAlgName(algorithm: string): string {
     case 'SHA512':
       return 'SHA512';
     default:
-      // 静默回退 SHA1 会让调用方以为在用更强的算法（与 pure-js provider 的行为也对不上）
-      return otpFail('CRYPTO_FAILED');
+      // 静默回退 SHA1 会让调用方以为在用更强的算法；未知算法是“算法不被接受”
+      return otpFail('INVALID_ALGORITHM');
   }
 }
 
@@ -34,10 +34,13 @@ function toMacAlgName(algorithm: string): string {
  */
 export class CryptoFrameworkHmac implements HmacProvider {
   sign(algorithm: string, key: Uint8Array, message: Uint8Array): Uint8Array {
+    // 未知算法在 try 外抛出：它是参数错误而不是 platform crypto 异常，
+    // 放进来会被本方法的 catch 再包一次。
+    const macAlg: string = toMacAlgName(algorithm);
     try {
       const gen = cryptoFramework.createSymKeyGenerator('HMAC');
       const symKey = gen.convertKeySync({ data: key });
-      const mac = cryptoFramework.createMac(toMacAlgName(algorithm));
+      const mac = cryptoFramework.createMac(macAlg);
       mac.initSync(symKey);
       mac.updateSync({ data: message });
       return new Uint8Array(mac.doFinalSync().data);

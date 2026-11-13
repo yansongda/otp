@@ -21,7 +21,7 @@ const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const BASELINE = {
   localTestCases: 240, // library/src/test 的 it( 数量（PC Local Test）
   deviceTestCases: 37, // library/src/ohosTest 的 it( 数量（真实 crypto，需设备）
-  errorCodeMembers: 20, // OtpErrorCode 成员数：取值冻结，仅允许显式新增（现含 INVALID_SECRET_LENGTH / INVALID_CLOCK_OFFSET）
+  errorCodeMembers: 21, // OtpErrorCode 成员数：取值冻结，仅允许显式新增（现含 INVALID_MIN_SECRET_BITS / INVALID_CLOCK_OFFSET / INVALID_SECRET_LENGTH）
 };
 
 const LIB_SRC = 'library/src/main/ets';
@@ -242,6 +242,14 @@ check('asOtpErrorCode 覆盖全部错误码', () => {
   const missing = names.filter((n) => !cases.has(n));
   if (missing.length > 0) throw new Error(`缺少 case：${missing.join(', ')}`);
   return `${cases.size} 个 case`;
+});
+
+check('OtpError 设置 name = \'OtpError\'', () => {
+  // provider 错误契约靠 name 判定（core engine 只兜未知错误）；不得删除
+  if (!/this\.name\s*=\s*'OtpError'/.test(readText(ERROR_FILE))) {
+    throw new Error("OtpError.ets 未设置 this.name = 'OtpError'");
+  }
+  return 'provider 错误契约的 name 已固定';
 });
 
 check('版本号与 CHANGELOG 一致', () => {

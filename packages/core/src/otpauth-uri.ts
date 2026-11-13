@@ -146,7 +146,7 @@ export class OTPAuthURI {
       const periodRaw = params.get("period");
       if (periodRaw !== undefined && periodRaw !== "") {
         const p = Number(periodRaw);
-        if (!Number.isInteger(p) || p <= 0) {
+        if (!Number.isSafeInteger(p) || p <= 0) {
           otpFail("INVALID_PERIOD");
         }
         period = p;
@@ -155,7 +155,7 @@ export class OTPAuthURI {
       const counterRaw = params.get("counter");
       if (counterRaw !== undefined && counterRaw !== "") {
         const c = Number(counterRaw);
-        if (!Number.isInteger(c) || c < 0) {
+        if (!isSafeCounter(c)) {
           otpFail("INVALID_COUNTER");
         }
         counter = c;
@@ -195,18 +195,18 @@ export class OTPAuthURI {
    * params.label 是 parse 的回填字段（原始 label），build 一律由 issuer/account 派生，忽略该字段。
    */
   static build(params: OtpAuthParams): string {
-    // 顺序与 parse 一致：type → algorithm → digits → secret → period|counter
+    // 顺序与 parse / errors.ts 优先级一致：type → secret → algorithm → digits → period|counter
     const type = params.type;
     if (type !== "totp" && type !== "hotp") {
       otpFail("UNSUPPORTED_OTPAUTH_TYPE");
     }
+    const secret = encode(decode(params.secret));
     if (!isValidAlgorithm(params.algorithm)) {
       otpFail("INVALID_ALGORITHM");
     }
     if (!isValidDigits(params.digits)) {
       otpFail("INVALID_DIGITS");
     }
-    const secret = encode(decode(params.secret));
     const issuer = params.issuer === undefined ? "" : params.issuer;
     const account = params.account === undefined ? "" : params.account;
 
@@ -234,7 +234,7 @@ export class OTPAuthURI {
     if (type === "totp") {
       const period =
         params.period === undefined ? DEFAULT_PERIOD : params.period;
-      if (!Number.isInteger(period) || period <= 0) {
+      if (!Number.isSafeInteger(period) || period <= 0) {
         otpFail("INVALID_PERIOD");
       }
       if (period !== DEFAULT_PERIOD) {

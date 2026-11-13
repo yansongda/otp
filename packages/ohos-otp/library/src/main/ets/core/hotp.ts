@@ -12,7 +12,7 @@ import {
   verify as engineVerify,
 } from "./internal/engine";
 import { resolveHmacOptions } from "./internal/resolve";
-import type { AlgorithmName, HotpOptions, VerifyOptions } from "./options";
+import type { AlgorithmName, HotpOptions, HotpVerifyOptions } from "./options";
 import { DEFAULT_COUNTER } from "./options";
 import { OTPAuthURI } from "./otpauth-uri";
 import type { Secret } from "./secret";
@@ -63,10 +63,10 @@ export class HOTP {
   }
 
   /**
-   * 恒定时间比对；counter 缺省用构造值、window 缺省 0、上限 1000。
+   * 恒定时间比对；counter 缺省用构造值、window 缺省 0、上限 MAX_VERIFY_WINDOW（10）。
    * 返回命中 counter 相对基准的偏移（步=1），未命中 null。
    */
-  verify(token: string, options?: VerifyOptions): number | null {
+  verify(token: string, options?: HotpVerifyOptions): number | null {
     const c =
       options === undefined || options.counter === undefined
         ? this._counter

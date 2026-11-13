@@ -34,11 +34,15 @@ export function resolveHmacOptions(options: HmacOptions): ResolvedHmacOptions {
       ? DEFAULT_MIN_SECRET_BITS
       : options.minSecretBits;
 
+  if (!isValidAlgorithm(algorithm)) {
+    otpFail("INVALID_ALGORITHM");
+  }
   if (!isValidDigits(digits)) {
     otpFail("INVALID_DIGITS");
   }
-  if (!isValidAlgorithm(algorithm)) {
-    otpFail("INVALID_ALGORITHM");
+  // fail-closed：非法阈值不得静默关闭强度校验（NaN > 0 为 false 会跳过检查）
+  if (!Number.isSafeInteger(minSecretBits) || minSecretBits < 0) {
+    otpFail("INVALID_MIN_SECRET_BITS");
   }
   if (minSecretBits > 0 && secret.bitLength < minSecretBits) {
     otpFail("SECRET_TOO_WEAK");

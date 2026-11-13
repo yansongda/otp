@@ -19,11 +19,9 @@ import type { OtpErrorCode } from "./errors";
 import { OtpError } from "./errors";
 import type {
   HotpOptions,
-  HotpVerifyOptions,
   OtpAuthParams,
   ParseOptions,
   TotpOptions,
-  TotpVerifyOptions,
 } from "./types";
 
 // 幂等注册；只构造对象并注册，不发起任何 HMAC 计算
@@ -32,6 +30,8 @@ setErrorFactory(
   (code: string): Error => new OtpError(code as OtpErrorCode, code),
 );
 
+/** 漂移窗口上限：直接复用 core 常量，调用方做输入预校验时不得再硬编码。 */
+export { MAX_VERIFY_WINDOW } from "@yansongda/otp-core";
 export { OtpError, OtpErrorCode } from "./errors";
 export type {
   HmacOptions,
@@ -47,21 +47,18 @@ export { OtpAlgorithm, OtpType } from "./types";
 
 // ---- 类型桥：实例类型复用 core，构造签名收紧到平台 DTO ----
 
-// verify 选项按类收窄：HOTP 不认 timestamp、TOTP 不认 counter（core 会静默忽略这两个字段）
-export type HOTP = Omit<CoreHOTP, "verify"> & {
-  verify(token: string, options?: HotpVerifyOptions): number | null;
-};
+// verify 选项已由 core 按类收窄（HotpVerifyOptions / TotpVerifyOptions），
+// 平台层不再用 Omit + 交叉重复声明一份。
+export type HOTP = CoreHOTP;
 export const HOTP: {
-  new (options: HotpOptions, provider?: HmacProvider): HOTP;
-  fromURI(uri: string): HOTP;
+  new (options: HotpOptions, provider?: HmacProvider): CoreHOTP;
+  fromURI(uri: string): CoreHOTP;
 } = CoreHOTP;
 
-export type TOTP = Omit<CoreTOTP, "verify"> & {
-  verify(token: string, options?: TotpVerifyOptions): number | null;
-};
+export type TOTP = CoreTOTP;
 export const TOTP: {
-  new (options: TotpOptions, provider?: HmacProvider): TOTP;
-  fromURI(uri: string): TOTP;
+  new (options: TotpOptions, provider?: HmacProvider): CoreTOTP;
+  fromURI(uri: string): CoreTOTP;
 } = CoreTOTP;
 
 export type Secret = CoreSecret;

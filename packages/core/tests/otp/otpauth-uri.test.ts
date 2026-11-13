@@ -370,4 +370,70 @@ describe("otpauth-uri", () => {
       "otpauth://totp/ACME:alice?secret=JBSWY3DPEHPK3PXP&issuer=ACME&algorithm=SHA1",
     );
   });
+
+  it("parse_counterUnsafe_throws", () => {
+    // counter 必须与 HOTP 构造器/build 同口径：> 2^53-1 的整数会丢精度，直接拒绝
+    expectCode(
+      () =>
+        OTPAuthURI.parse(
+          "otpauth://hotp/alice?secret=JBSWY3DPEHPK3PXP&counter=9007199254740993",
+        ),
+      "INVALID_COUNTER",
+    );
+  });
+
+  it("parse_periodUnsafe_throws", () => {
+    // period 必须是正安全整数：超大值语义上等同配置错误
+    expectCode(
+      () =>
+        OTPAuthURI.parse(
+          "otpauth://totp/alice?secret=JBSWY3DPEHPK3PXP&period=1e300",
+        ),
+      "INVALID_PERIOD",
+    );
+  });
+
+  it("build_secretErrorPrecedesParamErrors", () => {
+    // errors.ts 优先级：解析类先于参数类（与 parse 对称）
+    expectCode(
+      () =>
+        OTPAuthURI.build({
+          type: OtpType.TOTP,
+          secret: "!!!",
+          algorithm: "MD5",
+          digits: 5,
+        }),
+      "INVALID_BASE32_CHAR",
+    );
+    expectCode(
+      () =>
+        OTPAuthURI.build({
+          type: OtpType.TOTP,
+          secret: "JBSWY3DPEHPK3PXP",
+          algorithm: "MD5",
+          digits: 5,
+        }),
+      "INVALID_ALGORITHM",
+    );
+  });
+
+  it("build_parse_roundTripStable", () => {
+    // 合法域内：parse(build(x)) 与 build(parse(uri)) 必须稳定（对称校验的回归锁）
+    const params = {
+      type: OtpType.TOTP,
+      secret: "JBSWY3DPEHPK3PXP",
+      algorithm: OtpAlgorithm.SHA256,
+      digits: 8,
+      period: 60,
+      issuer: "ACME Co",
+      account: "alice",
+    };
+    const built = OTPAuthURI.build(params);
+    const parsed = OTPAuthURI.parse(built);
+    expect(OTPAuthURI.build(parsed)).toBe(built);
+
+    const hotpUri =
+      "otpauth://hotp/alice?secret=JBSWY3DPEHPK3PXP&algorithm=SHA1&counter=42";
+    expect(OTPAuthURI.build(OTPAuthURI.parse(hotpUri))).toBe(hotpUri);
+  });
 });

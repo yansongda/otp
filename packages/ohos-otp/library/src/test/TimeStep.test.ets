@@ -119,6 +119,14 @@ export default function timeStepTest() {
       // epochMs = -1 → INVALID_TIMESTAMP
       expect(() => { step(-1, 0, 30); }).assertThrowError('INVALID_TIMESTAMP');
     });
+    it('stepInvalidTimestampFractionOrUnsafe', 0, () => {
+      // 小数 / 超安全整数的时间戳无意义 → INVALID_TIMESTAMP
+      expect(() => { step(1.5, 0, 30); }).assertThrowError('INVALID_TIMESTAMP');
+      expect(() => { step(1e300, 0, 30); }).assertThrowError('INVALID_TIMESTAMP');
+    });
+    it('stepInvalidT0Unsafe', 0, () => {
+      expect(() => { step(1, 1e300, 30); }).assertThrowError('INVALID_T0');
+    });
     it('stepInvalidT0', 0, () => {
       // t0 = -1 不满足 ≥ 0 → INVALID_T0
       expect(() => { step(1, -1, 30); }).assertThrowError('INVALID_T0');

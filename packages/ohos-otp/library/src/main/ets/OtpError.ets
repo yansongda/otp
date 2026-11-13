@@ -1,10 +1,13 @@
 /**
- * 统一错误模型：错误码枚举（20 个，字符串值）+ OtpError。
+ * 统一错误模型：错误码枚举（21 个，字符串值）+ OtpError。
  * 消息文案固定，绝不包含 secret/token/派生密钥等用户输入。
  *
  * 取值唯一来源是 core（packages/core/src/errors.ts）：
  * 本枚举是 ArkTS 侧的强类型投影，新增码时必须同步（守卫脚本做枚举↔core 逐项对拍）。
  * core 通过 setErrorFactory 注入本类：core 只传错误码字符串，这里映射回 enum。
+ *
+ * 契约：name 固定为 'OtpError'——core 的 engine 靠它区分「已知错误（原样上抛）」与
+ * 「provider 实现缺陷（收敛为 CRYPTO_FAILED）」，不得删除。
  */
 export enum OtpErrorCode {
   EMPTY_SECRET = 'EMPTY_SECRET',
@@ -16,6 +19,8 @@ export enum OtpErrorCode {
   SECRET_TOO_WEAK = 'SECRET_TOO_WEAK',
   // Secret.generate(bytes) / 随机源：bytes 不是 [1, 4096] 整数
   INVALID_SECRET_LENGTH = 'INVALID_SECRET_LENGTH',
+  // minSecretBits 不是非负安全整数（参数错误；密钥本身强度不足才是 SECRET_TOO_WEAK）
+  INVALID_MIN_SECRET_BITS = 'INVALID_MIN_SECRET_BITS',
   INVALID_ALGORITHM = 'INVALID_ALGORITHM',
   INVALID_DIGITS = 'INVALID_DIGITS',
   INVALID_PERIOD = 'INVALID_PERIOD',
@@ -23,7 +28,7 @@ export enum OtpErrorCode {
   INVALID_COUNTER = 'INVALID_COUNTER',
   // 仅用于时间戳（epoch ms）
   INVALID_TIMESTAMP = 'INVALID_TIMESTAMP',
-  // clockOffsetMs 非有限，或 syncClockOffset 的 delta 非整数 / 累加结果超出安全整数
+  // clockOffsetMs 非安全整数，或 syncClockOffset 的 delta 非安全整数 / 累加结果超出安全整数
   INVALID_CLOCK_OFFSET = 'INVALID_CLOCK_OFFSET',
   INVALID_WINDOW = 'INVALID_WINDOW',
   INVALID_TOKEN = 'INVALID_TOKEN',
@@ -42,6 +47,7 @@ export class OtpError extends Error {
 
   constructor(code: OtpErrorCode, message: string, codeString?: string) {
     super(message);
+    this.name = 'OtpError';
     this.code = code;
     this.codeString = codeString === undefined ? code : codeString;
   }
@@ -56,6 +62,7 @@ export function asOtpErrorCode(code: string): OtpErrorCode {
     case 'SECRET_TOO_SHORT': return OtpErrorCode.SECRET_TOO_SHORT;
     case 'SECRET_TOO_WEAK': return OtpErrorCode.SECRET_TOO_WEAK;
     case 'INVALID_SECRET_LENGTH': return OtpErrorCode.INVALID_SECRET_LENGTH;
+    case 'INVALID_MIN_SECRET_BITS': return OtpErrorCode.INVALID_MIN_SECRET_BITS;
     case 'INVALID_ALGORITHM': return OtpErrorCode.INVALID_ALGORITHM;
     case 'INVALID_DIGITS': return OtpErrorCode.INVALID_DIGITS;
     case 'INVALID_PERIOD': return OtpErrorCode.INVALID_PERIOD;

@@ -28,7 +28,8 @@ export class PureJsHmac implements HmacProvider {
   sign(algorithm: string, key: Uint8Array, message: Uint8Array): Uint8Array {
     const spec: HashSpec | undefined = HASH_SPECS[algorithm as AlgorithmName];
     if (spec === undefined) {
-      return otpFail("CRYPTO_FAILED");
+      // 未知算法是「算法不被接受」，不是 crypto 层故障：用独立错误码
+      return otpFail("INVALID_ALGORITHM");
     }
     try {
       return hmac(spec.hash, spec.blockSize, key, message);

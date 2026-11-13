@@ -57,8 +57,8 @@ describe("provider", () => {
     });
   }
 
-  it("provider_wrapsUnexpectedFailureAsCryptoFailed", () => {
-    // 非法算法值穿透（仅测试构造）：固定错误码，不泄漏底层错误
+  it("provider_unknownAlgorithm_throwsInvalidAlgorithm", () => {
+    // 非法算法值穿透（仅测试构造）：未知算法是「算法不被接受」，不是 crypto 层故障
     let thrown: unknown = null;
     try {
       provider.sign("MD5" as "SHA1", new Uint8Array(1), new Uint8Array(1));
@@ -66,6 +66,6 @@ describe("provider", () => {
       thrown = e;
     }
     expect(thrown instanceof OtpError).toBe(true);
-    expect((thrown as OtpError).code).toBe("CRYPTO_FAILED");
+    expect((thrown as OtpError).code).toBe("INVALID_ALGORITHM");
   });
 });

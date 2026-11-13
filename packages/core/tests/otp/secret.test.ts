@@ -92,6 +92,12 @@ describe("secret", () => {
     expectCode(() => Secret.generate(1.5), "INVALID_SECRET_LENGTH");
   });
 
+  it("generate_sourceWrongLength_normalizedToCryptoFailed", () => {
+    // 随机源违反长度契约：静默接受会让密钥强度与调用方预期不符
+    registerRandom({ random: (n: number) => new Uint8Array(n + 1) });
+    expectCode(() => Secret.generate(20), "CRYPTO_FAILED");
+  });
+
   it("toJSON_redactsSecret", () => {
     const secret = Secret.fromBase32(SEEDS.SHA1_BASE32);
     expect(secret.toJSON()).toBe("[REDACTED]");

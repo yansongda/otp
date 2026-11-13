@@ -21,7 +21,7 @@ const BASELINE = {
   // 算法测试已迁至 packages/core（242 条）；本包只保留平台层契约测试
   testDeclarations: 9,
   testFiles: 1,
-  errorCodeMembers: 20,
+  errorCodeMembers: 21,
 };
 
 const SKIP_DIRS = new Set(["node_modules", "dist", "coverage", ".git"]);
@@ -175,6 +175,44 @@ check(`错误码唯一来源：core 恰为 ${BASELINE.errorCodeMembers} 个成�
     throw new Error("src/errors.ts 未从 @yansongda/otp-core 导入 OtpErrorCode");
   }
   return `${count} 个（core 单源，平台零重复）`;
+});
+
+check("verify DTO 唯一来源：core", () => {
+  // 平台不再手写 verify 选项：三个 DTO 必须从 core 转发（否则 HOTP/TOTP 收窄会漂移）
+  const text = stripComments(readText("src/types.ts"));
+  const redeclared = (
+    text.match(
+      /interface\s+(VerifyOptions|HotpVerifyOptions|TotpVerifyOptions)\b/g,
+    ) || []
+  ).length;
+  if (redeclared !== 0) {
+    throw new Error(
+      `src/types.ts 又声明了 ${redeclared} 个 verify DTO；必须从 @yansongda/otp-core 转发`,
+    );
+  }
+  if (
+    !/export type\s*\{[^}]*HotpVerifyOptions[^}]*\}\s*from\s+"@yansongda\/otp-core"/.test(
+      text,
+    )
+  ) {
+    throw new Error("src/types.ts 未从 @yansongda/otp-core 转发 verify DTO");
+  }
+  return "3 个 verify DTO 转发自 core";
+});
+
+check("MAX_VERIFY_WINDOW 随 barrel 导出", () => {
+  if (!/MAX_VERIFY_WINDOW/.test(readText(BARREL))) {
+    throw new Error("src/index.ts 未导出 MAX_VERIFY_WINDOW");
+  }
+  return "barrel 导出窗口上限常量";
+});
+
+check('OtpError 设置 name = "OtpError"', () => {
+  // provider 错误契约靠 name 判定（engine 只兜未知错误）；不得删除
+  if (!/this\.name\s*=\s*"OtpError"/.test(stripComments(readText(ERRORS)))) {
+    throw new Error('OtpError 未设置 this.name = "OtpError"');
+  }
+  return "provider 错误契约的 name 已固定";
 });
 
 check("零运行时依赖", () => {

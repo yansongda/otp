@@ -20,9 +20,12 @@ export {
   HmacOptions,
   TotpOptions,
   HotpOptions,
+  HotpVerifyOptions,
+  TotpVerifyOptions,
   VerifyOptions,
   ParseOptions,
-  OtpAuthParams
+  OtpAuthParams,
+  MAX_VERIFY_WINDOW
 } from './src/main/ets/OtpOptions';
 export { Secret } from './src/main/ets/Secret';
 export { HOTP } from './src/main/ets/HOTP';

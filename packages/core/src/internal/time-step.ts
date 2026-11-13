@@ -4,15 +4,15 @@
  */
 import { otpFail } from "../errors";
 
-/** 校验公共入参：epochMs ≥ 0 有限数（epoch 0 = 1970-01-01 合法）、t0 ≥ 0 整数、period 正整数。 */
+/** 校验公共入参：epochMs 为非负安全整数（epoch 0 = 1970-01-01 合法）、t0 非负安全整数、period 正安全整数。 */
 function assertValidInputs(epochMs: number, t0: number, period: number): void {
-  if (!Number.isFinite(epochMs) || epochMs < 0) {
+  if (!Number.isSafeInteger(epochMs) || epochMs < 0) {
     otpFail("INVALID_TIMESTAMP");
   }
-  if (!Number.isInteger(t0) || t0 < 0) {
+  if (!Number.isSafeInteger(t0) || t0 < 0) {
     otpFail("INVALID_T0");
   }
-  if (!Number.isInteger(period) || period <= 0) {
+  if (!Number.isSafeInteger(period) || period <= 0) {
     otpFail("INVALID_PERIOD");
   }
 }

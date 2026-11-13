@@ -162,6 +162,28 @@ describe("hotp", () => {
     ).toBe("755224");
   });
 
+  it("ctor_minSecretBitsInvalid_throws", () => {
+    // 非法阈值不得静默关闭强度校验（NaN > 0 为 false 会跳过检查）
+    for (const minSecretBits of [
+      Number.NaN,
+      -1,
+      1.5,
+      Number.MAX_SAFE_INTEGER + 1,
+    ]) {
+      expectCode(
+        () => new HOTP({ secret: SEEDS.SHA1_BASE32, minSecretBits }),
+        "INVALID_MIN_SECRET_BITS",
+      );
+    }
+  });
+
+  it("verify_windowExceedsCap_throws", () => {
+    // HOTP 与 TOTP 共用同一上限：window = 10 合法，11 拒绝
+    const h = new HOTP({ secret: SEEDS.SHA1_BASE32, counter: 1 });
+    expectCode(() => h.verify("287082", { window: 11 }), "INVALID_WINDOW");
+    expect(h.verify("287082", { window: 10 })).toBe(0);
+  });
+
   it("fromURI_totpType_throws", () => {
     expectCode(
       () => HOTP.fromURI(`otpauth://totp/alice?secret=${SEEDS.SHA1_BASE32}`),

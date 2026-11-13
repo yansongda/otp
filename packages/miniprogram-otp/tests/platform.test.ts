@@ -5,6 +5,7 @@
 import { describe, expect, it } from "bun:test";
 import {
   HOTP,
+  MAX_VERIFY_WINDOW,
   OTPAuthURI,
   OtpAlgorithm,
   OtpError,
@@ -13,6 +14,16 @@ import {
   Secret,
   TOTP,
 } from "../src/index";
+
+/** 期望抛出指定错误码（断言 code 比消息匹配更精确）。 */
+function thrownCode(fn: () => unknown): string {
+  try {
+    fn();
+    return "NO_THROW";
+  } catch (error) {
+    return (error as OtpError).code;
+  }
+}
 
 describe("platform barrel", () => {
   it("exports public symbols", () => {
@@ -93,9 +104,28 @@ describe("platform barrel", () => {
   });
   it("errorCodes come from core and stay in sync", () => {
     // 平台不再手抄码表：取值集合由 @yansongda/otp-core 唯一提供
-    expect(Object.keys(OtpErrorCode).length).toBe(20);
+    expect(Object.keys(OtpErrorCode).length).toBe(21);
     expect(OtpErrorCode.INVALID_SECRET_LENGTH).toBe("INVALID_SECRET_LENGTH");
     expect(OtpErrorCode.INVALID_CLOCK_OFFSET).toBe("INVALID_CLOCK_OFFSET");
+    expect(OtpErrorCode.INVALID_MIN_SECRET_BITS).toBe(
+      "INVALID_MIN_SECRET_BITS",
+    );
+    expect(MAX_VERIFY_WINDOW).toBe(10);
+  });
+
+  it("invalid parameters use dedicated codes", () => {
+    // 参数口径：安全整数 / fail-closed；每类错误独立码
+    expect(
+      thrownCode(
+        () => new TOTP({ secret: "JBSWY3DPEHPK3PXP", clockOffsetMs: 0.5 }),
+      ),
+    ).toBe("INVALID_CLOCK_OFFSET");
+    expect(
+      thrownCode(
+        () =>
+          new TOTP({ secret: "JBSWY3DPEHPK3PXP", minSecretBits: Number.NaN }),
+      ),
+    ).toBe("INVALID_MIN_SECRET_BITS");
   });
 
   it("OtpError keeps codeString and supports subclassing", () => {
@@ -140,8 +170,11 @@ describe("platform barrel", () => {
     totp.verify("287082", { counter: 1 });
     // @ts-expect-error HOTP.verify 不接受 timestamp
     hotp.verify("755224", { timestamp: 59000 });
-    // 合法字段仍然可用
-    expect(totp.verify("287082", { timestamp: 59000 })).toBe(0);
+    // 合法字段仍然可用（window 上限 10）
+    expect(totp.verify("287082", { timestamp: 59000, window: 10 })).toBe(0);
     expect(hotp.verify("755224", { counter: 0 })).toBe(0);
+    expect(
+      thrownCode(() => totp.verify("287082", { timestamp: 59000, window: 11 })),
+    ).toBe("INVALID_WINDOW");
   });
 });

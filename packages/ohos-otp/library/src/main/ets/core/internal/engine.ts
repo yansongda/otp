@@ -27,9 +27,17 @@ export function generate(
   let digest: Uint8Array;
   try {
     digest = provider.sign(params.algorithm, params.key, message);
-  } catch {
-    // provider 契约：失败由平台实现抛自己的错误类；自定义 provider 抛出的任意值
-    // 统一收敛为 CRYPTO_FAILED，避免非 OtpError 的错误类型穿透到调用方。
+  } catch (error) {
+    // provider 契约：失败必须抛 name === "OtpError" 的错误（core otpFail / 平台 OtpError）。
+    // 已知错误原样上抛（保留 INVALID_ALGORITHM / CRYPTO_FAILED 等精确码）；
+    // 其他值（TypeError、字符串、null…）视为 provider 实现缺陷，统一收敛。
+    if (error instanceof Error && error.name === "OtpError") {
+      throw error;
+    }
+    otpFail("CRYPTO_FAILED");
+  }
+  if (!(digest instanceof Uint8Array)) {
+    // provider 违反返回值契约（非 Uint8Array）同样视为 crypto 层缺陷
     otpFail("CRYPTO_FAILED");
   }
   return formatDigits(truncateApply(digest), params.digits);

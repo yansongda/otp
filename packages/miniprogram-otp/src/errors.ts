@@ -14,7 +14,8 @@ export { OtpErrorCode };
 
 /**
  * 统一错误类：调用方可通过 code 精确分支处理。
- * codeString 保留原始字符串：core 新增错误码尚未进入本包联合类型时仍能拿到真实值。
+ * codeString 保留原始字符串：外部传入 / 平台映射产生的未知码仍能拿到真实值
+ * （本包 `code` 的联合类型直接复用 core 码表，重建即自动同步；ohos 的 enum 才需手动映射）。
  */
 export class OtpError extends Error {
   readonly code: OtpErrorCodeType;

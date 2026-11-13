@@ -104,6 +104,14 @@ export default function hotpTest() {
       expect(new HOTP({ secret: SECRET, counter: 1 }, fixture).verify('755224')).assertEqual(null);
     });
 
+    it('verify_windowExceedsCap_throws', 0, () => {
+      // 上限 MAX_VERIFY_WINDOW = 10（HOTP/TOTP 共用）：11 拒绝、10 合法
+      expectThrowsCode(() => {
+        new HOTP({ secret: SECRET, counter: 1 }, fixture).verify('287082', { window: 11 });
+      }, OtpErrorCode.INVALID_WINDOW);
+      expect(new HOTP({ secret: SECRET, counter: 1 }, fixture).verify('287082', { window: 10 })).assertEqual(0);
+    });
+
     // ── 构造期即抛错（统一约束）──
     it('ctor_digits5_throws', 0, () => {
       // digits 仅允许 6/7/8，5 非法 → INVALID_DIGITS
@@ -135,6 +143,16 @@ export default function hotpTest() {
       // 160 bit secret（20 字节）≥ 128 → 构造不抛错，且能正常出码（counter=0 → A.2 的 755224）
       const h: HOTP = new HOTP({ secret: SECRET, minSecretBits: 128 }, fixture);
       expect(h.generate()).assertEqual('755224');
+    });
+
+    it('ctor_minSecretBitsInvalid_throws', 0, () => {
+      // 非法阈值不得静默关闭强度校验（NaN > 0 为 false 会跳过检查）
+      expectThrowsCode(() => {
+        new HOTP({ secret: SECRET, minSecretBits: NaN }, fixture);
+      }, OtpErrorCode.INVALID_MIN_SECRET_BITS);
+      expectThrowsCode(() => {
+        new HOTP({ secret: SECRET, minSecretBits: 1.5 }, fixture);
+      }, OtpErrorCode.INVALID_MIN_SECRET_BITS);
     });
 
     // ── fromURI 类型守卫：totp URI 拒绝 ──
