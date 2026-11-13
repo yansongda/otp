@@ -14,13 +14,14 @@ const SRC_DIR = "src";
 const TESTS_DIR = "tests";
 const BARREL = "src/index.ts";
 const ERRORS = "src/errors.ts";
+const CORE_ERRORS = "../core/src/errors.ts";
 const SECRET = "../core/src/secret.ts";
 
 const BASELINE = {
   // 算法测试已迁至 packages/core（242 条）；本包只保留平台层契约测试
   testDeclarations: 9,
   testFiles: 1,
-  errorCodeMembers: 18,
+  errorCodeMembers: 20,
 };
 
 const SKIP_DIRS = new Set(["node_modules", "dist", "coverage", ".git"]);
@@ -151,16 +152,29 @@ check("Secret 不得实现 toString()", () => {
   return "toJSON() 脱敏保留";
 });
 
-check(`OtpErrorCode 恰为 ${BASELINE.errorCodeMembers} 个成员`, () => {
-  const text = stripComments(readText(ERRORS));
-  const count = (text.match(/^\s{2}[A-Z0-9_]+\s*:\s*"[A-Z0-9_]+",$/gm) || [])
+check(`错误码唯一来源：core 恰为 ${BASELINE.errorCodeMembers} 个成员`, () => {
+  // 平台不再抄码表：mp 的 OtpErrorCode 必须从 core 复用，值集合只能有一份真源
+  const core = stripComments(readText(CORE_ERRORS));
+  const count = (core.match(/^\s{2}[A-Z0-9_]+\s*:\s*"[A-Z0-9_]+",$/gm) || [])
     .length;
   if (count !== BASELINE.errorCodeMembers) {
     throw new Error(
-      `实际 ${count} 个；错误码集合自 v1 冻结，仅允许显式调整基线`,
+      `core 实际 ${count} 个；错误码集合仅允许新增，且必须显式调整基线`,
     );
   }
-  return `${count} 个错误码`;
+  const platform = stripComments(readText(ERRORS));
+  const redeclared = (
+    platform.match(/^\s{2}[A-Z0-9_]+\s*:\s*"[A-Z0-9_]+",$/gm) || []
+  ).length;
+  if (redeclared !== 0) {
+    throw new Error(
+      `src/errors.ts 又声明了 ${redeclared} 个错误码；必须从 @yansongda/otp-core 复用`,
+    );
+  }
+  if (!/OtpErrorCode.*from\s+"@yansongda\/otp-core"/.test(platform)) {
+    throw new Error("src/errors.ts 未从 @yansongda/otp-core 导入 OtpErrorCode");
+  }
+  return `${count} 个（core 单源，平台零重复）`;
 });
 
 check("零运行时依赖", () => {

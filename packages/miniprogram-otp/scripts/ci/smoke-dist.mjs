@@ -58,7 +58,21 @@ assert.throws(
 );
 
 assert.equal(m.OtpErrorCode.INVALID_BASE32_PADDING, "INVALID_BASE32_PADDING");
-assert.equal(Object.keys(m.OtpErrorCode).length, 18);
+assert.equal(m.OtpErrorCode.INVALID_SECRET_LENGTH, "INVALID_SECRET_LENGTH");
+assert.equal(m.OtpErrorCode.INVALID_CLOCK_OFFSET, "INVALID_CLOCK_OFFSET");
+assert.equal(Object.keys(m.OtpErrorCode).length, 20);
+
+// 错误码唯一来源是 core：新增码必须自动出现在产物里，平台无需再抄一份
+assert.throws(
+  () => new m.TOTP({ secret: "JBSWY3DPEHPK3PXP", clockOffsetMs: Number.NaN }),
+  (e) =>
+    e instanceof m.OtpError && e.code === m.OtpErrorCode.INVALID_CLOCK_OFFSET,
+);
+assert.throws(
+  () => m.Secret.generate(0),
+  (e) =>
+    e instanceof m.OtpError && e.code === m.OtpErrorCode.INVALID_SECRET_LENGTH,
+);
 
 console.log(
   "dist smoke OK: 8 exports, RFC 4226/6238 vectors, URI, errors, redaction",

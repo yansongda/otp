@@ -11,7 +11,7 @@ import { installCryptoDefaults } from './src/main/ets/internal/CryptoSource';
 
 // 幂等注册；只构造对象并注册，不发起任何 crypto 调用
 installCryptoDefaults();
-setErrorFactory((code: string): Error => new OtpError(asOtpErrorCode(code), code));
+setErrorFactory((code: string): Error => new OtpError(asOtpErrorCode(code), code, code));
 
 export { OtpError, OtpErrorCode } from './src/main/ets/OtpError';
 export {

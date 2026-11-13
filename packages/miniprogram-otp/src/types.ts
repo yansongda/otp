@@ -44,10 +44,25 @@ export interface HotpOptions extends HmacOptions {
   account?: string;
 }
 
-/** verify 校验选项。 */
+/**
+ * verify 校验选项（HOTP / TOTP 共用形态；平台层已按类拆出更严的 DTO，
+ * 避免给 HOTP 传 timestamp、给 TOTP 传 counter 时被静默忽略）。
+ */
 export interface VerifyOptions {
   timestamp?: number;
   counter?: number;
+  window?: number;
+}
+
+/** HOTP.verify 选项：只有 counter / window（不接受 timestamp）。 */
+export interface HotpVerifyOptions {
+  counter?: number;
+  window?: number;
+}
+
+/** TOTP.verify 选项：只有 timestamp / window（不接受 counter）。 */
+export interface TotpVerifyOptions {
+  timestamp?: number;
   window?: number;
 }
 

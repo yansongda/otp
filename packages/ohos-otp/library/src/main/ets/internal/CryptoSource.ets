@@ -4,12 +4,14 @@
  * ⚠️ 全库唯一允许 import '@kit.CryptoArchitectureKit' 的文件；
  * 只被 library/Index.ets 值导入（installCryptoDefaults），公开类与 Secret 严禁引用它。
  * 接口与注册表来自 core/crypto.ts（跨边界签名用基础类型 string）。
+ *
+ * 错误一律经 core 的 otpFail 走平台工厂（与 core 内部零差异，不再绕开工厂直接 new OtpError）。
  */
 import { cryptoFramework } from '@kit.CryptoArchitectureKit';
 import { HmacProvider, RandomSource, registerHmac, registerRandom } from '../core/crypto';
-import { OtpError, OtpErrorCode } from '../OtpError';
+import { otpFail } from '../core/errors';
 
-/** 将算法名映射为 cryptoFramework 的 HMAC 算法名。 */
+/** 将算法名映射为 cryptoFramework 的 HMAC 算法名；未知算法必须失败，绝不静默降级。 */
 function toMacAlgName(algorithm: string): string {
   switch (algorithm) {
     case 'SHA1':
@@ -19,7 +21,8 @@ function toMacAlgName(algorithm: string): string {
     case 'SHA512':
       return 'SHA512';
     default:
-      return 'SHA1';
+      // 静默回退 SHA1 会让调用方以为在用更强的算法（与 pure-js provider 的行为也对不上）
+      return otpFail('CRYPTO_FAILED');
   }
 }
 
@@ -40,7 +43,7 @@ export class CryptoFrameworkHmac implements HmacProvider {
       return new Uint8Array(mac.doFinalSync().data);
     } catch (e) {
       // 固定文案：不透传原生错误、不打日志、不含 key/message
-      throw new OtpError(OtpErrorCode.CRYPTO_FAILED, 'CRYPTO_FAILED');
+      return otpFail('CRYPTO_FAILED');
     }
   }
 }
@@ -49,12 +52,13 @@ export class CryptoFrameworkHmac implements HmacProvider {
 export class CryptoFrameworkRandom implements RandomSource {
   random(bytes: number): Uint8Array {
     if (!(Number.isInteger(bytes) && bytes >= 1 && bytes <= 4096)) {
-      throw new OtpError(OtpErrorCode.SECRET_TOO_WEAK, 'SECRET_TOO_WEAK');
+      // 长度越界是参数错误，不是「密钥强度不足」
+      return otpFail('INVALID_SECRET_LENGTH');
     }
     try {
       return new Uint8Array(cryptoFramework.createRandom().generateRandomSync(bytes).data);
     } catch (e) {
-      throw new OtpError(OtpErrorCode.CRYPTO_FAILED, 'CRYPTO_FAILED');
+      return otpFail('CRYPTO_FAILED');
     }
   }
 }

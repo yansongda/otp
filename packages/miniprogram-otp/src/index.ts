@@ -19,9 +19,11 @@ import type { OtpErrorCode } from "./errors";
 import { OtpError } from "./errors";
 import type {
   HotpOptions,
+  HotpVerifyOptions,
   OtpAuthParams,
   ParseOptions,
   TotpOptions,
+  TotpVerifyOptions,
 } from "./types";
 
 // 幂等注册；只构造对象并注册，不发起任何 HMAC 计算
@@ -34,25 +36,32 @@ export { OtpError, OtpErrorCode } from "./errors";
 export type {
   HmacOptions,
   HotpOptions,
+  HotpVerifyOptions,
   OtpAuthParams,
   ParseOptions,
   TotpOptions,
+  TotpVerifyOptions,
   VerifyOptions,
 } from "./types";
 export { OtpAlgorithm, OtpType } from "./types";
 
 // ---- 类型桥：实例类型复用 core，构造签名收紧到平台 DTO ----
 
-export type HOTP = CoreHOTP;
+// verify 选项按类收窄：HOTP 不认 timestamp、TOTP 不认 counter（core 会静默忽略这两个字段）
+export type HOTP = Omit<CoreHOTP, "verify"> & {
+  verify(token: string, options?: HotpVerifyOptions): number | null;
+};
 export const HOTP: {
-  new (options: HotpOptions, provider?: HmacProvider): CoreHOTP;
-  fromURI(uri: string): CoreHOTP;
+  new (options: HotpOptions, provider?: HmacProvider): HOTP;
+  fromURI(uri: string): HOTP;
 } = CoreHOTP;
 
-export type TOTP = CoreTOTP;
+export type TOTP = Omit<CoreTOTP, "verify"> & {
+  verify(token: string, options?: TotpVerifyOptions): number | null;
+};
 export const TOTP: {
-  new (options: TotpOptions, provider?: HmacProvider): CoreTOTP;
-  fromURI(uri: string): CoreTOTP;
+  new (options: TotpOptions, provider?: HmacProvider): TOTP;
+  fromURI(uri: string): TOTP;
 } = CoreTOTP;
 
 export type Secret = CoreSecret;
