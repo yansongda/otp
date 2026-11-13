@@ -11,8 +11,9 @@ export {
   registerHmac,
   registerRandom,
 } from "./crypto";
-export type { OtpErrorFactory, OtpFailureCode } from "./errors";
-export { setErrorFactory } from "./errors";
+export type { OtpErrorFactory } from "./errors";
+/** 错误码取值随 barrel 导出：平台错误类必须复用本表，不得再抄一份。 */
+export { OtpErrorCode, setErrorFactory } from "./errors";
 export { HOTP } from "./hotp";
 export type {
   HmacOptions,

@@ -282,4 +282,92 @@ describe("otpauth-uri", () => {
     expect(back.account).toBeUndefined();
     expect(back.issuer).toBeUndefined();
   });
+  it("build_unsupportedType_throws", () => {
+    // type 只认小写 totp/hotp：奇形怪状的值不得静默变成 hotp
+    expectCode(
+      () =>
+        OTPAuthURI.build({
+          type: "TOTP",
+          secret: "JBSWY3DPEHPK3PXP",
+          algorithm: OtpAlgorithm.SHA1,
+          digits: 6,
+        }),
+      "UNSUPPORTED_OTPAUTH_TYPE",
+    );
+  });
+
+  it("build_invalidAlgorithm_throws", () => {
+    expectCode(
+      () =>
+        OTPAuthURI.build({
+          type: OtpType.TOTP,
+          secret: "JBSWY3DPEHPK3PXP",
+          algorithm: "sha1",
+          digits: 6,
+        }),
+      "INVALID_ALGORITHM",
+    );
+  });
+
+  it("build_invalidDigits_throws", () => {
+    expectCode(
+      () =>
+        OTPAuthURI.build({
+          type: OtpType.TOTP,
+          secret: "JBSWY3DPEHPK3PXP",
+          algorithm: OtpAlgorithm.SHA1,
+          digits: 5,
+        }),
+      "INVALID_DIGITS",
+    );
+  });
+
+  it("build_invalidPeriod_throws", () => {
+    for (const period of [0, -30, 1.5, Number.NaN]) {
+      expectCode(
+        () =>
+          OTPAuthURI.build({
+            type: OtpType.TOTP,
+            secret: "JBSWY3DPEHPK3PXP",
+            algorithm: OtpAlgorithm.SHA1,
+            digits: 6,
+            period,
+          }),
+        "INVALID_PERIOD",
+      );
+    }
+  });
+
+  it("build_invalidCounter_throws", () => {
+    for (const counter of [-1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+      expectCode(
+        () =>
+          OTPAuthURI.build({
+            type: OtpType.HOTP,
+            secret: "JBSWY3DPEHPK3PXP",
+            algorithm: OtpAlgorithm.SHA1,
+            digits: 6,
+            counter,
+          }),
+        "INVALID_COUNTER",
+      );
+    }
+  });
+
+  it("build_ignoresLabelField", () => {
+    // label 是 parse 的回填字段；build 一律由 issuer/account 派生
+    expect(
+      OTPAuthURI.build({
+        type: OtpType.TOTP,
+        secret: "JBSWY3DPEHPK3PXP",
+        algorithm: OtpAlgorithm.SHA1,
+        digits: 6,
+        label: "custom:label",
+        issuer: "ACME",
+        account: "alice",
+      }),
+    ).toBe(
+      "otpauth://totp/ACME:alice?secret=JBSWY3DPEHPK3PXP&issuer=ACME&algorithm=SHA1",
+    );
+  });
 });

@@ -4,9 +4,9 @@
  */
 import { otpFail } from "../errors";
 
-/** 校验公共入参：epochMs > 0 有限数、t0 ≥ 0 整数、period 正整数。 */
+/** 校验公共入参：epochMs ≥ 0 有限数（epoch 0 = 1970-01-01 合法）、t0 ≥ 0 整数、period 正整数。 */
 function assertValidInputs(epochMs: number, t0: number, period: number): void {
-  if (!Number.isFinite(epochMs) || epochMs <= 0) {
+  if (!Number.isFinite(epochMs) || epochMs < 0) {
     otpFail("INVALID_TIMESTAMP");
   }
   if (!Number.isInteger(t0) || t0 < 0) {

@@ -21,15 +21,11 @@ export class Secret {
   /**
    * 从 base32 字符串构造，默认宽松解析（容忍大小写 / 空白 / 填充）；空结果抛 EMPTY_SECRET。
    * options.strict === true 时追加规范形式校验，不合规抛 INVALID_BASE32_PADDING
-   * —— 用于「拒绝被截断 / 被改写的 secret」的导入边界。
+   * —— 用于拒绝被截断 / 被改写的 secret 的导入边界。
    */
   static fromBase32(input: string, options?: ParseOptions): Secret {
     const strict = options !== undefined && options.strict === true;
-    const bytes = strict ? decodeStrict(input) : decode(input);
-    if (bytes.length === 0) {
-      otpFail("EMPTY_SECRET");
-    }
-    return new Secret(bytes);
+    return new Secret(strict ? decodeStrict(input) : decode(input));
   }
 
   /** 从字节数组构造（拷贝入参，杜绝外部引用共享）；空数组抛 EMPTY_SECRET。 */
@@ -42,14 +38,15 @@ export class Secret {
 
   /**
    * 随机生成 bytes 字节 secret（默认 20 字节 = RFC 4226 推荐 160 bit）。
-   * bytes 须为 [1, 4096] 整数，否则抛 SECRET_TOO_WEAK。
+   * bytes 须为 [1, 4096] 整数，否则抛 INVALID_SECRET_LENGTH
+   * （这不是「密钥强度不足」，强度问题由 minSecretBits 的 SECRET_TOO_WEAK 承担）。
    *
    * 注意：微信小程序默认不注册随机源（wx.getRandomValues 异步），
    * 未注入 RandomSource 时本方法抛 CRYPTO_NOT_INITIALIZED。
    */
   static generate(bytes = 20): Secret {
     if (!Number.isInteger(bytes) || bytes < 1 || bytes > 4096) {
-      otpFail("SECRET_TOO_WEAK");
+      otpFail("INVALID_SECRET_LENGTH");
     }
     return new Secret(new Uint8Array(requireRandom().random(bytes)));
   }

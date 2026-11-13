@@ -139,8 +139,16 @@ describe("totp", () => {
   it("syncClockOffset_nonInteger_throws", () => {
     expectCode(
       () => new TOTP({ secret: SEEDS.SHA1_BASE32 }).syncClockOffset(1.5),
-      "INVALID_WINDOW",
+      "INVALID_CLOCK_OFFSET",
     );
+  });
+
+  it("syncClockOffset_unsafeResult_throws", () => {
+    // delta × period × 1000 超出安全整数时必须在源头拒绝，
+    // 否则后续以不相关的 INVALID_COUNTER / 错误码漂移的形式暴露。
+    const t = new TOTP({ secret: SEEDS.SHA1_BASE32 });
+    expectCode(() => t.syncClockOffset(10 ** 15), "INVALID_CLOCK_OFFSET");
+    expect(t.clockOffsetMs).toBe(0);
   });
 
   it("t0_1_period30_timestamp31000", () => {
@@ -228,7 +236,7 @@ describe("totp", () => {
   it("ctor_clockOffsetNaN_throws", () => {
     expectCode(
       () => new TOTP({ secret: SEEDS.SHA1_BASE32, clockOffsetMs: Number.NaN }),
-      "INVALID_TIMESTAMP",
+      "INVALID_CLOCK_OFFSET",
     );
   });
 
@@ -239,7 +247,7 @@ describe("totp", () => {
           secret: SEEDS.SHA1_BASE32,
           clockOffsetMs: Number.POSITIVE_INFINITY,
         }),
-      "INVALID_TIMESTAMP",
+      "INVALID_CLOCK_OFFSET",
     );
   });
 
@@ -268,9 +276,21 @@ describe("totp", () => {
   });
 
   it("timeInputs_invalid_throw", () => {
+    // epoch 0 合法（1970-01-01），只有负值 / 非有限数才抛 INVALID_TIMESTAMP
     const t = new TOTP({ secret: SEEDS.SHA1_BASE32 });
-    expectCode(() => t.generate(0), "INVALID_TIMESTAMP");
-    expectCode(() => t.remaining(0), "INVALID_TIMESTAMP");
+    expect(t.generate(0)).toBe("755224");
+    expectCode(() => t.generate(-1), "INVALID_TIMESTAMP");
+    expectCode(() => t.remaining(-1), "INVALID_TIMESTAMP");
     expectCode(() => t.progress(-1), "INVALID_TIMESTAMP");
+  });
+
+  it("verify_windowExceedsCap_throws", () => {
+    // window 来自外部输入时不得当计算炸弹：上限 1000 步
+    const t = new TOTP({ secret: SEEDS.SHA1_BASE32 });
+    expectCode(
+      () => t.verify("287082", { timestamp: 59000, window: 1001 }),
+      "INVALID_WINDOW",
+    );
+    expect(t.verify("287082", { timestamp: 59000, window: 1000 })).toBe(0);
   });
 });

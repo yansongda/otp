@@ -198,10 +198,10 @@ export default function totpTest() {
       }, OtpErrorCode.INVALID_ALGORITHM);
     });
     it('syncClockOffset_nonInteger_throws', 0, () => {
-      // delta 非整数 → INVALID_WINDOW（单参数）
+      // delta 非整数 → INVALID_CLOCK_OFFSET（单参数）
       expectThrowsCode(() => {
         new TOTP({ secret: S1 }, fixture).syncClockOffset(1.5);
-      }, OtpErrorCode.INVALID_WINDOW);
+      }, OtpErrorCode.INVALID_CLOCK_OFFSET);
     });
 
     // ── t0 用例（A.6：t0=1、period=30、timestampMs=31000 → counter=1）──
@@ -257,10 +257,10 @@ export default function totpTest() {
       expectThrowsCode(() => { new TOTP({ secret: S1, t0: 1.5 }, fixture); }, OtpErrorCode.INVALID_T0);
     });
     it('ctor_clockOffsetNaN_throws', 0, () => {
-      expectThrowsCode(() => { new TOTP({ secret: S1, clockOffsetMs: NaN }, fixture); }, OtpErrorCode.INVALID_TIMESTAMP);
+      expectThrowsCode(() => { new TOTP({ secret: S1, clockOffsetMs: NaN }, fixture); }, OtpErrorCode.INVALID_CLOCK_OFFSET);
     });
     it('ctor_clockOffsetInfinity_throws', 0, () => {
-      expectThrowsCode(() => { new TOTP({ secret: S1, clockOffsetMs: Infinity }, fixture); }, OtpErrorCode.INVALID_TIMESTAMP);
+      expectThrowsCode(() => { new TOTP({ secret: S1, clockOffsetMs: Infinity }, fixture); }, OtpErrorCode.INVALID_CLOCK_OFFSET);
     });
     it('ctor_minSecretBits128_80bit_throws', 0, () => {
       // 80 bit secret（10 字节 JBSWY3DPEHPK3PXP）< 128 → SECRET_TOO_WEAK

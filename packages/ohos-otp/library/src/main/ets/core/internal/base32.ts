@@ -17,24 +17,32 @@ export function normalize(input: string): string {
 }
 
 /**
- * RFC 4648 §6 解码：先归一化。
- * 空串抛 EMPTY_SECRET；非法字符抛 INVALID_BASE32_CHAR；解码长度 0 抛 SECRET_TOO_SHORT。
- * 实现：按 8 字符一组（组宽 5 字节）位拼接，缺位补 0，末组按剩余有效位截断。
+ * 归一化串 → 每字符 5 bit 数值；非法字符抛 INVALID_BASE32_CHAR。
+ * 一次查表供后续位拼接复用：原先校验与拼接各查一遍（每组还额外分配 number[]）。
  */
-export function decode(input: string): Uint8Array {
-  const normalized = normalize(input);
-
-  if (normalized.length === 0) {
-    otpFail("EMPTY_SECRET");
-  }
-
+function valuesOf(normalized: string): Uint8Array {
+  const values = new Uint8Array(normalized.length);
   for (let i = 0; i < normalized.length; i++) {
-    if (BASE32_ALPHABET.indexOf(normalized.charAt(i)) === -1) {
+    const value = BASE32_ALPHABET.indexOf(normalized.charAt(i));
+    if (value === -1) {
       otpFail("INVALID_BASE32_CHAR");
     }
+    values[i] = value;
   }
+  return values;
+}
 
-  const length = Math.floor((normalized.length * 5) / 8);
+/** 取第 i 个 5 bit 值；越界按 0 补位（RFC 4648 末组缺位补 0）。 */
+function valueAt(values: Uint8Array, index: number): number {
+  return index < values.length ? values[index] : 0;
+}
+
+/**
+ * 5 bit 值 → 字节（8 字符一组 = 5 字节，末组按剩余有效字节截断）。
+ * 长度 0（即输入仅 1 字符）时抛 SECRET_TOO_SHORT。
+ */
+function assemble(values: Uint8Array): Uint8Array {
+  const length = Math.floor((values.length * 5) / 8);
   if (length === 0) {
     otpFail("SECRET_TOO_SHORT");
   }
@@ -42,42 +50,51 @@ export function decode(input: string): Uint8Array {
   const result = new Uint8Array(length);
   let outIndex = 0;
 
-  for (let start = 0; start < normalized.length; start += 8) {
-    const end = Math.min(start + 8, normalized.length);
-    const groupLength = end - start;
+  for (let start = 0; start < values.length; start += 8) {
+    const end = Math.min(start + 8, values.length);
+    const bytesInGroup = Math.floor(((end - start) * 5) / 8);
 
-    const buf: number[] = [];
-    for (let i = start; i < end; i++) {
-      buf.push(BASE32_ALPHABET.indexOf(normalized.charAt(i)));
-    }
-    for (let i = 0; i < 8 - groupLength; i++) {
-      buf.push(0);
-    }
-
-    const bytesInGroup = Math.floor((groupLength * 5) / 8);
+    const b0 = valueAt(values, start);
+    const b1 = valueAt(values, start + 1);
+    const b2 = valueAt(values, start + 2);
+    const b3 = valueAt(values, start + 3);
+    const b4 = valueAt(values, start + 4);
+    const b5 = valueAt(values, start + 5);
+    const b6 = valueAt(values, start + 6);
+    const b7 = valueAt(values, start + 7);
 
     // RFC 4648 位拼接；每字节 & 0xff 收敛为无符号字节。
     if (bytesInGroup >= 1) {
-      result[outIndex] = ((buf[0] << 3) | (buf[1] >> 2)) & 0xff;
+      result[outIndex] = ((b0 << 3) | (b1 >> 2)) & 0xff;
     }
     if (bytesInGroup >= 2) {
-      result[outIndex + 1] =
-        ((buf[1] << 6) | (buf[2] << 1) | (buf[3] >> 4)) & 0xff;
+      result[outIndex + 1] = ((b1 << 6) | (b2 << 1) | (b3 >> 4)) & 0xff;
     }
     if (bytesInGroup >= 3) {
-      result[outIndex + 2] = ((buf[3] << 4) | (buf[4] >> 1)) & 0xff;
+      result[outIndex + 2] = ((b3 << 4) | (b4 >> 1)) & 0xff;
     }
     if (bytesInGroup >= 4) {
-      result[outIndex + 3] =
-        ((buf[4] << 7) | (buf[5] << 2) | (buf[6] >> 3)) & 0xff;
+      result[outIndex + 3] = ((b4 << 7) | (b5 << 2) | (b6 >> 3)) & 0xff;
     }
     if (bytesInGroup >= 5) {
-      result[outIndex + 4] = ((buf[6] << 5) | buf[7]) & 0xff;
+      result[outIndex + 4] = ((b6 << 5) | b7) & 0xff;
     }
     outIndex += bytesInGroup;
   }
 
   return result;
+}
+
+/**
+ * RFC 4648 §6 解码（先归一化）。
+ * 空串抛 EMPTY_SECRET；非法字符抛 INVALID_BASE32_CHAR；解码长度 0 抛 SECRET_TOO_SHORT。
+ */
+export function decode(input: string): Uint8Array {
+  const normalized = normalize(input);
+  if (normalized.length === 0) {
+    otpFail("EMPTY_SECRET");
+  }
+  return assemble(valuesOf(normalized));
 }
 
 /**
@@ -124,18 +141,14 @@ export function decodeStrict(input: string): Uint8Array {
     otpFail("EMPTY_SECRET");
   }
 
-  for (let i = 0; i < normalized.length; i++) {
-    if (BASE32_ALPHABET.indexOf(normalized.charAt(i)) === -1) {
-      otpFail("INVALID_BASE32_CHAR");
-    }
-  }
+  const values = valuesOf(normalized);
 
   const tail = normalized.length % 8;
   if (tail === 1 || tail === 3 || tail === 6) {
     otpFail("INVALID_BASE32_PADDING");
   }
 
-  const bytes = decode(normalized);
+  const bytes = assemble(values);
   if (encode(bytes) !== normalized) {
     otpFail("INVALID_BASE32_PADDING");
   }

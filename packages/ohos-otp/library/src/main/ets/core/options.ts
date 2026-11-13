@@ -87,7 +87,31 @@ export const OtpType = {
 } as const;
 export type OtpType = (typeof OtpType)[keyof typeof OtpType];
 
-export const ALGORITHMS = ["SHA1", "SHA256", "SHA512"] as const;
+export const ALGORITHMS = [
+  OtpAlgorithm.SHA1,
+  OtpAlgorithm.SHA256,
+  OtpAlgorithm.SHA512,
+] as const;
 
 export const ALLOWED_DIGITS = [6, 7, 8] as const;
 export type DigitCount = (typeof ALLOWED_DIGITS)[number];
+
+/**
+ * 默认值唯一来源（ArkTS 不支持 `as const` 对象字面量，故用独立常量）。
+ * 构造器、URI parse / build 必须共用，禁止再写字面量 30 / 6 / 0。
+ */
+export const DEFAULT_ALGORITHM: AlgorithmName = "SHA1";
+export const DEFAULT_DIGITS = 6;
+export const DEFAULT_PERIOD = 30;
+export const DEFAULT_COUNTER = 0;
+export const DEFAULT_T0 = 0;
+export const DEFAULT_CLOCK_OFFSET_MS = 0;
+export const DEFAULT_MIN_SECRET_BITS = 0;
+
+/**
+ * verify 漂移窗口上限（单位 = 时间步，双向）。
+ * 不设上限时 window 来自外部输入即可放大成 HMAC 计算炸弹：
+ * window = 10^5 需要 2×10^5 次 HMAC（本机 ≈ 220ms，小程序纯 JS 更慢）。
+ * 1000 步覆盖 TOTP 默认周期下的 ±8.3 小时，远超时钟漂移的实际量级。
+ */
+export const MAX_VERIFY_WINDOW = 1000;

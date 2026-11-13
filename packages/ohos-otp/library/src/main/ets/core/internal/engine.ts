@@ -6,6 +6,7 @@
 
 import type { HmacProvider } from "../crypto";
 import { otpFail } from "../errors";
+import { MAX_VERIFY_WINDOW } from "../options";
 import { isSafeCounter, toBytes } from "./counter";
 import { format as formatDigits } from "./digits";
 import { constantTimeEquals } from "./time-step";
@@ -22,7 +23,15 @@ export function generate(
   params: EngineParams,
   counter: number,
 ): string {
-  const digest = provider.sign(params.algorithm, params.key, toBytes(counter));
+  const message = toBytes(counter);
+  let digest: Uint8Array;
+  try {
+    digest = provider.sign(params.algorithm, params.key, message);
+  } catch {
+    // provider 契约：失败由平台实现抛自己的错误类；自定义 provider 抛出的任意值
+    // 统一收敛为 CRYPTO_FAILED，避免非 OtpError 的错误类型穿透到调用方。
+    otpFail("CRYPTO_FAILED");
+  }
   return formatDigits(truncateApply(digest), params.digits);
 }
 
@@ -40,6 +49,13 @@ function isNumericToken(token: string): boolean {
   return true;
 }
 
+/** 窗口上限：超出即拒绝，避免外部 window 放大成 HMAC 计算炸弹（见 options.ts 注释）。 */
+function assertValidWindow(window: number): void {
+  if (!Number.isInteger(window) || window < 0 || window > MAX_VERIFY_WINDOW) {
+    otpFail("INVALID_WINDOW");
+  }
+}
+
 export function verify(
   provider: HmacProvider,
   params: EngineParams,
@@ -47,14 +63,14 @@ export function verify(
   counter: number,
   window: number,
 ): number | null {
-  if (!isNumericToken(token) || token.length !== params.digits) {
-    otpFail("INVALID_TOKEN");
-  }
+  // 校验顺序遵循 errors.ts 的优先级：配置类（counter / window）先于输入类（token），
+  // 避免调用方写错参数时被用户输入错误掩盖。
   if (!isSafeCounter(counter)) {
     otpFail("INVALID_COUNTER");
   }
-  if (!Number.isInteger(window) || window < 0) {
-    otpFail("INVALID_WINDOW");
+  assertValidWindow(window);
+  if (!isNumericToken(token) || token.length !== params.digits) {
+    otpFail("INVALID_TOKEN");
   }
 
   let firstMatch: number | null = null;

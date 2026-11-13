@@ -5,19 +5,21 @@
 import { type HmacProvider, requireHmac } from "./crypto";
 import { otpFail } from "./errors";
 import { isSafeCounter } from "./internal/counter";
-import { isValidAlgorithm, isValidDigits } from "./internal/digits";
 import {
   type EngineParams,
   generate as engineGenerate,
   verify as engineVerify,
 } from "./internal/engine";
+import { resolveHmacOptions } from "./internal/resolve";
 import type { AlgorithmName, HotpOptions, VerifyOptions } from "./options";
+import { DEFAULT_COUNTER } from "./options";
 import { OTPAuthURI } from "./otpauth-uri";
-import { Secret } from "./secret";
+import type { Secret } from "./secret";
 
 export class HOTP {
   private readonly _provider: HmacProvider;
   private readonly _secret: Secret;
+  private readonly _key: Uint8Array;
   private readonly _algorithm: AlgorithmName;
   private readonly _digits: number;
   private readonly _counter: number;
@@ -28,31 +30,18 @@ export class HOTP {
    * @param provider 仅供库内测试注入；调用方省略即走 requireHmac() 的默认实现。
    */
   constructor(options: HotpOptions, provider?: HmacProvider) {
-    const secret = Secret.fromBase32(options.secret);
-    const algorithm =
-      options.algorithm === undefined ? "SHA1" : options.algorithm;
-    const digits = options.digits === undefined ? 6 : options.digits;
-    const counter = options.counter === undefined ? 0 : options.counter;
-    const minSecretBits =
-      options.minSecretBits === undefined ? 0 : options.minSecretBits;
-
-    if (!isValidDigits(digits)) {
-      otpFail("INVALID_DIGITS");
-    }
-    if (!isValidAlgorithm(algorithm)) {
-      otpFail("INVALID_ALGORITHM");
-    }
+    const resolved = resolveHmacOptions(options);
+    const counter =
+      options.counter === undefined ? DEFAULT_COUNTER : options.counter;
     if (!isSafeCounter(counter)) {
       otpFail("INVALID_COUNTER");
     }
-    if (minSecretBits > 0 && secret.bitLength < minSecretBits) {
-      otpFail("SECRET_TOO_WEAK");
-    }
 
     this._provider = provider === undefined ? requireHmac() : provider;
-    this._secret = secret;
-    this._algorithm = algorithm;
-    this._digits = digits;
+    this._secret = resolved.secret;
+    this._key = resolved.key;
+    this._algorithm = resolved.algorithm;
+    this._digits = resolved.digits;
     this._counter = counter;
     this._issuer = options.issuer;
     this._account = options.account;
@@ -62,7 +51,7 @@ export class HOTP {
     return {
       algorithm: this._algorithm,
       digits: this._digits,
-      key: this._secret.bytes,
+      key: this._key,
     };
   }
 
@@ -73,7 +62,7 @@ export class HOTP {
   }
 
   /**
-   * 恒定时间比对；counter 缺省用构造值、window 缺省 0。
+   * 恒定时间比对；counter 缺省用构造值、window 缺省 0、上限 1000。
    * 返回命中 counter 相对基准的偏移（步=1），未命中 null。
    */
   verify(token: string, options?: VerifyOptions): number | null {
@@ -111,7 +100,7 @@ export class HOTP {
       secret: params.secret,
       algorithm: params.algorithm,
       digits: params.digits,
-      counter: params.counter === undefined ? 0 : params.counter,
+      counter: params.counter === undefined ? DEFAULT_COUNTER : params.counter,
       issuer: params.issuer,
       account: params.account,
     });
