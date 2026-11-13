@@ -282,4 +282,158 @@ describe("otpauth-uri", () => {
     expect(back.account).toBeUndefined();
     expect(back.issuer).toBeUndefined();
   });
+  it("build_unsupportedType_throws", () => {
+    // type 只认小写 totp/hotp：奇形怪状的值不得静默变成 hotp
+    expectCode(
+      () =>
+        OTPAuthURI.build({
+          type: "TOTP",
+          secret: "JBSWY3DPEHPK3PXP",
+          algorithm: OtpAlgorithm.SHA1,
+          digits: 6,
+        }),
+      "UNSUPPORTED_OTPAUTH_TYPE",
+    );
+  });
+
+  it("build_invalidAlgorithm_throws", () => {
+    expectCode(
+      () =>
+        OTPAuthURI.build({
+          type: OtpType.TOTP,
+          secret: "JBSWY3DPEHPK3PXP",
+          algorithm: "sha1",
+          digits: 6,
+        }),
+      "INVALID_ALGORITHM",
+    );
+  });
+
+  it("build_invalidDigits_throws", () => {
+    expectCode(
+      () =>
+        OTPAuthURI.build({
+          type: OtpType.TOTP,
+          secret: "JBSWY3DPEHPK3PXP",
+          algorithm: OtpAlgorithm.SHA1,
+          digits: 5,
+        }),
+      "INVALID_DIGITS",
+    );
+  });
+
+  it("build_invalidPeriod_throws", () => {
+    for (const period of [0, -30, 1.5, Number.NaN]) {
+      expectCode(
+        () =>
+          OTPAuthURI.build({
+            type: OtpType.TOTP,
+            secret: "JBSWY3DPEHPK3PXP",
+            algorithm: OtpAlgorithm.SHA1,
+            digits: 6,
+            period,
+          }),
+        "INVALID_PERIOD",
+      );
+    }
+  });
+
+  it("build_invalidCounter_throws", () => {
+    for (const counter of [-1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+      expectCode(
+        () =>
+          OTPAuthURI.build({
+            type: OtpType.HOTP,
+            secret: "JBSWY3DPEHPK3PXP",
+            algorithm: OtpAlgorithm.SHA1,
+            digits: 6,
+            counter,
+          }),
+        "INVALID_COUNTER",
+      );
+    }
+  });
+
+  it("build_ignoresLabelField", () => {
+    // label 是 parse 的回填字段；build 一律由 issuer/account 派生
+    expect(
+      OTPAuthURI.build({
+        type: OtpType.TOTP,
+        secret: "JBSWY3DPEHPK3PXP",
+        algorithm: OtpAlgorithm.SHA1,
+        digits: 6,
+        label: "custom:label",
+        issuer: "ACME",
+        account: "alice",
+      }),
+    ).toBe(
+      "otpauth://totp/ACME:alice?secret=JBSWY3DPEHPK3PXP&issuer=ACME&algorithm=SHA1",
+    );
+  });
+
+  it("parse_counterUnsafe_throws", () => {
+    // counter 必须与 HOTP 构造器/build 同口径：> 2^53-1 的整数会丢精度，直接拒绝
+    expectCode(
+      () =>
+        OTPAuthURI.parse(
+          "otpauth://hotp/alice?secret=JBSWY3DPEHPK3PXP&counter=9007199254740993",
+        ),
+      "INVALID_COUNTER",
+    );
+  });
+
+  it("parse_periodUnsafe_throws", () => {
+    // period 必须是正安全整数：超大值语义上等同配置错误
+    expectCode(
+      () =>
+        OTPAuthURI.parse(
+          "otpauth://totp/alice?secret=JBSWY3DPEHPK3PXP&period=1e300",
+        ),
+      "INVALID_PERIOD",
+    );
+  });
+
+  it("build_secretErrorPrecedesParamErrors", () => {
+    // errors.ts 优先级：解析类先于参数类（与 parse 对称）
+    expectCode(
+      () =>
+        OTPAuthURI.build({
+          type: OtpType.TOTP,
+          secret: "!!!",
+          algorithm: "MD5",
+          digits: 5,
+        }),
+      "INVALID_BASE32_CHAR",
+    );
+    expectCode(
+      () =>
+        OTPAuthURI.build({
+          type: OtpType.TOTP,
+          secret: "JBSWY3DPEHPK3PXP",
+          algorithm: "MD5",
+          digits: 5,
+        }),
+      "INVALID_ALGORITHM",
+    );
+  });
+
+  it("build_parse_roundTripStable", () => {
+    // 合法域内：parse(build(x)) 与 build(parse(uri)) 必须稳定（对称校验的回归锁）
+    const params = {
+      type: OtpType.TOTP,
+      secret: "JBSWY3DPEHPK3PXP",
+      algorithm: OtpAlgorithm.SHA256,
+      digits: 8,
+      period: 60,
+      issuer: "ACME Co",
+      account: "alice",
+    };
+    const built = OTPAuthURI.build(params);
+    const parsed = OTPAuthURI.parse(built);
+    expect(OTPAuthURI.build(parsed)).toBe(built);
+
+    const hotpUri =
+      "otpauth://hotp/alice?secret=JBSWY3DPEHPK3PXP&algorithm=SHA1&counter=42";
+    expect(OTPAuthURI.build(OTPAuthURI.parse(hotpUri))).toBe(hotpUri);
+  });
 });

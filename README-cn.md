@@ -18,7 +18,7 @@
 - `TOTP.remaining()` / `TOTP.progress()`，便于倒计时与环形进度条
 - 可选严格 base32 解析（用于导入边界）
 - 恒定时间比较；错误消息与日志绝不包含 secret / token
-- 18 个冻结错误码，统一 `OtpError`
+- 21 个冻结错误码，统一 `OtpError`
 - 零运行时依赖
 
 ## 包一览
@@ -84,7 +84,7 @@ totp.verify(token, { window: 1 });
 | ------------ | ------------------------------------------------------------------------------ |
 | 校验         | 恒定时间比较；窗口内扫描完全部候选后才返回首个命中                             |
 | 时钟漂移     | `verify()` 返回命中的步偏移；`syncClockOffset(delta)` 永久记录该偏移           |
-| 错误模型     | `OtpError.code` 为 18 个冻结字符串码之一；消息固定，绝不包含 secret / token    |
+| 错误模型     | `OtpError.code` 为 21 个冻结字符串码之一；消息固定，绝不包含 secret / token    |
 | 密钥处理     | `Secret` 不实现 `toString()`；`JSON.stringify(secret)` 输出 `"[REDACTED]"`     |
 | counter 范围 | 0 … 2^53-1（不使用 BigInt，兼容老 WebView）                                    |
 | base32       | 默认宽松（大小写 / 空白 / 填充）；`{ strict: true }` 拒绝被截断或改写的 secret |

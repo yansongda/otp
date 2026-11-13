@@ -58,6 +58,13 @@ export default function cryptoAdapterTest() {
       expect(toHex(digest)).assertEqual('75a48a19d4cbe100644e8ac1397eea747a2d33ab');
     });
 
+    it('hmac_unknownAlgorithm_throwsInvalidAlgorithm', 0, () => {
+      // 未知算法是「算法不被接受」，绝不静默降级 SHA1，也不冒充 crypto 层故障
+      expect(() => {
+        new CryptoFrameworkHmac().sign('MD5', Secret.fromBase32(SHA1_B32).bytes, MSG_COUNTER_1);
+      }).assertThrowError('INVALID_ALGORITHM');
+    });
+
     it('hmacSha256_counter1_digest', 0, () => {
       const digest: Uint8Array = new CryptoFrameworkHmac().sign(
         OtpAlgorithm.SHA256, Secret.fromBase32(SHA256_B32).bytes, MSG_COUNTER_1);

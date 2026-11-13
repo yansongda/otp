@@ -5,8 +5,15 @@
  */
 import { otpFail } from "./errors";
 import { decode, decodeStrict, encode } from "./internal/base32";
-import { isValidAlgorithm } from "./internal/digits";
+import { isSafeCounter } from "./internal/counter";
+import { isValidAlgorithm, isValidDigits } from "./internal/digits";
 import type { OtpAuthParams, ParseOptions } from "./options";
+import {
+  DEFAULT_ALGORITHM,
+  DEFAULT_COUNTER,
+  DEFAULT_DIGITS,
+  DEFAULT_PERIOD,
+} from "./options";
 
 export class OTPAuthURI {
   /**
@@ -110,7 +117,7 @@ export class OTPAuthURI {
     }
 
     // algorithm：大小写不敏感，默认 SHA1；非三值抛 INVALID_ALGORITHM
-    let algorithm = "SHA1";
+    let algorithm: string = DEFAULT_ALGORITHM;
     const algorithmRaw = params.get("algorithm");
     if (algorithmRaw !== undefined && algorithmRaw !== "") {
       const upper = algorithmRaw.toUpperCase();
@@ -121,11 +128,11 @@ export class OTPAuthURI {
     }
 
     // digits：默认 6，仅 6/7/8，否则 INVALID_DIGITS
-    let digits = 6;
+    let digits: number = DEFAULT_DIGITS;
     const digitsRaw = params.get("digits");
     if (digitsRaw !== undefined && digitsRaw !== "") {
       const d = Number(digitsRaw);
-      if (d !== 6 && d !== 7 && d !== 8) {
+      if (!isValidDigits(d)) {
         otpFail("INVALID_DIGITS");
       }
       digits = d;
@@ -133,13 +140,13 @@ export class OTPAuthURI {
 
     // period（仅 TOTP）：默认 30，正整数，否则 INVALID_PERIOD
     // counter（仅 HOTP）：默认 0，非负整数，否则 INVALID_COUNTER
-    let period = 30;
-    let counter = 0;
+    let period: number = DEFAULT_PERIOD;
+    let counter: number = DEFAULT_COUNTER;
     if (type === "totp") {
       const periodRaw = params.get("period");
       if (periodRaw !== undefined && periodRaw !== "") {
         const p = Number(periodRaw);
-        if (!Number.isInteger(p) || p <= 0) {
+        if (!Number.isSafeInteger(p) || p <= 0) {
           otpFail("INVALID_PERIOD");
         }
         period = p;
@@ -148,7 +155,7 @@ export class OTPAuthURI {
       const counterRaw = params.get("counter");
       if (counterRaw !== undefined && counterRaw !== "") {
         const c = Number(counterRaw);
-        if (!Number.isInteger(c) || c < 0) {
+        if (!isSafeCounter(c)) {
           otpFail("INVALID_COUNTER");
         }
         counter = c;
@@ -183,10 +190,23 @@ export class OTPAuthURI {
    * label 形如 issuer:account（两者百分号编码、冒号保留，为空则省略）；algorithm 始终输出，
    * digits 仅 !== 6、period 仅 TOTP 且 !== 30 时输出（与 GA 二维码惯例一致），HOTP 始终输出 counter。
    * secret 先经 Base32 规范化（与 parse 对称）；非法 base32 抛对应错误码。
+   *
+   * 校验与 parse 对称：build 的产物必须能被 parse 接受，否则下游扫码方会拿到非法 URI。
+   * params.label 是 parse 的回填字段（原始 label），build 一律由 issuer/account 派生，忽略该字段。
    */
   static build(params: OtpAuthParams): string {
+    // 顺序与 parse / errors.ts 优先级一致：type → secret → algorithm → digits → period|counter
+    const type = params.type;
+    if (type !== "totp" && type !== "hotp") {
+      otpFail("UNSUPPORTED_OTPAUTH_TYPE");
+    }
     const secret = encode(decode(params.secret));
-    const type = params.type === "totp" ? "totp" : "hotp";
+    if (!isValidAlgorithm(params.algorithm)) {
+      otpFail("INVALID_ALGORITHM");
+    }
+    if (!isValidDigits(params.digits)) {
+      otpFail("INVALID_DIGITS");
+    }
     const issuer = params.issuer === undefined ? "" : params.issuer;
     const account = params.account === undefined ? "" : params.account;
 
@@ -208,16 +228,24 @@ export class OTPAuthURI {
       parts.push(`issuer=${encodeURIComponent(issuer)}`);
     }
     parts.push(`algorithm=${params.algorithm}`);
-    if (params.digits !== 6) {
+    if (params.digits !== DEFAULT_DIGITS) {
       parts.push(`digits=${params.digits}`);
     }
     if (type === "totp") {
-      const period = params.period === undefined ? 30 : params.period;
-      if (period !== 30) {
+      const period =
+        params.period === undefined ? DEFAULT_PERIOD : params.period;
+      if (!Number.isSafeInteger(period) || period <= 0) {
+        otpFail("INVALID_PERIOD");
+      }
+      if (period !== DEFAULT_PERIOD) {
         parts.push(`period=${period}`);
       }
     } else {
-      const counter = params.counter === undefined ? 0 : params.counter;
+      const counter =
+        params.counter === undefined ? DEFAULT_COUNTER : params.counter;
+      if (!isSafeCounter(counter)) {
+        otpFail("INVALID_COUNTER");
+      }
       parts.push(`counter=${counter}`);
     }
 

@@ -6,24 +6,26 @@
 
 import { type HmacProvider, requireHmac } from "./crypto";
 import { otpFail } from "./errors";
-import { isValidAlgorithm, isValidDigits } from "./internal/digits";
 import {
   type EngineParams,
   generate as engineGenerate,
   verify as engineVerify,
 } from "./internal/engine";
+import { resolveHmacOptions } from "./internal/resolve";
 import {
   remainingSec,
   progress as timeStepProgress,
   step as timeStepStep,
 } from "./internal/time-step";
-import type { AlgorithmName, TotpOptions, VerifyOptions } from "./options";
+import type { AlgorithmName, TotpOptions, TotpVerifyOptions } from "./options";
+import { DEFAULT_CLOCK_OFFSET_MS, DEFAULT_PERIOD, DEFAULT_T0 } from "./options";
 import { OTPAuthURI } from "./otpauth-uri";
-import { Secret } from "./secret";
+import type { Secret } from "./secret";
 
 export class TOTP {
   private readonly _provider: HmacProvider;
   private readonly _secret: Secret;
+  private readonly _key: Uint8Array;
   private readonly _algorithm: AlgorithmName;
   private readonly _digits: number;
   private readonly _period: number;
@@ -36,40 +38,31 @@ export class TOTP {
    * @param provider 仅供库内测试注入；调用方省略即走 requireHmac() 的默认实现。
    */
   constructor(options: TotpOptions, provider?: HmacProvider) {
-    const secret = Secret.fromBase32(options.secret);
-    const algorithm =
-      options.algorithm === undefined ? "SHA1" : options.algorithm;
-    const digits = options.digits === undefined ? 6 : options.digits;
-    const period = options.period === undefined ? 30 : options.period;
-    const t0 = options.t0 === undefined ? 0 : options.t0;
+    const resolved = resolveHmacOptions(options);
+    const period =
+      options.period === undefined ? DEFAULT_PERIOD : options.period;
+    const t0 = options.t0 === undefined ? DEFAULT_T0 : options.t0;
     const clockOffsetMs =
-      options.clockOffsetMs === undefined ? 0 : options.clockOffsetMs;
-    const minSecretBits =
-      options.minSecretBits === undefined ? 0 : options.minSecretBits;
+      options.clockOffsetMs === undefined
+        ? DEFAULT_CLOCK_OFFSET_MS
+        : options.clockOffsetMs;
 
-    if (!isValidDigits(digits)) {
-      otpFail("INVALID_DIGITS");
-    }
-    if (!isValidAlgorithm(algorithm)) {
-      otpFail("INVALID_ALGORITHM");
-    }
-    if (!Number.isInteger(period) || period <= 0) {
+    if (!Number.isSafeInteger(period) || period <= 0) {
       otpFail("INVALID_PERIOD");
     }
-    if (!Number.isInteger(t0) || t0 < 0) {
+    if (!Number.isSafeInteger(t0) || t0 < 0) {
       otpFail("INVALID_T0");
     }
-    if (!Number.isFinite(clockOffsetMs)) {
-      otpFail("INVALID_TIMESTAMP");
-    }
-    if (minSecretBits > 0 && secret.bitLength < minSecretBits) {
-      otpFail("SECRET_TOO_WEAK");
+    if (!Number.isSafeInteger(clockOffsetMs)) {
+      // 小数 / NaN / Infinity / 超安全整数：偏移无意义，构造期即拒绝
+      otpFail("INVALID_CLOCK_OFFSET");
     }
 
     this._provider = provider === undefined ? requireHmac() : provider;
-    this._secret = secret;
-    this._algorithm = algorithm;
-    this._digits = digits;
+    this._secret = resolved.secret;
+    this._key = resolved.key;
+    this._algorithm = resolved.algorithm;
+    this._digits = resolved.digits;
     this._period = period;
     this._t0 = t0;
     this._clockOffsetMs = clockOffsetMs;
@@ -81,7 +74,7 @@ export class TOTP {
     return {
       algorithm: this._algorithm,
       digits: this._digits,
-      key: this._secret.bytes,
+      key: this._key,
     };
   }
 
@@ -103,16 +96,16 @@ export class TOTP {
   }
 
   /**
-   * 恒定时间比对；window 缺省 0、timestamp 缺省当前时刻（叠加偏移）。
+   * 恒定时间比对；window 缺省 0、上限 MAX_VERIFY_WINDOW（10）、timestamp 缺省当前时刻（叠加偏移）。
    * 返回命中窗口相对当前步的偏移 delta，未命中 null。
    */
-  verify(token: string, options?: VerifyOptions): number | null {
-    const baseTs =
-      options === undefined || options.timestamp === undefined
-        ? Date.now()
-        : options.timestamp;
+  verify(token: string, options?: TotpVerifyOptions): number | null {
     const counter = timeStepStep(
-      baseTs + this._clockOffsetMs,
+      this.effectiveTs(
+        options === undefined || options.timestamp === undefined
+          ? undefined
+          : options.timestamp,
+      ),
       this._t0,
       this._period,
     );
@@ -139,14 +132,19 @@ export class TOTP {
 
   /**
    * 时钟偏移校准（单参数，单位 = 时间步）：clockOffsetMs += delta * period * 1000。
+   * delta 必须为安全整数，可为负（本地偏快时回调）；累加结果必须是安全整数。
    * 闭环不变量：verify(token, w) 命中 delta 后，syncClockOffset(delta) 使同一时刻的
    * verify(token, 0) 命中 delta = 0（依据 RFC 6238 §6）。
    */
   syncClockOffset(delta: number): void {
-    if (!Number.isInteger(delta)) {
-      otpFail("INVALID_WINDOW");
+    if (!Number.isSafeInteger(delta)) {
+      otpFail("INVALID_CLOCK_OFFSET");
     }
-    this._clockOffsetMs += delta * this._period * 1000;
+    const next = this._clockOffsetMs + delta * this._period * 1000;
+    if (!Number.isSafeInteger(next)) {
+      otpFail("INVALID_CLOCK_OFFSET");
+    }
+    this._clockOffsetMs = next;
   }
 
   /** 当前时钟偏移（毫秒）。 */
@@ -177,7 +175,7 @@ export class TOTP {
       secret: params.secret,
       algorithm: params.algorithm,
       digits: params.digits,
-      period: params.period === undefined ? 30 : params.period,
+      period: params.period === undefined ? DEFAULT_PERIOD : params.period,
       issuer: params.issuer,
       account: params.account,
     });

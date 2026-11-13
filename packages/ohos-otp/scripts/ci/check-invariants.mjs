@@ -21,11 +21,13 @@ const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const BASELINE = {
   localTestCases: 240, // library/src/test 的 it( 数量（PC Local Test）
   deviceTestCases: 37, // library/src/ohosTest 的 it( 数量（真实 crypto，需设备）
-  errorCodeMembers: 18, // OtpErrorCode 成员数：v1 的 17 个取值冻结，v1.1.0 仅新增 INVALID_BASE32_PADDING
+  errorCodeMembers: 21, // OtpErrorCode 成员数：取值冻结，仅允许显式新增（现含 INVALID_MIN_SECRET_BITS / INVALID_CLOCK_OFFSET / INVALID_SECRET_LENGTH）
 };
 
 const LIB_SRC = 'library/src/main/ets';
 const BARREL = 'library/Index.ets';
+const ERROR_FILE = `${LIB_SRC}/OtpError.ets`;
+const CORE_ERRORS = `${LIB_SRC}/core/errors.ts`;
 const KIT_SOURCE = `${LIB_SRC}/internal/CryptoSource.ets`;
 
 /** 构建产物与依赖目录不参与扫描。 */
@@ -187,14 +189,67 @@ check(`测试数量不减少（本地 ≥ ${BASELINE.localTestCases}，设备 �
   return `本地 ${local} / 设备 ${device}`;
 });
 
+/** 从 `NAME: "VALUE"` / `NAME = 'VALUE'` 形式的定义块里抽取 name→value。 */
+function codePairs(body, pattern) {
+  const pairs = new Map();
+  for (const line of body.split('\n')) {
+    const matched = pattern.exec(line);
+    if (matched) pairs.set(matched[1], matched[2]);
+  }
+  return pairs;
+}
+
 check(`OtpErrorCode 恰为 ${BASELINE.errorCodeMembers} 个成员`, () => {
-  const matched = /export enum OtpErrorCode\s*\{([\s\S]*?)\n\}/.exec(readText('library/src/main/ets/OtpError.ets'));
+  const matched = /export enum OtpErrorCode\s*\{([\s\S]*?)\n\}/.exec(readText(ERROR_FILE));
   if (!matched) throw new Error('未找到 OtpErrorCode 枚举定义');
   const members = matched[1].split('\n').filter((l) => /^\s*[A-Z0-9_]+\s*=/.test(l)).length;
   if (members !== BASELINE.errorCodeMembers) {
-    throw new Error(`实际 ${members} 个；错误码集合自 v1 冻结，仅版本升级时可显式调整基线`);
+    throw new Error(`实际 ${members} 个；错误码集合冻结，仅允许显式新增并同步调整基线`);
   }
   return `${members} 个错误码`;
+});
+
+check('OtpErrorCode 与 core 逐项对拍（名称 + 取值）', () => {
+  // 枚举是 ArkTS 侧的强类型投影：名称/取值漂移不会让任何单测变红，只能在这里拦
+  const enumBody = /export enum OtpErrorCode\s*\{([\s\S]*?)\n\}/.exec(readText(ERROR_FILE))[1];
+  const coreBody = /export const OtpErrorCode = \{([\s\S]*?)\n\} as const;/.exec(readText(CORE_ERRORS))[1];
+  const platform = codePairs(enumBody, /^\s*([A-Z0-9_]+)\s*=\s*'([A-Z0-9_]+)'/);
+  const core = codePairs(coreBody, /^\s*([A-Z0-9_]+):\s*"([A-Z0-9_]+)",/);
+
+  if (core.size !== platform.size) {
+    throw new Error(`core ${core.size} 个 vs 枚举 ${platform.size} 个`);
+  }
+  const drift = [];
+  for (const [name, value] of core) {
+    if (!platform.has(name)) drift.push(`枚举缺 ${name}`);
+    else if (platform.get(name) !== value) drift.push(`${name}: core=${value} 枚举=${platform.get(name)}`);
+  }
+  for (const name of platform.keys()) {
+    if (!core.has(name)) drift.push(`枚举多出 ${name}`);
+  }
+  if (drift.length > 0) throw new Error(drift.join('；'));
+  return `${core.size} 项完全一致`;
+});
+
+check('asOtpErrorCode 覆盖全部错误码', () => {
+  // 漏一个 case 会静默兜底到 NOT_IMPLEMENTED，且 ohos 单测只在设备/本地测试里跑
+  const body = /export function asOtpErrorCode\(code: string\): OtpErrorCode \{([\s\S]*?)\n\}/.exec(readText(ERROR_FILE))[1];
+  const cases = new Set(
+    [...body.matchAll(/case '([A-Z0-9_]+)':/g)].map((m) => m[1]),
+  );
+  const enumBody = /export enum OtpErrorCode\s*\{([\s\S]*?)\n\}/.exec(readText(ERROR_FILE))[1];
+  const names = [...codePairs(enumBody, /^\s*([A-Z0-9_]+)\s*=\s*'([A-Z0-9_]+)'/).keys()];
+  const missing = names.filter((n) => !cases.has(n));
+  if (missing.length > 0) throw new Error(`缺少 case：${missing.join(', ')}`);
+  return `${cases.size} 个 case`;
+});
+
+check('OtpError 设置 name = \'OtpError\'', () => {
+  // provider 错误契约靠 name 判定（core engine 只兜未知错误）；不得删除
+  if (!/this\.name\s*=\s*'OtpError'/.test(readText(ERROR_FILE))) {
+    throw new Error("OtpError.ets 未设置 this.name = 'OtpError'");
+  }
+  return 'provider 错误契约的 name 已固定';
 });
 
 check('版本号与 CHANGELOG 一致', () => {

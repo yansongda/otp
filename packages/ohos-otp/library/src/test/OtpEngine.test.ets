@@ -271,11 +271,17 @@ export default function otpEngineTest() {
       // window=1.5 不满足整数 → INVALID_WINDOW
       expect(() => { verify(fixture, p6, '287082', 1, 1.5); }).assertThrowError('INVALID_WINDOW');
     });
+    it('verify_windowExceedsCap', 0, () => {
+      // 上限 MAX_VERIFY_WINDOW = 10：11 拒绝。
+      // 「10 合法」只在 core 测试断言：本地 fixture 是黄金表，不覆盖 ±10 个候选。
+      expect(() => { verify(fixture, p6, '287082', 1, 11); }).assertThrowError('INVALID_WINDOW');
+    });
 
     // ── fixture 未命中必须抛错（绝不返回零值数组）──
     it('fixture_miss_throws', 0, () => {
-      // counter=42 不在黄金表内 → fixture 抛错
-      expect(() => { generate(fixture, p6, 42); }).assertThrowError('HmacFixture 未命中');
+      // counter=42 不在黄金表内 → fixture 抛错；engine 会把任意 provider 失败收敛为 CRYPTO_FAILED
+      // （保证调用方拿到的永远是平台 OtpError，而不是 provider 的原始错误类型）
+      expect(() => { generate(fixture, p6, 42); }).assertThrowError('CRYPTO_FAILED');
     });
   });
 }

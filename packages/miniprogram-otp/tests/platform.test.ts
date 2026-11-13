@@ -5,6 +5,7 @@
 import { describe, expect, it } from "bun:test";
 import {
   HOTP,
+  MAX_VERIFY_WINDOW,
   OTPAuthURI,
   OtpAlgorithm,
   OtpError,
@@ -13,6 +14,16 @@ import {
   Secret,
   TOTP,
 } from "../src/index";
+
+/** 期望抛出指定错误码（断言 code 比消息匹配更精确）。 */
+function thrownCode(fn: () => unknown): string {
+  try {
+    fn();
+    return "NO_THROW";
+  } catch (error) {
+    return (error as OtpError).code;
+  }
+}
 
 describe("platform barrel", () => {
   it("exports public symbols", () => {
@@ -90,5 +101,80 @@ describe("platform barrel", () => {
     expect(params.digits).toBe(8);
     expect(params.period).toBe(60);
     expect(params.issuer).toBe("ACME");
+  });
+  it("errorCodes come from core and stay in sync", () => {
+    // 平台不再手抄码表：取值集合由 @yansongda/otp-core 唯一提供
+    expect(Object.keys(OtpErrorCode).length).toBe(21);
+    expect(OtpErrorCode.INVALID_SECRET_LENGTH).toBe("INVALID_SECRET_LENGTH");
+    expect(OtpErrorCode.INVALID_CLOCK_OFFSET).toBe("INVALID_CLOCK_OFFSET");
+    expect(OtpErrorCode.INVALID_MIN_SECRET_BITS).toBe(
+      "INVALID_MIN_SECRET_BITS",
+    );
+    expect(MAX_VERIFY_WINDOW).toBe(10);
+  });
+
+  it("invalid parameters use dedicated codes", () => {
+    // 参数口径：安全整数 / fail-closed；每类错误独立码
+    expect(
+      thrownCode(
+        () => new TOTP({ secret: "JBSWY3DPEHPK3PXP", clockOffsetMs: 0.5 }),
+      ),
+    ).toBe("INVALID_CLOCK_OFFSET");
+    expect(
+      thrownCode(
+        () =>
+          new TOTP({ secret: "JBSWY3DPEHPK3PXP", minSecretBits: Number.NaN }),
+      ),
+    ).toBe("INVALID_MIN_SECRET_BITS");
+  });
+
+  it("OtpError keeps codeString and supports subclassing", () => {
+    const err = new OtpError(OtpErrorCode.INVALID_DIGITS, "INVALID_DIGITS");
+    expect(err.codeString).toBe("INVALID_DIGITS");
+
+    // 子类场景：构造函数只在原型退化时才 setPrototypeOf，不得把子类原型改回基类
+    class SubOtpError extends OtpError {
+      detail(): string {
+        return "detail";
+      }
+    }
+    const sub = new SubOtpError(OtpErrorCode.EMPTY_SECRET, "EMPTY_SECRET");
+    expect(Object.getPrototypeOf(sub)).toBe(SubOtpError.prototype);
+    expect(sub instanceof SubOtpError).toBe(true);
+    expect(sub.detail()).toBe("detail");
+  });
+
+  it("OTPAuthURI build validates like parse", () => {
+    // 产物必须能被 parse 接受：非法 type / digits 不得静默输出
+    let thrown: unknown = null;
+    try {
+      OTPAuthURI.build({
+        type: "TOTP" as OtpType,
+        secret: "JBSWY3DPEHPK3PXP",
+        algorithm: OtpAlgorithm.SHA1,
+        digits: 6,
+      });
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown instanceof OtpError).toBe(true);
+    expect((thrown as OtpError).code).toBe(
+      OtpErrorCode.UNSUPPORTED_OTPAUTH_TYPE,
+    );
+  });
+  it("verify options are narrowed per class", () => {
+    const totp = new TOTP({ secret: "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ" });
+    const hotp = new HOTP({ secret: "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ" });
+    // 类型层契约：给 TOTP 传 counter / 给 HOTP 传 timestamp 必须编译失败（core 会静默忽略）
+    // @ts-expect-error TOTP.verify 不接受 counter
+    totp.verify("287082", { counter: 1 });
+    // @ts-expect-error HOTP.verify 不接受 timestamp
+    hotp.verify("755224", { timestamp: 59000 });
+    // 合法字段仍然可用（window 上限 10）
+    expect(totp.verify("287082", { timestamp: 59000, window: 10 })).toBe(0);
+    expect(hotp.verify("755224", { counter: 0 })).toBe(0);
+    expect(
+      thrownCode(() => totp.verify("287082", { timestamp: 59000, window: 11 })),
+    ).toBe("INVALID_WINDOW");
   });
 });

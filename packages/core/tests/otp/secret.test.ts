@@ -85,10 +85,17 @@ describe("secret", () => {
   });
 
   it("generate_invalidSize_throws", () => {
+    // 长度越界是参数错误，不是「密钥强度不足」（后者由 minSecretBits 的 SECRET_TOO_WEAK 承担）
     registerRandom({ random: (n: number) => new Uint8Array(n) });
-    expectCode(() => Secret.generate(0), "SECRET_TOO_WEAK");
-    expectCode(() => Secret.generate(4097), "SECRET_TOO_WEAK");
-    expectCode(() => Secret.generate(1.5), "SECRET_TOO_WEAK");
+    expectCode(() => Secret.generate(0), "INVALID_SECRET_LENGTH");
+    expectCode(() => Secret.generate(4097), "INVALID_SECRET_LENGTH");
+    expectCode(() => Secret.generate(1.5), "INVALID_SECRET_LENGTH");
+  });
+
+  it("generate_sourceWrongLength_normalizedToCryptoFailed", () => {
+    // 随机源违反长度契约：静默接受会让密钥强度与调用方预期不符
+    registerRandom({ random: (n: number) => new Uint8Array(n + 1) });
+    expectCode(() => Secret.generate(20), "CRYPTO_FAILED");
   });
 
   it("toJSON_redactsSecret", () => {

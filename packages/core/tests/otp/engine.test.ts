@@ -93,4 +93,77 @@ describe("engine", () => {
       verify(provider, params6, "000000", Number.MAX_SAFE_INTEGER, 1),
     ).toBeNull();
   });
+  it("verify_configErrorsPrecedeTokenErrors", () => {
+    // 校验顺序：配置类（counter / window）先于输入类（token），
+    // 否则调用方写错 window 会被「用户 token 非法」掩盖
+    expectCode(() => verify(provider, params6, "zz", 1, -1), "INVALID_WINDOW");
+    expectCode(() => verify(provider, params6, "zz", -1, 0), "INVALID_COUNTER");
+  });
+
+  it("verify_windowExceedsCap_throws", () => {
+    // 上限 MAX_VERIFY_WINDOW = 10 步：防止外部 window 放大成 HMAC 计算炸弹
+    expectCode(
+      () => verify(provider, params6, "287082", 1, 11),
+      "INVALID_WINDOW",
+    );
+    expect(verify(provider, params6, "287082", 1, 10)).toBe(0);
+  });
+
+  it("generate_providerFailure_normalizedToCryptoFailed", () => {
+    // 非 OtpError 的任意值必须收敛为 CRYPTO_FAILED，不得穿透原始错误类型
+    const broken = {
+      sign(): Uint8Array {
+        throw new Error("native hmac exploded");
+      },
+    };
+    expectCode(() => generate(broken, params6, 0), "CRYPTO_FAILED");
+  });
+
+  it("generate_providerOtpError_passesThrough", () => {
+    // 平台/core 的 OtpError（name 固定）属“已知错误”：保留精确码并原样上抛
+    const providerError = new Error("INVALID_ALGORITHM");
+    providerError.name = "OtpError";
+    const broken = {
+      sign(): Uint8Array {
+        throw providerError;
+      },
+    };
+    let thrown: unknown = null;
+    try {
+      generate(broken, params6, 0);
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBe(providerError);
+  });
+
+  it("generate_providerNonError_normalizedToCryptoFailed", () => {
+    // provider 抛字符串 / null 等非 Error 值同样收敛
+    const broken = {
+      sign(): Uint8Array {
+        throw "boom";
+      },
+    };
+    expectCode(() => generate(broken, params6, 0), "CRYPTO_FAILED");
+  });
+
+  it("generate_providerWrongReturnType_normalizedToCryptoFailed", () => {
+    // provider 违反返回值契约（非 Uint8Array）→ CRYPTO_FAILED，不越界读
+    const broken = {
+      sign(): Uint8Array {
+        return null as unknown as Uint8Array;
+      },
+    };
+    expectCode(() => generate(broken, params6, 0), "CRYPTO_FAILED");
+  });
+
+  it("generate_providerShortDigest_throws", () => {
+    // provider 违反摘要长度契约（< 20 字节）→ CRYPTO_FAILED，不越界读
+    const shortDigest = {
+      sign(): Uint8Array {
+        return new Uint8Array(16);
+      },
+    };
+    expectCode(() => generate(shortDigest, params6, 0), "CRYPTO_FAILED");
+  });
 });

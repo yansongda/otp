@@ -30,10 +30,12 @@ Pi 只自动加载本文件（cwd 及其祖先的 context file）；子包 AGENT
 | 生成副本          | `packages/ohos-otp/library/src/main/ets/core/**`                                                                            | **禁止手改**；由 `bun run sync:core` 生成                                  |
 
 1. **core 是唯一实现**：算法/门面/URI/错误码只改 core，禁止在平台包内复制实现。
-2. **错误跨层靠工厂**：core 只 `otpFail(code)`；平台 barrel 注册 `setErrorFactory`，公开 `OtpError` 由平台拥有。
+2. **错误跨层靠工厂**：core 只 `otpFail(code)`；平台 barrel 注册 `setErrorFactory`，公开 `OtpError` 由平台拥有。provider 失败必须抛 `name === "OtpError"` 的错误——core 的 engine 只兜未知错误，其余错误码原样上抛。
 3. **ohos 副本禁止手改**：CI 必须跑 `bun run sync:core:check`；改动只能来自 core。
 4. **pure-js 不进 ohos 编译图**：ohos 只 import `core/src/index`，不得 import `core/src/pure-js*`。
-5. 其余算法不变量（取模位置、恒定时间 verify、secret 不泄漏、错误码冻结）见两个包内 AGENTS.md，保持有效。
+5. **参数口径**：`timestamp` / `period` / `t0` / `clockOffsetMs` / `minSecretBits` 必须是安全整数；`window` 上限 `MAX_VERIFY_WINDOW = 10`；每个已知失败原因使用独立错误码（仅同一语义条件在不同入口复用）。
+6. **错误码新增流程**：core 码表 → ohos enum + `asOtpErrorCode` → 两个守卫基线 + smoke → 四份 README → CHANGELOG，缺一不可。
+7. 其余算法不变量（取模位置、恒定时间 verify、secret 不泄漏）见两个包内 AGENTS.md，保持有效。
 
 ## 3. 命令
 

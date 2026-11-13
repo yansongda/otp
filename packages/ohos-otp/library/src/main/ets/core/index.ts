@@ -11,17 +11,22 @@ export {
   registerHmac,
   registerRandom,
 } from "./crypto";
-export type { OtpErrorFactory, OtpFailureCode } from "./errors";
-export { setErrorFactory } from "./errors";
+export type { OtpErrorFactory } from "./errors";
+/** 错误码取值随 barrel 导出：平台错误类必须复用本表，不得再抄一份。 */
+export { OtpErrorCode, setErrorFactory } from "./errors";
 export { HOTP } from "./hotp";
 export type {
   HmacOptions,
   HotpOptions,
+  HotpVerifyOptions,
   OtpAuthParams,
   ParseOptions,
   TotpOptions,
+  TotpVerifyOptions,
   VerifyOptions,
 } from "./options";
+/** 漂移窗口上限随 barrel 导出：调用方做输入预校验时不得再硬编码 1000 / 10。 */
+export { MAX_VERIFY_WINDOW } from "./options";
 export { OTPAuthURI } from "./otpauth-uri";
 export { Secret } from "./secret";
 export { TOTP } from "./totp";

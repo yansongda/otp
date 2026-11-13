@@ -30,19 +30,25 @@ setErrorFactory(
   (code: string): Error => new OtpError(code as OtpErrorCode, code),
 );
 
+/** 漂移窗口上限：直接复用 core 常量，调用方做输入预校验时不得再硬编码。 */
+export { MAX_VERIFY_WINDOW } from "@yansongda/otp-core";
 export { OtpError, OtpErrorCode } from "./errors";
 export type {
   HmacOptions,
   HotpOptions,
+  HotpVerifyOptions,
   OtpAuthParams,
   ParseOptions,
   TotpOptions,
+  TotpVerifyOptions,
   VerifyOptions,
 } from "./types";
 export { OtpAlgorithm, OtpType } from "./types";
 
 // ---- 类型桥：实例类型复用 core，构造签名收紧到平台 DTO ----
 
+// verify 选项已由 core 按类收窄（HotpVerifyOptions / TotpVerifyOptions），
+// 平台层不再用 Omit + 交叉重复声明一份。
 export type HOTP = CoreHOTP;
 export const HOTP: {
   new (options: HotpOptions, provider?: HmacProvider): CoreHOTP;

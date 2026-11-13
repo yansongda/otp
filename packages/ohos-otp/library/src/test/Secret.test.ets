@@ -104,9 +104,10 @@ export default function secretTest() {
     it('generate_invalidSizeThrows', 0, () => {
       const fixture: RandomFixture = new RandomFixture();
       registerRandom(fixture);
-      expectThrowsCode(() => Secret.generate(0), OtpErrorCode.SECRET_TOO_WEAK);
-      expectThrowsCode(() => Secret.generate(1.5), OtpErrorCode.SECRET_TOO_WEAK);
-      expectThrowsCode(() => Secret.generate(4097), OtpErrorCode.SECRET_TOO_WEAK);
+      // 长度越界是参数错误；强度问题由 minSecretBits 的 SECRET_TOO_WEAK 承担
+      expectThrowsCode(() => Secret.generate(0), OtpErrorCode.INVALID_SECRET_LENGTH);
+      expectThrowsCode(() => Secret.generate(1.5), OtpErrorCode.INVALID_SECRET_LENGTH);
+      expectThrowsCode(() => Secret.generate(4097), OtpErrorCode.INVALID_SECRET_LENGTH);
     });
 
     it('jsonStringify_redactsSecret', 0, () => {
