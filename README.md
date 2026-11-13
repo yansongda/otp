@@ -18,7 +18,7 @@ All protocol logic — RFC 4226 HOTP, RFC 6238 TOTP, base32, `otpauth://` URIs, 
 - `TOTP.remaining()` / `TOTP.progress()` for countdown and progress rings
 - Optional strict base32 parsing for import boundaries
 - Constant-time token comparison; secrets never appear in messages or logs
-- 18 frozen error codes with a single `OtpError` type
+- 21 frozen error codes with a single `OtpError` type
 - Zero runtime dependencies
 
 ## Packages
@@ -84,7 +84,7 @@ totp.verify(token, { window: 1 });
 | --------------- | -------------------------------------------------------------------------------------------------------- |
 | Verification    | Constant-time comparison; the full window is scanned before the first match is returned                  |
 | Clock drift     | `verify()` returns the matched offset in steps; `syncClockOffset(delta)` records it permanently          |
-| Error model     | `OtpError.code` is one of 18 frozen string codes; messages are fixed and never contain secrets or tokens |
+| Error model     | `OtpError.code` is one of 21 frozen string codes; messages are fixed and never contain secrets or tokens |
 | Secret handling | `Secret` has no `toString()`; `JSON.stringify(secret)` yields `"[REDACTED]"`                             |
 | Counter range   | 0 … 2^53-1 (no BigInt, for older WebView compatibility)                                                  |
 | Base32          | Lenient by default (case/whitespace/padding); `{ strict: true }` rejects truncated or rewritten secrets  |
