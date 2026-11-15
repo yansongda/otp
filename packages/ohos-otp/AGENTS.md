@@ -1,6 +1,6 @@
 # AGENTS.md —— ohos-otp 工程上下文
 
-> 面向所有在该包工作的 coding agent / 协作者。**动手前先读本文件**；当前实现以 `packages/core` 源码为准，`docs/ohos-otp-lib-rfc.md` 是 v1.1.0 及以前的历史设计文档（与源码冲突时以源码为准）。
+> 面向所有在该包工作的 coding agent / 协作者。**动手前先读本文件**；当前实现以 `packages/core` 源码为准，`docs/ohos-otp-lib-rfc.md` 是 monorepo 重构前的历史设计文档（与源码冲突时以源码为准）。
 
 ## 1. 项目定位
 
@@ -8,7 +8,7 @@
 - **实现全部来自 `packages/core`（唯一源码）**，经 `bun run sync:core` 生成为 `library/src/main/ets/core/**`；本包只保留薄壳、平台类型层与 crypto 实现。
 - `entry/` = 消费方 smoke demo（仅依赖 barrel，**不参与** HAR 打包）。
 - 兼容性：`compatibleSdkVersion 6.0.0(20)`（API 12–19 工程无法消费，README 已声明）。
-- 现状：本地单测 280 全绿 / 覆盖率 lines 90.92%；设备端 `ohosTest` 37/37；RFC 向量 10/10 + 18/18；`ohpm prepublish` 通过。已发布至 OHPM（当前版本以 `library/oh-package.json5` 为准）。
+- 现状：本地单测 284 条全绿 / 覆盖率 lines 90.92%；设备端 `ohosTest` 38 条（需真机/模拟器）；RFC 向量 10/10 + 18/18；`ohpm prepublish` 通过。已发布至 OHPM（当前版本以 `library/oh-package.json5` 为准）。
 
 ## 2. 分层与不变量（**改动必须遵守**）
 
@@ -30,7 +30,7 @@
 8. **`verify` 恒定时间**：窗口内**扫完所有候选**后才返回首个命中 delta，禁止加早退优化。
 9. **`library/example/` 随 HAR 发布，不得删除/改名**：hvigor 对 bytecode HAR 的 release 白名单目录名就是 `example`（`RELEASE_HAR_WHITE_LIST_DIR_NAME`），该目录会被原样打进包内 `package/example/`；OHPM「支持文档 / example」的 20 分完全依赖它。里面只放文档（README），不放不参与编译与 lint 的源码。缺失由 `scripts/ci/check-invariants.mjs` 与 CI 的 HAR 内容校验拦截。
 
-其他冻结契约：`OtpOptions` 字段名/可选性冻结（v1 起仅允许**新增可选字段**）；`OtpErrorCode` 取值冻结、仅允许**新增**（v1 17 → v1.1.0 `INVALID_BASE32_PADDING` → 现新增 `INVALID_SECRET_LENGTH` / `INVALID_CLOCK_OFFSET` / `INVALID_MIN_SECRET_BITS`，共 21 个），枚举必须与 core 逐项一致（`check-invariants.mjs` 对拍）；全同步 API（`*Sync` 链路）；零运行时依赖。参数口径：`timestamp` / `period` / `t0` / `clockOffsetMs` / `minSecretBits` 必须是安全整数；`window` 上限 `MAX_VERIFY_WINDOW = 10`；provider 失败必须抛 `name === 'OtpError'` 的错误（core engine 只兜未知错误）。
+其他冻结契约：`OtpOptions` 字段名/可选性冻结（仅允许**新增可选字段**）；`OtpErrorCode` 取值冻结、仅允许**新增**（当前 21 个，取值以 core 码表为唯一来源），枚举必须与 core 逐项一致（`check-invariants.mjs` 对拍）；全同步 API（`*Sync` 链路）；零运行时依赖。参数口径：`timestamp` / `period` / `t0` / `clockOffsetMs` / `minSecretBits` 必须是安全整数；`window` 上限 `MAX_VERIFY_WINDOW = 10`；provider 失败必须抛 `name === 'OtpError'` 的错误（core engine 只兜未知错误），并视 `key` / `message` 为只读（不得修改或跨调用保留引用）。
 
 ## 3. 命令（实测可跑）
 
@@ -45,7 +45,7 @@ HDC=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony/toolchains/
 
 # 本地单测 + 覆盖率（PC；改算法逻辑后必跑）
 $HB --no-daemon -c modelVersion=6.1.1 test --mode module -p module=library@default -p testType=local -p coverage=true
-#   → Tests run: 280, Pass: 280；覆盖率 lines ≈ 90.92%
+#   → Tests run: 284, Pass: 284；覆盖率 lines ≈ 90.92%
 
 # 库产物（release）
 $HB --no-daemon -c modelVersion=6.1.1 assembleHar --mode module -p module=library@default -p product=default -p buildMode=release
@@ -64,7 +64,7 @@ $HB --no-daemon -c modelVersion=6.1.1 onDeviceTest --mode module -p module=libra
 
 # 零 SDK 依赖的两条（CI 的 guard.yml / ci.yml 跑的就是它们，可先跑）
 bash scripts/ci/lint-local.sh          # CodeLinter；exit 4 = 命中 error，0 = 通过（不带 -e 永远 0）
-node scripts/ci/check-invariants.mjs   # 仓库不变量守卫（10 项）
+node scripts/ci/check-invariants.mjs   # 仓库不变量守卫（13 项）
 ```
 
 **CI（GitHub Actions，workflow 均在仓库根 `.github/workflows/`）**：`guard.yml` = 不变量守卫（ubuntu-latest，无 SDK，秒级）；`ohos.yml` = CodeLinter + PC 单测（覆盖率门槛 88%）+ `assembleHar` + `ohpm prepublish` + entry HAP smoke，产物含 `library.har` 与覆盖率报告。工具链取自社区镜像的华为 command-line-tools（`CLI_VERSION` 与归档 sha256 钉在 workflow 里，升级走显式 PR）；**跑在 `macos-15`，因为 local test 要起 Previewer（见 §8）**。本地无 SDK 时用上面两条脚本 + `bash scripts/ci/lint-local.sh` 复现 lint 与守卫。**CI 不执行 `ohpm publish` / `git push`**（§7 人工闸门）。
@@ -78,7 +78,7 @@ node scripts/ci/check-invariants.mjs   # 仓库不变量守卫（10 项）
 | `src/test/`     | PC Local Test（kit-free 可跑） | 纯算法核心全链路 + 公开类（注入 `HmacFixture`/`RandomFixture`）+ RFC 黄金向量    |
 | `src/ohosTest/` | 设备/模拟器                    | 真实 `CryptoFrameworkHmac`、barrel 注册链路、默认 provider（**不注入 fixture**） |
 
-- 新算法逻辑只改 `packages/core` 并补 core 测试；`src/test` 的 280 条经薄壳直接测 core（断言不变），涉及真实 crypto 的断言只能放 `src/ohosTest`。
+- 新算法逻辑只改 `packages/core` 并补 core 测试；`src/test` 的 284 条经薄壳直接测 core（断言不变），涉及真实 crypto 的断言只能放 `src/ohosTest`。
 - 向量唯一来源：`src/test/vectors/RfcVectors.ets`——**逐字照抄，禁止自行推导或补算**；期望值不得由被测实现反推（自证）。
 - Local Test 环境下 cryptoFramework 返回空数据（`doFinalSync()` 的 DataBlob `len=0`），是环境限制而非缺陷；不要在 PC 用例里断言真实 digest。
 - 测试文件禁止 `expect(true)` 占位；`it(` 计数不得下降。
@@ -93,12 +93,12 @@ node scripts/ci/check-invariants.mjs   # 仓库不变量守卫（10 项）
 
 ## 6. 文档职责
 
-| 路径                                                       | 用途                                                                                                              | 是否入库                  |
-| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------- |
-| `docs/ohos-otp-lib-rfc.md`                                 | **v1.1.0 及以前的历史设计文档**（背景/契约/向量/验证结果）；当前共享 core 架构见根 `AGENTS.md` 与 `packages/core` | ✅                        |
-| `docs/implementation/`、`docs/evidence/`、`docs/learning/` | 执行计划、验证证据、共享知识（过程产物）                                                                          | ❌ 已 gitignore，本地保留 |
-| `library/README.md`（英文，必交）/ `README-cn.md`          | 使用说明、错误码故障排查表、覆盖边界声明                                                                          | ✅                        |
-| `library/CHANGELOG.md`                                     | **必须含当前版本号**                                                                                              | ✅                        |
+| 路径                                                       | 用途                                                                                                                | 是否入库                  |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| `docs/ohos-otp-lib-rfc.md`                                 | **monorepo 重构前的历史设计文档**（背景/契约/向量/验证结果）；当前共享 core 架构见根 `AGENTS.md` 与 `packages/core` | ✅                        |
+| `docs/implementation/`、`docs/evidence/`、`docs/learning/` | 执行计划、验证证据、共享知识（过程产物）                                                                            | ❌ 已 gitignore，本地保留 |
+| `library/README.md`（英文，必交）/ `README-cn.md`          | 使用说明、错误码故障排查表、覆盖边界声明                                                                            | ✅                        |
+| `library/CHANGELOG.md`                                     | **必须含当前版本号**                                                                                                | ✅                        |
 
 ## 7. 发布流程（人工闸门）
 

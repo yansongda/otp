@@ -143,41 +143,42 @@ try {
 
 `{ strict: true }` rejects text that canonical Base32 could not produce, after the library's own normalization (case, whitespace and trailing `=` are still tolerated):
 
-| Normalized input                                         | `len % 8`     | Default                      | `{ strict: true }`                    |
-| -------------------------------------------------------- | ------------- | ---------------------------- | ------------------------------------- |
-| `JBSWY3DPEHPK3PXP`                                       | 0             | OK                           | OK                                    |
-| `MY` / `MZXQ` / `MZXW6` / `MZXW6YQ`                      | 2 / 4 / 5 / 7 | OK                           | OK                                    |
-| `MB` / `MZXR` / `MZXW7` / `MZXW6YT` (non-zero tail bits) | 2 / 4 / 5 / 7 | silently re-encoded          | `INVALID_BASE32_PADDING`              |
-| `A` / `AAA` / `MZXW6Y` (impossible tail length)          | 1 / 3 / 6     | `SECRET_TOO_SHORT` / OK / OK | `INVALID_BASE32_PADDING`              |
-| `AB1` (illegal character)                                | 3             | `INVALID_BASE32_CHAR`        | `INVALID_BASE32_CHAR` (checked first) |
+| Normalized input                                         | `len % 8`     | Default               | `{ strict: true }`                    |
+| -------------------------------------------------------- | ------------- | --------------------- | ------------------------------------- |
+| `JBSWY3DPEHPK3PXP`                                       | 0             | OK                    | OK                                    |
+| `MY` / `MZXQ` / `MZXW6` / `MZXW6YQ`                      | 2 / 4 / 5 / 7 | OK                    | OK                                    |
+| `MB` / `MZXR` / `MZXW7` / `MZXW6YT` (non-zero tail bits) | 2 / 4 / 5 / 7 | silently re-encoded   | `INVALID_BASE32_PADDING`              |
+| `A` (tail length 1, decodes to 0 bytes)                  | 1             | `SECRET_TOO_SHORT`    | `SECRET_TOO_SHORT` (same code)        |
+| `AAA` / `MZXW6Y` (impossible tail length)                | 3 / 6         | OK                    | `INVALID_BASE32_PADDING`              |
+| `AB1` (illegal character)                                | 3             | `INVALID_BASE32_CHAR` | `INVALID_BASE32_CHAR` (checked first) |
 
 ## Error codes
 
 All failures throw `OtpError` with a fixed `code`. Messages never contain secrets, tokens or derived keys.
 
-| Code                       | Meaning                                                                                                               |
-| -------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `EMPTY_SECRET`             | Missing or empty secret                                                                                               |
-| `INVALID_BASE32_CHAR`      | Character outside the Base32 alphabet                                                                                 |
-| `INVALID_BASE32_PADDING`   | Strict mode: non-canonical tail length or non-zero tail bits                                                          |
-| `SECRET_TOO_SHORT`         | Decoded secret is shorter than one byte                                                                               |
-| `SECRET_TOO_WEAK`          | `minSecretBits` check failed (strength only)                                                                          |
-| `INVALID_SECRET_LENGTH`    | `Secret.generate(bytes)` bytes is not an integer in `[1, 4096]`                                                       |
-| `INVALID_MIN_SECRET_BITS`  | `minSecretBits` is not a non-negative safe integer (fail-closed)                                                      |
-| `INVALID_ALGORITHM`        | Not SHA1 / SHA256 / SHA512                                                                                            |
-| `INVALID_DIGITS`           | Not 6 / 7 / 8                                                                                                         |
-| `INVALID_PERIOD`           | Period is not a positive safe integer                                                                                 |
-| `INVALID_T0`               | `t0` is not a non-negative safe integer                                                                               |
-| `INVALID_COUNTER`          | Counter is not an integer in `[0, 2^53-1]`                                                                            |
-| `INVALID_TIMESTAMP`        | Timestamp is not a non-negative safe integer (epoch 0 is valid)                                                       |
-| `INVALID_CLOCK_OFFSET`     | `clockOffsetMs` is not a safe integer, or `syncClockOffset` delta is not / overflows                                  |
-| `INVALID_WINDOW`           | Window is not an integer in `[0, 10]` (`MAX_VERIFY_WINDOW`)                                                           |
-| `INVALID_TOKEN`            | Token is not numeric or its length differs from `digits`                                                              |
-| `CRYPTO_FAILED`            | Provider failure (native crypto error, short/non-`Uint8Array` digest, wrong random length); no key material is leaked |
-| `CRYPTO_NOT_INITIALIZED`   | No provider registered; import the package barrel                                                                     |
-| `INVALID_OTPAUTH_URI`      | URI does not start with `otpauth://` (case-insensitive)                                                               |
-| `UNSUPPORTED_OTPAUTH_TYPE` | Type is not `totp` / `hotp` (parse and build)                                                                         |
-| `NOT_IMPLEMENTED`          | Reserved fallback for an error code the platform cannot map (never thrown by the library)                             |
+| Code                       | Meaning                                                                                                                                                                |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `EMPTY_SECRET`             | Missing or empty secret                                                                                                                                                |
+| `INVALID_BASE32_CHAR`      | Character outside the Base32 alphabet                                                                                                                                  |
+| `INVALID_BASE32_PADDING`   | Strict mode: non-canonical tail length or non-zero tail bits                                                                                                           |
+| `SECRET_TOO_SHORT`         | Decoded secret is shorter than one byte                                                                                                                                |
+| `SECRET_TOO_WEAK`          | `minSecretBits` check failed (strength only)                                                                                                                           |
+| `INVALID_SECRET_LENGTH`    | `Secret.generate(bytes)` bytes is not an integer in `[1, 4096]`                                                                                                        |
+| `INVALID_MIN_SECRET_BITS`  | `minSecretBits` is not a non-negative safe integer (fail-closed)                                                                                                       |
+| `INVALID_ALGORITHM`        | Not SHA1 / SHA256 / SHA512                                                                                                                                             |
+| `INVALID_DIGITS`           | Not 6 / 7 / 8                                                                                                                                                          |
+| `INVALID_PERIOD`           | Period is not a positive safe integer                                                                                                                                  |
+| `INVALID_T0`               | `t0` is not a non-negative safe integer                                                                                                                                |
+| `INVALID_COUNTER`          | Counter is not an integer in `[0, 2^53-1]`                                                                                                                             |
+| `INVALID_TIMESTAMP`        | Timestamp is not a non-negative safe integer (epoch 0 is valid)                                                                                                        |
+| `INVALID_CLOCK_OFFSET`     | `clockOffsetMs` is not a safe integer, `syncClockOffset` delta is not / overflows, or the offset pushes `timestamp`/now past the safe-integer range                    |
+| `INVALID_WINDOW`           | Window is not an integer in `[0, 10]` (`MAX_VERIFY_WINDOW`)                                                                                                            |
+| `INVALID_TOKEN`            | Token is not numeric or its length differs from `digits`                                                                                                               |
+| `CRYPTO_FAILED`            | Provider failure (native crypto error, short/non-`Uint8Array` digest, random source returning a non-`Uint8Array` value or the wrong length); no key material is leaked |
+| `CRYPTO_NOT_INITIALIZED`   | No provider registered; import the package barrel                                                                                                                      |
+| `INVALID_OTPAUTH_URI`      | URI does not start with `otpauth://` (case-insensitive)                                                                                                                |
+| `UNSUPPORTED_OTPAUTH_TYPE` | Type is not `totp` / `hotp` (parse and build)                                                                                                                          |
+| `NOT_IMPLEMENTED`          | Reserved fallback for an error code the platform cannot map (never thrown by the library)                                                                              |
 
 ## WeChat-specific limitations
 
@@ -216,7 +217,7 @@ The Mini Program has no WebCrypto / SubtleCrypto. HMAC-SHA1/256/512 are implemen
 
 ## Shared core and platform differences
 
-- Public API, DTO field names, 21 error codes and RFC behavior are aligned with the HarmonyOS package (`@yansongda/otp` v1.1.1).
+- Public API, DTO field names, 21 error codes and RFC behavior are aligned with the HarmonyOS package (`@yansongda/otp`): both consume the same `packages/core`, so the error model cannot drift.
 - Both packages consume `packages/core`; only the type layer and crypto provider differ.
 - `OtpAlgorithm` is a `const` object plus string union instead of an ArkTS `enum`, so both `"SHA1"` and `OtpAlgorithm.SHA1` work.
 - `OtpError` sets `name` and repairs the prototype chain **only when the prototype has degraded to `Error.prototype`** (WeChat ES5 downleveling); an unconditional `Object.setPrototypeOf` would rewrite subclass instances and break `instanceof` for subclasses. ES5 + custom subclasses must still fix their own prototype chain.

@@ -124,13 +124,14 @@ try {
 
 `{ strict: true }`（`Secret.fromBase32` 与 `OTPAuthURI.parse` 共用）只拒绝「规范 base32 不可能产生」的文本；判定发生在库内**归一化之后**，因此大小写、空白、尾部 `=` 仍被容忍：
 
-| 输入（归一化后）                                    | `len % 8` | 默认                         | `{ strict: true }`                |
-| --------------------------------------------------- | --------- | ---------------------------- | --------------------------------- |
-| `JBSWY3DPEHPK3PXP`（16 字符）                       | 0         | OK                           | OK                                |
-| `MY` / `MZXQ` / `MZXW6` / `MZXW6YQ`（RFC 4648 §10） | 2/4/5/7   | OK                           | OK                                |
-| `MB` / `MZXR` / `MZXW7` / `MZXW6YT`（填充位非 0）   | 2/4/5/7   | 静默重编码（`MA` …）         | `INVALID_BASE32_PADDING`          |
-| `A` / `AAA` / `MZXW6Y`（不可能的尾长）              | 1/3/6     | `SECRET_TOO_SHORT` / OK / OK | `INVALID_BASE32_PADDING`          |
-| `AB1`（非法字符）                                   | 3         | `INVALID_BASE32_CHAR`        | `INVALID_BASE32_CHAR`（优先校验） |
+| 输入（归一化后）                                    | `len % 8` | 默认                  | `{ strict: true }`                |
+| --------------------------------------------------- | --------- | --------------------- | --------------------------------- |
+| `JBSWY3DPEHPK3PXP`（16 字符）                       | 0         | OK                    | OK                                |
+| `MY` / `MZXQ` / `MZXW6` / `MZXW6YQ`（RFC 4648 §10） | 2/4/5/7   | OK                    | OK                                |
+| `MB` / `MZXR` / `MZXW7` / `MZXW6YT`（填充位非 0）   | 2/4/5/7   | 静默重编码（`MA` …）  | `INVALID_BASE32_PADDING`          |
+| `A`（尾长 1，解码后 0 字节）                        | 1         | `SECRET_TOO_SHORT`    | `SECRET_TOO_SHORT`（同码）        |
+| `AAA` / `MZXW6Y`（尾长 3 / 6，结构性非法）          | 3/6       | OK                    | `INVALID_BASE32_PADDING`          |
+| `AB1`（非法字符）                                   | 3         | `INVALID_BASE32_CHAR` | `INVALID_BASE32_CHAR`（优先校验） |
 
 适合用在「账户导入」等边界：拒绝被截断或手工改写的 secret，而不是静默规范化。该判据等价于 `encode(decode(normalized)) === normalized`（decode 对缺位补 0）。
 
@@ -148,29 +149,29 @@ try {
 
 一切失败均抛 `OtpError`，携带固定 `code`（字符串）；错误消息绝不包含 secret、token 或密钥材料。下表覆盖全部 21 个错误码（`OtpErrorCode` 经 barrel 导出；取值镜像自共享 core，并由仓库守卫逐项对拍）。`NOT_IMPLEMENTED` 只是「枚举映射不到」时的兜底——库内不抛出，`OtpError.codeString` 始终保留原始错误码字符串（`name` 固定为 `OtpError`，用于 provider 错误契约）。
 
-| `OtpErrorCode`             | 现象                                          | 根因                                                                                                | 处置                                                                    |
-| -------------------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `EMPTY_SECRET`             | 构造 / URI 解析抛错，secret 为空              | secret 缺失或空串                                                                                   | 提供非空 base32 secret                                                  |
-| `INVALID_BASE32_CHAR`      | secret 含非法字符                             | 字符不在 base32 字母表                                                                              | 仅使用 `A–Z` 与 `2–7`                                                   |
-| `SECRET_TOO_SHORT`         | secret 解码后不足 1 字节                      | base32 串过短                                                                                       | 至少提供 8 个字符（1 字节）                                             |
-| `INVALID_BASE32_PADDING`   | 仅 `{ strict: true }`：secret 不是规范 base32 | 尾长 ∉ `{0,2,4,5,7}`，或末字符填充位非 0                                                            | 用 `secret.toBase32()` 重新编码；或去掉 `strict` 保持原有宽松行为       |
-| `SECRET_TOO_WEAK`          | `minSecretBits` 校验失败（仅强度问题）        | `secret.bitLength < minSecretBits`                                                                  | 换更强的密钥或调低 `minSecretBits`                                      |
-| `INVALID_SECRET_LENGTH`    | `Secret.generate(bytes)` 拒绝该长度           | `bytes` 不是 `[1, 4096]` 内的整数                                                                   | 传 `[1, 4096]` 内的整数                                                 |
-| `INVALID_MIN_SECRET_BITS`  | `minSecretBits` 被拒绝                        | 不是非负安全整数（fail-closed；`NaN` 绝不静默关闭强度校验）                                         | 传非负安全整数，或省略该选项                                            |
-| `INVALID_ALGORITHM`        | 算法不被接受                                  | 非 SHA1 / SHA256 / SHA512                                                                           | 使用三种受支持算法之一                                                  |
-| `INVALID_DIGITS`           | 位数不被接受                                  | 非 6 / 7 / 8                                                                                        | 使用 6、7 或 8                                                          |
-| `INVALID_PERIOD`           | 周期不被接受                                  | 不是正安全整数                                                                                      | 使用正整数秒                                                            |
-| `INVALID_T0`               | `t0` 不被接受                                 | 不是非负安全整数                                                                                    | 使用 ≥0 整数（秒）                                                      |
-| `INVALID_COUNTER`          | 计数器不被接受                                | 非 ≥0 整数，或超过 2^53-1                                                                           | 使用 `[0, 2^53-1]` 内的合法值                                           |
-| `INVALID_TIMESTAMP`        | 时间戳不被接受                                | 不是非负安全整数（epoch 0 = 1970-01-01 合法）                                                       | 使用合法的非负 epoch 毫秒时间戳                                         |
-| `INVALID_CLOCK_OFFSET`     | 时钟偏移不被接受                              | `clockOffsetMs` 不是安全整数（构造期同样校验），或 `syncClockOffset` 的 delta 非安全整数 / 累加溢出 | 用安全整数偏移与 delta，且结果保持安全整数                              |
-| `INVALID_WINDOW`           | 窗口不被接受                                  | 不是 `[0, 10]`（`MAX_VERIFY_WINDOW`）内的整数                                                       | 漂移窗口保持小（通常 ≤ 1–2）                                            |
-| `INVALID_TOKEN`            | token 格式非法                                | 非纯数字，或长度 ≠ `digits`                                                                         | 调用 `verify` 前先校验用户输入                                          |
-| `CRYPTO_FAILED`            | provider 失败                                 | 平台 `cryptoFramework` 异常、短/非 `Uint8Array` 摘要、随机源长度不符                                | 检查系统能力后重试；错误文案固定，不泄漏密钥材料                        |
-| `CRYPTO_NOT_INITIALIZED`   | crypto 注册表未注册                           | 经深路径导入公开类且未注入 provider，默认注册从未执行                                               | 从包 barrel（`@yansongda/otp`）导入以自动触发 `installCryptoDefaults()` |
-| `INVALID_OTPAUTH_URI`      | URI 前缀非法                                  | 不以 `otpauth://` 开头（大小写不敏感）                                                              | 提供合法 `otpauth://` URI                                               |
-| `UNSUPPORTED_OTPAUTH_TYPE` | URI 类型不支持                                | 类型非 `totp` / `hotp`                                                                              | 使用 `totp` 或 `hotp`                                                   |
-| `NOT_IMPLEMENTED`          | （从不抛出）                                  | 内部预留占位                                                                                        | 无需处理                                                                |
+| `OtpErrorCode`             | 现象                                          | 根因                                                                                                                                            | 处置                                                                    |
+| -------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `EMPTY_SECRET`             | 构造 / URI 解析抛错，secret 为空              | secret 缺失或空串                                                                                                                               | 提供非空 base32 secret                                                  |
+| `INVALID_BASE32_CHAR`      | secret 含非法字符                             | 字符不在 base32 字母表                                                                                                                          | 仅使用 `A–Z` 与 `2–7`                                                   |
+| `SECRET_TOO_SHORT`         | secret 解码后不足 1 字节                      | base32 串过短                                                                                                                                   | 至少提供 8 个字符（1 字节）                                             |
+| `INVALID_BASE32_PADDING`   | 仅 `{ strict: true }`：secret 不是规范 base32 | 尾长 ∉ `{0,2,4,5,7}`，或末字符填充位非 0                                                                                                        | 用 `secret.toBase32()` 重新编码；或去掉 `strict` 保持原有宽松行为       |
+| `SECRET_TOO_WEAK`          | `minSecretBits` 校验失败（仅强度问题）        | `secret.bitLength < minSecretBits`                                                                                                              | 换更强的密钥或调低 `minSecretBits`                                      |
+| `INVALID_SECRET_LENGTH`    | `Secret.generate(bytes)` 拒绝该长度           | `bytes` 不是 `[1, 4096]` 内的整数                                                                                                               | 传 `[1, 4096]` 内的整数                                                 |
+| `INVALID_MIN_SECRET_BITS`  | `minSecretBits` 被拒绝                        | 不是非负安全整数（fail-closed；`NaN` 绝不静默关闭强度校验）                                                                                     | 传非负安全整数，或省略该选项                                            |
+| `INVALID_ALGORITHM`        | 算法不被接受                                  | 非 SHA1 / SHA256 / SHA512                                                                                                                       | 使用三种受支持算法之一                                                  |
+| `INVALID_DIGITS`           | 位数不被接受                                  | 非 6 / 7 / 8                                                                                                                                    | 使用 6、7 或 8                                                          |
+| `INVALID_PERIOD`           | 周期不被接受                                  | 不是正安全整数                                                                                                                                  | 使用正整数秒                                                            |
+| `INVALID_T0`               | `t0` 不被接受                                 | 不是非负安全整数                                                                                                                                | 使用 ≥0 整数（秒）                                                      |
+| `INVALID_COUNTER`          | 计数器不被接受                                | 非 ≥0 整数，或超过 2^53-1                                                                                                                       | 使用 `[0, 2^53-1]` 内的合法值                                           |
+| `INVALID_TIMESTAMP`        | 时间戳不被接受                                | 不是非负安全整数（epoch 0 = 1970-01-01 合法）                                                                                                   | 使用合法的非负 epoch 毫秒时间戳                                         |
+| `INVALID_CLOCK_OFFSET`     | 时钟偏移不被接受                              | `clockOffsetMs` 不是安全整数（构造期同样校验）、`syncClockOffset` 的 delta 非安全整数 / 累加溢出，或偏移使 `timestamp`/当前时刻超出安全整数范围 | 用安全整数偏移与 delta，且结果保持安全整数                              |
+| `INVALID_WINDOW`           | 窗口不被接受                                  | 不是 `[0, 10]`（`MAX_VERIFY_WINDOW`）内的整数                                                                                                   | 漂移窗口保持小（通常 ≤ 1–2）                                            |
+| `INVALID_TOKEN`            | token 格式非法                                | 非纯数字，或长度 ≠ `digits`                                                                                                                     | 调用 `verify` 前先校验用户输入                                          |
+| `CRYPTO_FAILED`            | provider 失败                                 | 平台 `cryptoFramework` 异常、短/非 `Uint8Array` 摘要、随机源返回值非 `Uint8Array` 或长度不符                                                    | 检查系统能力后重试；错误文案固定，不泄漏密钥材料                        |
+| `CRYPTO_NOT_INITIALIZED`   | crypto 注册表未注册                           | 经深路径导入公开类且未注入 provider，默认注册从未执行                                                                                           | 从包 barrel（`@yansongda/otp`）导入以自动触发 `installCryptoDefaults()` |
+| `INVALID_OTPAUTH_URI`      | URI 前缀非法                                  | 不以 `otpauth://` 开头（大小写不敏感）                                                                                                          | 提供合法 `otpauth://` URI                                               |
+| `UNSUPPORTED_OTPAUTH_TYPE` | URI 类型不支持                                | 类型非 `totp` / `hotp`                                                                                                                          | 使用 `totp` 或 `hotp`                                                   |
+| `NOT_IMPLEMENTED`          | （从不抛出）                                  | 内部预留占位                                                                                                                                    | 无需处理                                                                |
 
 ## 测试与限制说明
 

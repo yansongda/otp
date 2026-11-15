@@ -1,7 +1,7 @@
 # AGENTS.md —— miniprogram-otp 工程上下文
 
 > 面向所有在该仓库工作的编码 agent / 协作者。**动手前先读本文件**。
-> 设计基线：公开 API / 错误模型与 `packages/ohos-otp/library` v1.1.0 对齐；实现来自 `packages/core`（唯一源码）。
+> 设计基线：公开 API / 错误模型与 `packages/ohos-otp/library` 对齐（两者消费同一个 `packages/core`）；实现来自 `packages/core`（唯一源码）。
 
 ## 1. 项目定位
 
@@ -29,7 +29,7 @@
 7. **错误码唯一来源是 core**：`src/errors.ts` 只保留平台 `OtpError`，`OtpErrorCode` 必须从 `@yansongda/otp-core` 复用（守卫脚本禁止再声明码表）；码集合现为 21 个，v1 起仅允许新增，不得改已有字符串值。新增码必须同步 core 码表 / 守卫基线 / 四份 README / CHANGELOG。
 8. **DTO 冻结**：`HmacOptions` / `TotpOptions` / `HotpOptions` / `VerifyOptions` / `OtpAuthParams` 字段名与可选性仅允许新增可选字段；`HOTP.verify` / `TOTP.verify` 由 core 分别收窄为 `HotpVerifyOptions` / `TotpVerifyOptions`（平台 type-only 转发，守卫脚本禁止重复声明）。
 9. **参数口径**：`timestamp` / `period` / `t0` / `clockOffsetMs` / `minSecretBits` 必须是安全整数（`minSecretBits` 非法时 fail-closed 抛 `INVALID_MIN_SECRET_BITS`）；`window` 上限 `MAX_VERIFY_WINDOW = 10`（barrel 导出）。
-10. **provider 错误契约**：provider 失败必须抛 `name === "OtpError"` 的错误（core `otpFail` / 平台 `OtpError`）；core 的 engine 只兜未知错误，平台错误类的 `name` 不得删改。
+10. **provider 错误契约**：provider 失败必须抛 `name === "OtpError"` 的错误（core `otpFail` / 平台 `OtpError`）；core 的 engine 只兜未知错误，平台错误类的 `name` 不得删改。provider 对 `key` / `message` 只能读，不得修改或跨调用保留引用（库每次公开调用传入一份密钥副本，不把可写密钥跨调用复用）。
 
 其他有意差异（相对 OHOS）：
 

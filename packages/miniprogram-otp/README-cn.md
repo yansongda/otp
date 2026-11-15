@@ -143,41 +143,42 @@ try {
 
 `{ strict: true }` 在库内归一化之后，拒绝「规范 Base32 不可能产生」的文本；大小写、空白、尾部 `=` 仍被容忍：
 
-| 归一化后输入                                      | `len % 8`     | 默认                         | `{ strict: true }`                |
-| ------------------------------------------------- | ------------- | ---------------------------- | --------------------------------- |
-| `JBSWY3DPEHPK3PXP`                                | 0             | OK                           | OK                                |
-| `MY` / `MZXQ` / `MZXW6` / `MZXW6YQ`               | 2 / 4 / 5 / 7 | OK                           | OK                                |
-| `MB` / `MZXR` / `MZXW7` / `MZXW6YT`（填充位非 0） | 2 / 4 / 5 / 7 | 静默重编码                   | `INVALID_BASE32_PADDING`          |
-| `A` / `AAA` / `MZXW6Y`（不可能尾长）              | 1 / 3 / 6     | `SECRET_TOO_SHORT` / OK / OK | `INVALID_BASE32_PADDING`          |
-| `AB1`（非法字符）                                 | 3             | `INVALID_BASE32_CHAR`        | `INVALID_BASE32_CHAR`（优先校验） |
+| 归一化后输入                                      | `len % 8`     | 默认                  | `{ strict: true }`                |
+| ------------------------------------------------- | ------------- | --------------------- | --------------------------------- |
+| `JBSWY3DPEHPK3PXP`                                | 0             | OK                    | OK                                |
+| `MY` / `MZXQ` / `MZXW6` / `MZXW6YQ`               | 2 / 4 / 5 / 7 | OK                    | OK                                |
+| `MB` / `MZXR` / `MZXW7` / `MZXW6YT`（填充位非 0） | 2 / 4 / 5 / 7 | 静默重编码            | `INVALID_BASE32_PADDING`          |
+| `A`（尾长 1，解码后 0 字节）                      | 1             | `SECRET_TOO_SHORT`    | `SECRET_TOO_SHORT`（同码）        |
+| `AAA` / `MZXW6Y`（尾长 3 / 6，结构性非法）        | 3 / 6         | OK                    | `INVALID_BASE32_PADDING`          |
+| `AB1`（非法字符）                                 | 3             | `INVALID_BASE32_CHAR` | `INVALID_BASE32_CHAR`（优先校验） |
 
 ## 错误码
 
 一切失败均抛 `OtpError`，消息为固定文案，绝不包含 secret、token 或派生密钥。
 
-| 错误码                     | 含义                                                                                   |
-| -------------------------- | -------------------------------------------------------------------------------------- |
-| `EMPTY_SECRET`             | secret 缺失或为空                                                                      |
-| `INVALID_BASE32_CHAR`      | 字符不在 Base32 字母表                                                                 |
-| `INVALID_BASE32_PADDING`   | strict：尾长非规范或填充位非 0                                                         |
-| `SECRET_TOO_SHORT`         | 解码后不足 1 字节                                                                      |
-| `SECRET_TOO_WEAK`          | `minSecretBits` 校验失败（仅强度问题）                                                 |
-| `INVALID_SECRET_LENGTH`    | `Secret.generate(bytes)` 的 bytes 非 [1,4096] 整数                                     |
-| `INVALID_MIN_SECRET_BITS`  | `minSecretBits` 非非负安全整数（fail-closed，不静默关闭校验）                          |
-| `INVALID_ALGORITHM`        | 非 SHA1 / SHA256 / SHA512                                                              |
-| `INVALID_DIGITS`           | 非 6 / 7 / 8                                                                           |
-| `INVALID_PERIOD`           | 周期不是正安全整数                                                                     |
-| `INVALID_T0`               | `t0` 不是非负安全整数                                                                  |
-| `INVALID_COUNTER`          | counter 不在 `[0, 2^53-1]`                                                             |
-| `INVALID_TIMESTAMP`        | 时间戳不是非负安全整数（epoch 0 合法）                                                 |
-| `INVALID_CLOCK_OFFSET`     | `clockOffsetMs` 非安全整数，或 `syncClockOffset` delta 非安全整数/溢出                 |
-| `INVALID_WINDOW`           | window 不是 [0, 10]（`MAX_VERIFY_WINDOW`）内的整数                                     |
-| `INVALID_TOKEN`            | token 非纯数字或长度不等于 digits                                                      |
-| `CRYPTO_FAILED`            | provider 失败（原生 crypto 异常、短/非 `Uint8Array` 摘要、随机源长度不符）；不泄漏密钥 |
-| `CRYPTO_NOT_INITIALIZED`   | 未注册 provider；应从包 barrel 导入                                                    |
-| `INVALID_OTPAUTH_URI`      | URI 不以 `otpauth://` 开头（大小写不敏感）                                             |
-| `UNSUPPORTED_OTPAUTH_TYPE` | 类型不是 `totp` / `hotp`（parse 与 build）                                             |
-| `NOT_IMPLEMENTED`          | 平台无法映射错误码时的兜底（库内不抛出）                                               |
+| 错误码                     | 含义                                                                                                               |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `EMPTY_SECRET`             | secret 缺失或为空                                                                                                  |
+| `INVALID_BASE32_CHAR`      | 字符不在 Base32 字母表                                                                                             |
+| `INVALID_BASE32_PADDING`   | strict：尾长非规范或填充位非 0                                                                                     |
+| `SECRET_TOO_SHORT`         | 解码后不足 1 字节                                                                                                  |
+| `SECRET_TOO_WEAK`          | `minSecretBits` 校验失败（仅强度问题）                                                                             |
+| `INVALID_SECRET_LENGTH`    | `Secret.generate(bytes)` 的 bytes 非 [1,4096] 整数                                                                 |
+| `INVALID_MIN_SECRET_BITS`  | `minSecretBits` 非非负安全整数（fail-closed，不静默关闭校验）                                                      |
+| `INVALID_ALGORITHM`        | 非 SHA1 / SHA256 / SHA512                                                                                          |
+| `INVALID_DIGITS`           | 非 6 / 7 / 8                                                                                                       |
+| `INVALID_PERIOD`           | 周期不是正安全整数                                                                                                 |
+| `INVALID_T0`               | `t0` 不是非负安全整数                                                                                              |
+| `INVALID_COUNTER`          | counter 不在 `[0, 2^53-1]`                                                                                         |
+| `INVALID_TIMESTAMP`        | 时间戳不是非负安全整数（epoch 0 合法）                                                                             |
+| `INVALID_CLOCK_OFFSET`     | `clockOffsetMs` 非安全整数、`syncClockOffset` delta 非安全整数/溢出，或偏移使 `timestamp`/当前时刻超出安全整数范围 |
+| `INVALID_WINDOW`           | window 不是 [0, 10]（`MAX_VERIFY_WINDOW`）内的整数                                                                 |
+| `INVALID_TOKEN`            | token 非纯数字或长度不等于 digits                                                                                  |
+| `CRYPTO_FAILED`            | provider 失败（原生 crypto 异常、短/非 `Uint8Array` 摘要、随机源返回值非 `Uint8Array` 或长度不符）；不泄漏密钥     |
+| `CRYPTO_NOT_INITIALIZED`   | 未注册 provider；应从包 barrel 导入                                                                                |
+| `INVALID_OTPAUTH_URI`      | URI 不以 `otpauth://` 开头（大小写不敏感）                                                                         |
+| `UNSUPPORTED_OTPAUTH_TYPE` | 类型不是 `totp` / `hotp`（parse 与 build）                                                                         |
+| `NOT_IMPLEMENTED`          | 平台无法映射错误码时的兜底（库内不抛出）                                                                           |
 
 ## 微信小程序限制
 
@@ -216,7 +217,7 @@ wx.getRandomValues({
 
 ## 共享 core 与平台差异
 
-- 公开 API、DTO 字段名、21 个错误码与 RFC 行为对齐鸿蒙包（`@yansongda/otp` v1.1.1）。
+- 公开 API、DTO 字段名、21 个错误码与 RFC 行为与鸿蒙包（`@yansongda/otp`）一致：两者消费同一个 `packages/core`，错误模型不会漂移。
 - 两个包都消费 `packages/core`；差异只在类型层与 crypto provider。
 - `OtpAlgorithm` 在 TS 侧为 `const` 对象 + 字符串联合，而不是 ArkTS `enum`；`"SHA1"` 与 `OtpAlgorithm.SHA1` 都可用。
 - `OtpError` 设置 `name`，且**仅在原型退化为 `Error.prototype` 时**执行 `Object.setPrototypeOf`，保证微信 ES5 降级后 `instanceof` 可靠；无条件重设会改写子类实例原型。ES5 + 自定义子类仍需自行修正原型链。
