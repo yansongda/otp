@@ -164,6 +164,24 @@ export default function totpTest() {
         t.verify('287082', { timestamp: 59000, window: 11 });
       }, OtpErrorCode.INVALID_WINDOW);
     });
+    it('timestampNegative_notMaskedByClockOffset', 0, () => {
+      // 显式 timestamp 先按口径校验：负数不得因「正偏移抵消」而静默通过。
+      const t: TOTP = new TOTP({ secret: S1, digits: 6, clockOffsetMs: 10000 }, fixture);
+      expectThrowsCode(() => {
+        t.generate(-10000);
+      }, OtpErrorCode.INVALID_TIMESTAMP);
+      expectThrowsCode(() => {
+        t.verify('755224', { timestamp: -10000 });
+      }, OtpErrorCode.INVALID_TIMESTAMP);
+    });
+    it('timestampOffsetOverflow_throwsClockOffset', 0, () => {
+      // 入参合法（MAX_SAFE）但叠加偏移后越界 → INVALID_CLOCK_OFFSET，
+      // 不把合法入参误报成 INVALID_TIMESTAMP。
+      const t: TOTP = new TOTP({ secret: S1, digits: 6, clockOffsetMs: 10 }, fixture);
+      expectThrowsCode(() => {
+        t.generate(Number.MAX_SAFE_INTEGER);
+      }, OtpErrorCode.INVALID_CLOCK_OFFSET);
+    });
 
     // ── syncClockOffset 双场景（先推导再断言）──
     it('syncClockOffset_closure_slowLocal', 0, () => {

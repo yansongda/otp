@@ -260,6 +260,35 @@ export default function otpAuthUriTest() {
       assertParamsEqual(back, p);
     });
 
+    it('roundtrip_issuerWithColon', 0, () => {
+      // build 把 issuer 内部的冒号编码为 %3A；parse 必须先按原始串切分再逐段解码，
+      // 否则 issuer 会被冒号截断（往返丢数据）。
+      const p: OtpAuthParams = {
+        type: OtpType.TOTP,
+        secret: 'JBSWY3DPEHPK3PXP',
+        algorithm: OtpAlgorithm.SHA1,
+        digits: 6,
+        issuer: 'AC:ME',
+        account: 'alice'
+      };
+      const uri: string = OTPAuthURI.build(p);
+      expect(uri).assertEqual('otpauth://totp/AC%3AME:alice?secret=JBSWY3DPEHPK3PXP&issuer=AC%3AME&algorithm=SHA1');
+      const back: OtpAuthParams = OTPAuthURI.parse(uri);
+      assertParamsEqual(back, p);
+    });
+
+    it('parse_legacyEncodedSeparatorCaseInsensitive', 0, () => {
+      // 兼容把分隔符整体编码为 %3A / %3a 的 URI（issuer%3Aaccount）。
+      const upper: OtpAuthParams = OTPAuthURI.parse(
+        'otpauth://totp/ACME%3Aco@example.com?secret=JBSWY3DPEHPK3PXP');
+      expect(upper.issuer).assertEqual('ACME');
+      expect(upper.account).assertEqual('co@example.com');
+      const lower: OtpAuthParams = OTPAuthURI.parse(
+        'otpauth://totp/ACME%3aco@example.com?secret=JBSWY3DPEHPK3PXP');
+      expect(lower.issuer).assertEqual('ACME');
+      expect(lower.account).assertEqual('co@example.com');
+    });
+
     it('roundtrip_minimalRequired', 0, () => {
       const p: OtpAuthParams = {
         type: OtpType.TOTP,
