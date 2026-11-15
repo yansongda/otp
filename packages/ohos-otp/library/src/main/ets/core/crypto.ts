@@ -11,12 +11,19 @@ import { otpFail } from "./errors";
 /** 单参哈希函数（消息 → 摘要）。 */
 export type HashFunction = (message: Uint8Array) => Uint8Array;
 
-/** HMAC 抽象接口（algorithm 为字符串，ArkTS 可直接实现）。 */
+/**
+ * HMAC 抽象接口（algorithm 为字符串，ArkTS 可直接实现）。
+ *
+ * 入参契约（provider 必须遵守）：`key` / `message` 一律只读——不得修改、不得 fill、
+ * 不得跨调用保留引用。库每次**公开调用**传入一份密钥临时副本（同一次调用的窗口扫描会
+ * 复用该副本）；实现若写入入参，本次调用的后续候选就会用被污染的密钥计算，
+ * 且这类错误只会表现为「码不对」而非可诊断的错误码。
+ */
 export interface HmacProvider {
   sign(algorithm: string, key: Uint8Array, message: Uint8Array): Uint8Array;
 }
 
-/** 随机数抽象接口。 */
+/** 随机数抽象接口：必须同步返回 Uint8Array，且长度等于请求的 bytes（否则 CRYPTO_FAILED）。 */
 export interface RandomSource {
   random(bytes: number): Uint8Array;
 }

@@ -2,7 +2,8 @@
  * 构造期共享解析：secret → algorithm → digits → minSecretBits（HOTP / TOTP 共用）。
  *
  * 抽出来是为了：① 两个公开类的默认值与校验顺序不再各自维护（改一处即同步）；
- * ② 顺带缓存 secret.bytes 的副本 —— 原先每次 generate / verify 候选都要复制一次密钥。
+ * ② 密钥的唯一事实源始终是 `Secret._bytes`——本层不再额外缓存一份副本，
+ *    调用方每次公开调用经 `secret.bytes` 取临时视图（provider 只读，见 crypto.ts 契约）。
  */
 import { otpFail } from "../errors";
 import {
@@ -17,8 +18,6 @@ import { isValidAlgorithm, isValidDigits } from "./digits";
 
 export interface ResolvedHmacOptions {
   secret: Secret;
-  /** secret.bytes 的缓存副本：调用方改动不影响内部，且不再逐次分配。 */
-  key: Uint8Array;
   algorithm: AlgorithmName;
   digits: number;
 }
@@ -48,5 +47,5 @@ export function resolveHmacOptions(options: HmacOptions): ResolvedHmacOptions {
     otpFail("SECRET_TOO_WEAK");
   }
 
-  return { secret, key: secret.bytes, algorithm, digits };
+  return { secret, algorithm, digits };
 }

@@ -37,9 +37,10 @@ describe("secret", () => {
       () => Secret.fromBase32("MZXW6YT", { strict: true }),
       "INVALID_BASE32_PADDING",
     );
+    // 单字符合法：解码后 0 字节，与宽松模式同码（不随 strict 开关换语义）
     expectCode(
       () => Secret.fromBase32("A", { strict: true }),
-      "INVALID_BASE32_PADDING",
+      "SECRET_TOO_SHORT",
     );
   });
 
@@ -95,6 +96,18 @@ describe("secret", () => {
   it("generate_sourceWrongLength_normalizedToCryptoFailed", () => {
     // 随机源违反长度契约：静默接受会让密钥强度与调用方预期不符
     registerRandom({ random: (n: number) => new Uint8Array(n + 1) });
+    expectCode(() => Secret.generate(20), "CRYPTO_FAILED");
+  });
+
+  it("generate_sourceNonUint8Array_normalizedToCryptoFailed", () => {
+    // 字符串 / array-like 的 length 可能「恰好合法」，而 new Uint8Array(str) 会得到 0 字节
+    // （静默生成空密钥）；null 则连 .length 都取不到，会漏出 TypeError 而不是 OtpError。
+    registerRandom({
+      random: (n: number) => "x".repeat(n) as unknown as Uint8Array,
+    });
+    expectCode(() => Secret.generate(20), "CRYPTO_FAILED");
+
+    registerRandom({ random: () => null as unknown as Uint8Array });
     expectCode(() => Secret.generate(20), "CRYPTO_FAILED");
   });
 

@@ -30,6 +30,8 @@ export interface TotpOptions extends HmacOptions {
   /**
    * 默认 0；时钟偏移补偿，仅 TOTP 有效。
    * 必须是安全整数毫秒（小数偏移无意义）：非法值抛 INVALID_CLOCK_OFFSET。
+   * 构造期只校验「自身」；与 timestamp 叠加后仍须落在安全整数内，否则同样抛
+   * INVALID_CLOCK_OFFSET（偏移过大属配置问题，不归咎于 timestamp）。
    */
   clockOffsetMs?: number;
   /** 仅用于 toURI()。 */
@@ -53,7 +55,7 @@ export interface HotpOptions extends HmacOptions {
  * 具体入口请使用下面按类收窄的 DTO：HOTP 不认 timestamp、TOTP 不认 counter。
  */
 export interface VerifyOptions {
-  /** epoch ms（安全整数），仅 TOTP，默认 Date.now()。 */
+  /** epoch ms（非负安全整数），仅 TOTP，默认 Date.now()。 */
   timestamp?: number;
   /** 仅 HOTP，默认构造时的 counter。 */
   counter?: number;
@@ -71,7 +73,7 @@ export interface HotpVerifyOptions {
 
 /** TOTP.verify 选项：仅 timestamp / window（不接受 counter）。 */
 export interface TotpVerifyOptions {
-  /** epoch ms（安全整数），默认 Date.now()。 */
+  /** epoch ms（非负安全整数），默认 Date.now()；非法值抛 INVALID_TIMESTAMP。 */
   timestamp?: number;
   /** 漂移窗口（步），默认 0；必须为 [0, MAX_VERIFY_WINDOW] 内整数。 */
   window?: number;

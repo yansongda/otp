@@ -436,4 +436,38 @@ describe("otpauth-uri", () => {
       "otpauth://hotp/alice?secret=JBSWY3DPEHPK3PXP&algorithm=SHA1&counter=42";
     expect(OTPAuthURI.build(OTPAuthURI.parse(hotpUri))).toBe(hotpUri);
   });
+
+  it("parse_issuerWithColon_staysWhole", () => {
+    // build 把 issuer 内部的冒号编码为 %3A；parse 必须先按原始串切分再逐段解码，
+    // 否则 issuer 会被冒号截断（build → parse 往返丢 issuer）
+    const built = OTPAuthURI.build({
+      type: OtpType.TOTP,
+      secret: "JBSWY3DPEHPK3PXP",
+      algorithm: OtpAlgorithm.SHA1,
+      digits: 6,
+      issuer: "AC:ME",
+      account: "alice",
+    });
+    expect(built).toBe(
+      "otpauth://totp/AC%3AME:alice?secret=JBSWY3DPEHPK3PXP&issuer=AC%3AME&algorithm=SHA1",
+    );
+    const parsed = OTPAuthURI.parse(built);
+    expect(parsed.issuer).toBe("AC:ME");
+    expect(parsed.account).toBe("alice");
+  });
+
+  it("parse_legacyEncodedSeparatorIsCaseInsensitive", () => {
+    // 兼容把分隔符整体编码为 %3A / %3a 的 URI（issuer%3Aaccount）
+    const upper = OTPAuthURI.parse(
+      "otpauth://totp/ACME%3Aco@example.com?secret=JBSWY3DPEHPK3PXP",
+    );
+    expect(upper.issuer).toBe("ACME");
+    expect(upper.account).toBe("co@example.com");
+
+    const lower = OTPAuthURI.parse(
+      "otpauth://totp/ACME%3aco@example.com?secret=JBSWY3DPEHPK3PXP",
+    );
+    expect(lower.issuer).toBe("ACME");
+    expect(lower.account).toBe("co@example.com");
+  });
 });

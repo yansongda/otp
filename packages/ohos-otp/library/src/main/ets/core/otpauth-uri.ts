@@ -16,10 +16,19 @@ import {
   DEFAULT_PERIOD,
 } from "./options";
 
+/** 百分号解码；失败回退原串（不抛错，最大化互操作）。 */
+function decodePart(raw: string): string {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
 export class OTPAuthURI {
   /**
    * 解析 otpauth:// URI 为 OtpAuthParams：scheme 大小写不敏感 → type 限 totp/hotp →
-   * label 百分号解码（失败回退原串）后按首个冒号切 issuer/account → query 手写拆分 →
+   * label 按**原始串**首个冒号切分后逐段百分号解码（失败回退原串）→ query 手写拆分 →
    * secret 规范化为大写无填充 base32；未知参数忽略，query 的 issuer 优先于 label 前缀。
    * options.strict === true 时 secret 必须是规范 base32，否则 INVALID_BASE32_PADDING。
    */
@@ -43,29 +52,33 @@ export class OTPAuthURI {
       otpFail("UNSUPPORTED_OTPAUTH_TYPE");
     }
 
-    // ③ label：'/' 之后、'?' 之前的部分，百分号解码（失败回退原串）
+    // ③ label：'/' 之后、'?' 之前的部分
     const labelRaw =
       slashIndex === -1 ? "" : beforeQuery.substring(slashIndex + 1);
+    // label 字段（parse 回填用）保留整体解码结果；失败回退原串
     let label = labelRaw;
     try {
       label = decodeURIComponent(labelRaw);
     } catch {
-      label = labelRaw; // 解码失败回退原串
+      label = labelRaw;
     }
-    // 按首个冒号切分 issuer/account；解码失败回退原串时兼容 '%3A' 分隔形式
+    // 切分与解码顺序：必须**先按原始串**切分，再逐段解码。
+    // build 会把 issuer 内部的冒号编码为 %3A（label 里只有分隔冒号是原字符），
+    // 若先整体解码再切分，issuer 里的 %3A 会被误当分隔符（build → parse 往返丢 issuer）。
     let issuerFromLabel = "";
     let account = "";
-    const colonIndex = label.indexOf(":");
+    const colonIndex = labelRaw.indexOf(":");
     if (colonIndex !== -1) {
-      issuerFromLabel = label.substring(0, colonIndex);
-      account = label.substring(colonIndex + 1);
+      issuerFromLabel = decodePart(labelRaw.substring(0, colonIndex));
+      account = decodePart(labelRaw.substring(colonIndex + 1));
     } else {
-      const pctIndex = label.indexOf("%3A");
+      // 兼容把分隔符整体编码为 %3A 的 URI（issuer%3Aaccount），大小写不敏感
+      const pctIndex = labelRaw.toLowerCase().indexOf("%3a");
       if (pctIndex !== -1) {
-        issuerFromLabel = label.substring(0, pctIndex);
-        account = label.substring(pctIndex + 3);
+        issuerFromLabel = decodePart(labelRaw.substring(0, pctIndex));
+        account = decodePart(labelRaw.substring(pctIndex + 3));
       } else {
-        account = label;
+        account = decodePart(labelRaw);
       }
     }
 
@@ -88,17 +101,7 @@ export class OTPAuthURI {
           key = pair.substring(0, eqIndex);
           value = pair.substring(eqIndex + 1);
         }
-        try {
-          key = decodeURIComponent(key);
-        } catch {
-          // 键解码失败回退原串
-        }
-        try {
-          value = decodeURIComponent(value);
-        } catch {
-          // 值解码失败回退原串
-        }
-        params.set(key.toLowerCase(), value);
+        params.set(decodePart(key).toLowerCase(), decodePart(value));
       }
     }
 

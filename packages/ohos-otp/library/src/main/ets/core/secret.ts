@@ -49,8 +49,10 @@ export class Secret {
       otpFail("INVALID_SECRET_LENGTH");
     }
     const generated = requireRandom().random(bytes);
-    if (generated.length !== bytes) {
-      // 随机源违反长度契约：静默接受会让密钥强度与调用方预期不符
+    // 先判类型再取 length：字符串 / array-like 的 length 可能「恰好合法」，
+    // 而 new Uint8Array(字符串) 会得到 0 字节（空密钥，HMAC 退化为全零密钥）；
+    // null / undefined 则连 .length 都取不到，会漏出 TypeError 而不是 OtpError。
+    if (!(generated instanceof Uint8Array) || generated.length !== bytes) {
       otpFail("CRYPTO_FAILED");
     }
     return new Secret(new Uint8Array(generated));

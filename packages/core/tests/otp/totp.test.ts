@@ -2,7 +2,9 @@
  * TOTP 公开类测试：RFC 6238 Appendix B 全量向量 + 时间偏移闭环 + 构造期校验 + URI 往返。
  */
 import { describe, expect, it } from "bun:test";
+import type { HmacProvider } from "../../src/crypto";
 import { TOTP } from "../../src/index";
+import { PureJsHmac } from "../../src/pure-js/pure-js-hmac";
 import { expectCode } from "./helpers";
 import {
   RFC6238_SHA1,
@@ -338,5 +340,46 @@ describe("totp", () => {
       "INVALID_WINDOW",
     );
     expect(t.verify("287082", { timestamp: 59000, window: 10 })).toBe(0);
+  });
+
+  it("timestampNegative_notMaskedByClockOffset", () => {
+    // 显式 timestamp 先按口径校验：负数不得因为正偏移「抵消」而静默通过
+    const t = new TOTP({ secret: SEEDS.SHA1_BASE32, clockOffsetMs: 10000 });
+    expectCode(() => t.generate(-10000), "INVALID_TIMESTAMP");
+    expectCode(
+      () => t.verify("755224", { timestamp: -10000 }),
+      "INVALID_TIMESTAMP",
+    );
+    expectCode(() => t.remaining(-10000), "INVALID_TIMESTAMP");
+    expectCode(() => t.progress(-10000), "INVALID_TIMESTAMP");
+  });
+
+  it("timestampOffsetOverflow_throwsClockOffset", () => {
+    // 入参合法但叠加偏移后越界属偏移配置问题：不得把入参误报成 INVALID_TIMESTAMP
+    const t = new TOTP({ secret: SEEDS.SHA1_BASE32, clockOffsetMs: 10 });
+    expectCode(
+      () => t.generate(Number.MAX_SAFE_INTEGER),
+      "INVALID_CLOCK_OFFSET",
+    );
+    expectCode(
+      () => t.verify("755224", { timestamp: Number.MAX_SAFE_INTEGER }),
+      "INVALID_CLOCK_OFFSET",
+    );
+  });
+
+  it("mutatingProvider_cannotCorruptLaterCalls", () => {
+    // provider 契约（crypto.ts）：key / message 只读。库每次公开调用给一份临时副本，
+    // 不在实例里缓存可被 provider 改写的密钥。
+    const pure = new PureJsHmac();
+    const mutating: HmacProvider = {
+      sign(algorithm, key, message) {
+        const digest = pure.sign(algorithm, key, message);
+        key.fill(0);
+        return digest;
+      },
+    };
+    const t = new TOTP({ secret: SEEDS.SHA1_BASE32, digits: 6 }, mutating);
+    expect(t.generate(59000)).toBe("287082");
+    expect(t.generate(59000)).toBe("287082");
   });
 });

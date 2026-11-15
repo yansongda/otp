@@ -19,7 +19,6 @@ import type { Secret } from "./secret";
 export class HOTP {
   private readonly _provider: HmacProvider;
   private readonly _secret: Secret;
-  private readonly _key: Uint8Array;
   private readonly _algorithm: AlgorithmName;
   private readonly _digits: number;
   private readonly _counter: number;
@@ -39,7 +38,6 @@ export class HOTP {
 
     this._provider = provider === undefined ? requireHmac() : provider;
     this._secret = resolved.secret;
-    this._key = resolved.key;
     this._algorithm = resolved.algorithm;
     this._digits = resolved.digits;
     this._counter = counter;
@@ -51,7 +49,9 @@ export class HOTP {
     return {
       algorithm: this._algorithm,
       digits: this._digits,
-      key: this._key,
+      // 每次公开调用取一份临时副本：唯一事实源是 Secret._bytes，
+      // 不在实例里再存一份长期密钥，也不让 provider 摸到跨调用共享的可写数组。
+      key: this._secret.bytes,
     };
   }
 

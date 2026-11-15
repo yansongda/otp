@@ -17,8 +17,8 @@
  *             INVALID_ALGORITHM → INVALID_DIGITS → INVALID_PERIOD | INVALID_COUNTER
  *   URI build：UNSUPPORTED_OTPAUTH_TYPE → secret 解析 → INVALID_ALGORITHM →
  *             INVALID_DIGITS → INVALID_PERIOD | INVALID_COUNTER
- *   verify：INVALID_TIMESTAMP（仅 TOTP 显式 timestamp）→ INVALID_COUNTER →
- *           INVALID_WINDOW → INVALID_TOKEN
+ *   verify：INVALID_TIMESTAMP（仅 TOTP 显式 timestamp）→ INVALID_CLOCK_OFFSET（TOTP
+ *           叠加 clockOffsetMs 后越界）→ INVALID_COUNTER → INVALID_WINDOW → INVALID_TOKEN
  *
  * 两个原则：
  * 1) 配置/构造期错误先于用户输入错误，避免「调用方写错参数」被「用户输错 token」掩盖；
@@ -29,12 +29,13 @@
 export const OtpErrorCode = {
   EMPTY_SECRET: "EMPTY_SECRET",
   INVALID_BASE32_CHAR: "INVALID_BASE32_CHAR",
-  // 严格 base32 专用：归一化后尾长 ∉ {0,2,4,5,7}，或末尾填充位非 0（宽松模式静默补 0）
+  // 严格 base32 专用：归一化后尾长 ∉ {0,2,4,5,7}，或末尾填充位非 0（宽松模式静默补 0）；
+  // 单字符（解码后 0 字节）两种模式都报 SECRET_TOO_SHORT，不随 strict 开关改变语义
   INVALID_BASE32_PADDING: "INVALID_BASE32_PADDING",
   SECRET_TOO_SHORT: "SECRET_TOO_SHORT",
   // 仅用于 { minSecretBits } 强度校验
   SECRET_TOO_WEAK: "SECRET_TOO_WEAK",
-  // Secret.generate(bytes) / 平台随机源：bytes 不是 [1, 4096] 整数
+  // Secret.generate 长度越界；平台随机源：bytes 不是 [1, 4096] 整数
   INVALID_SECRET_LENGTH: "INVALID_SECRET_LENGTH",
   // minSecretBits 不是非负安全整数（参数错误；密钥本身强度不足才是 SECRET_TOO_WEAK）
   INVALID_MIN_SECRET_BITS: "INVALID_MIN_SECRET_BITS",
@@ -45,7 +46,8 @@ export const OtpErrorCode = {
   INVALID_COUNTER: "INVALID_COUNTER",
   // 仅用于时间戳（epoch ms）
   INVALID_TIMESTAMP: "INVALID_TIMESTAMP",
-  // clockOffsetMs 非安全整数，或 syncClockOffset 的 delta 非安全整数 / 累加结果超出安全整数
+  // clockOffsetMs 非安全整数；syncClockOffset 的 delta 非安全整数 / 累加结果超出安全整数；
+  // 或 TOTP 的 timestamp + clockOffsetMs 叠加后超出安全整数
   INVALID_CLOCK_OFFSET: "INVALID_CLOCK_OFFSET",
   INVALID_WINDOW: "INVALID_WINDOW",
   INVALID_TOKEN: "INVALID_TOKEN",

@@ -14,7 +14,8 @@ export function hmac(
   // 密钥长于块大小时先哈希到摘要长度（RFC 2104 §2）
   const effectiveKey = key.length > blockSize ? hash(key) : key;
 
-  // 直接按位写入 ipad / opad，省掉一次 keyBlock 分配与拷贝（热路径：verify 窗口扫描 × 2）。
+  // 直接按位写入 ipad / opad：省掉 keyBlock 的 set() 拷贝与一趟二次遍历
+  // （热路径：verify 窗口扫描里每个候选一次 HMAC）。
   const inner = new Uint8Array(blockSize + message.length);
   const outerPad = new Uint8Array(blockSize);
   for (let i = 0; i < blockSize; i++) {

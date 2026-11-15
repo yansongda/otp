@@ -24,7 +24,6 @@ import type { Secret } from "./secret";
 export class TOTP {
   private readonly _provider: HmacProvider;
   private readonly _secret: Secret;
-  private readonly _key: Uint8Array;
   private readonly _algorithm: AlgorithmName;
   private readonly _digits: number;
   private readonly _period: number;
@@ -59,7 +58,6 @@ export class TOTP {
 
     this._provider = provider === undefined ? requireHmac() : provider;
     this._secret = resolved.secret;
-    this._key = resolved.key;
     this._algorithm = resolved.algorithm;
     this._digits = resolved.digits;
     this._period = period;
@@ -73,16 +71,34 @@ export class TOTP {
     return {
       algorithm: this._algorithm,
       digits: this._digits,
-      key: this._key,
+      // 每次公开调用取一份临时副本：唯一事实源是 Secret._bytes，
+      // 不在实例里再存一份长期密钥，也不让 provider 摸到跨调用共享的可写数组。
+      key: this._secret.bytes,
     };
   }
 
-  /** 所有时间入口统一：缺省取当前时刻，显式传入也叠加时钟偏移。 */
+  /**
+   * 所有时间入口统一：缺省取当前时刻，显式传入也叠加时钟偏移。
+   *
+   * 校验的是「入参」与「叠加结果」两段，而不是只看和：
+   * - 显式 timestamp 必须是非负安全整数（与 INVALID_TIMESTAMP 口径一致，不被偏移掩盖）；
+   * - 叠加偏移后越界属偏移配置问题，抛 INVALID_CLOCK_OFFSET，
+   *   避免把合法入参（如 MAX_SAFE_INTEGER）误报成时间戳非法。
+   */
   private effectiveTs(timestampMs?: number): number {
-    return (
+    if (
+      timestampMs !== undefined &&
+      (!Number.isSafeInteger(timestampMs) || timestampMs < 0)
+    ) {
+      otpFail("INVALID_TIMESTAMP");
+    }
+    const effective =
       (timestampMs === undefined ? Date.now() : timestampMs) +
-      this._clockOffsetMs
-    );
+      this._clockOffsetMs;
+    if (!Number.isSafeInteger(effective)) {
+      otpFail("INVALID_CLOCK_OFFSET");
+    }
+    return effective;
   }
 
   /** 生成验证码；timestampMs 缺省当前时刻。 */
