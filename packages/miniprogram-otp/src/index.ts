@@ -65,9 +65,15 @@ export type Secret = CoreSecret;
 export const Secret: typeof CoreSecret = CoreSecret;
 
 export const OTPAuthURI: {
+  // options 允许 null：JS 调用方 JSON.parse("null") 时等价于未传（core 侧已 fail-closed）
   parse(uri: string, options?: ParseOptions | null): OtpAuthParams;
   build(params: OtpAuthParams): string;
-} = CoreOTPAuthURI as unknown as {
-  parse(uri: string, options?: ParseOptions | null): OtpAuthParams;
-  build(params: OtpAuthParams): string;
+} = {
+  parse(uri: string, options?: ParseOptions | null): OtpAuthParams {
+    // core 返回 type/algorithm 为 string；仅此处做一次返回值投影到平台 DTO
+    return CoreOTPAuthURI.parse(uri, options) as OtpAuthParams;
+  },
+  build(params: OtpAuthParams): string {
+    return CoreOTPAuthURI.build(params);
+  },
 };

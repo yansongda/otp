@@ -102,6 +102,32 @@ describe("platform barrel", () => {
     expect(params.period).toBe(60);
     expect(params.issuer).toBe("ACME");
   });
+  it("OTPAuthURI label round-trips without phantom account", () => {
+    // 规范里无原始冒号的 label 就是 account：issuer-only 不得凭空多出 account；
+    // account 内的冒号编码为 %3A 后必须按整体还原。
+    const issuerOnly = OTPAuthURI.build({
+      type: OtpType.TOTP,
+      secret: "JBSWY3DPEHPK3PXP",
+      algorithm: OtpAlgorithm.SHA1,
+      digits: 6,
+      issuer: "ACME",
+    });
+    const parsedIssuerOnly = OTPAuthURI.parse(issuerOnly);
+    expect(parsedIssuerOnly.issuer).toBe("ACME");
+    expect(parsedIssuerOnly.account).toBeUndefined();
+
+    const accountColon = OTPAuthURI.build({
+      type: OtpType.TOTP,
+      secret: "JBSWY3DPEHPK3PXP",
+      algorithm: OtpAlgorithm.SHA1,
+      digits: 6,
+      account: "a:b",
+    });
+    const parsedAccountColon = OTPAuthURI.parse(accountColon);
+    expect(parsedAccountColon.account).toBe("a:b");
+    expect(parsedAccountColon.issuer).toBeUndefined();
+  });
+
   it("errorCodes come from core and stay in sync", () => {
     // 平台不再手抄码表：取值集合由 @yansongda/otp-core 唯一提供
     expect(Object.keys(OtpErrorCode).length).toBe(22);
@@ -199,6 +225,33 @@ describe("platform barrel", () => {
     expect(
       thrownCode(() => totp.verify("287082", { timestamp: 59000, window: 11 })),
     ).toBe("INVALID_WINDOW");
+  });
+
+  it("non-string inputs fail closed instead of throwing TypeError", () => {
+    // 小程序是 JS 调用方：secret / token / issuer 类型不对时必须是 OtpError + 可分类码，
+    // 不得漏「input.replace is not a function」这类原生 TypeError
+    expect(thrownCode(() => Secret.fromBase32(123 as unknown as string))).toBe(
+      "INVALID_SECRET_CONTAINER",
+    );
+    expect(
+      thrownCode(() =>
+        new TOTP({ secret: "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ" }).verify(
+          undefined as unknown as string,
+        ),
+      ),
+    ).toBe("INVALID_TOKEN");
+    // 孤立代理字符（如被 slice 截断的 emoji）→ INVALID_OTPAUTH_URI（不是 URIError）
+    expect(
+      thrownCode(() =>
+        OTPAuthURI.build({
+          type: OtpType.TOTP,
+          secret: "JBSWY3DPEHPK3PXP",
+          algorithm: OtpAlgorithm.SHA1,
+          digits: 6,
+          account: "👨‍👩‍👧".slice(0, 1),
+        }),
+      ),
+    ).toBe("INVALID_OTPAUTH_URI");
   });
 
   it("null options behave like undefined", () => {

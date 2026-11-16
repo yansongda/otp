@@ -134,7 +134,7 @@ try {
 | `secret.bytes` / `secret.byteLength` / `secret.bitLength`                                   | Byte view (copy) / byte length / bit length                                                                         |
 | `secret.toJSON(): string`                                                                   | Always `[REDACTED]`; `JSON.stringify` is safe                                                                       |
 | `OTPAuthURI.parse(uri: string, options?: ParseOptions): OtpAuthParams`                      | Parse `otpauth://`; unknown query parameters and type-inapplicable ones (TOTP `counter`, HOTP `period`) are ignored |
-| `OTPAuthURI.build(params: OtpAuthParams): string`                                           | Build canonical `otpauth://`                                                                                        |
+| `OTPAuthURI.build(params: OtpAuthParams): string`                                           | Build canonical `otpauth://`; the label is derived from `account` (omitted when empty)                              |
 | `interface ParseOptions { strict?: boolean }`                                               | Shared by `Secret.fromBase32` and `OTPAuthURI.parse`                                                                |
 | `OtpAlgorithm` / `OtpType`                                                                  | String-valued constants; literals such as `"SHA1"` also work                                                        |
 | `class OtpError extends Error { readonly code: OtpErrorCode; readonly codeString: string }` | Stable code for branching (`codeString` keeps the raw code when unmapped)                                           |

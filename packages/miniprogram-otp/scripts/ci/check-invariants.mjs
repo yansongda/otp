@@ -18,8 +18,8 @@ const CORE_ERRORS = "../core/src/errors.ts";
 const SECRET = "../core/src/secret.ts";
 
 const BASELINE = {
-  // 算法测试已迁至 packages/core（296 条）；本包只保留平台层契约测试
-  testDeclarations: 17,
+  // 算法测试已迁至 packages/core（303 条）；本包只保留平台层契约测试
+  testDeclarations: 19,
   testFiles: 1,
   errorCodeMembers: 22,
 };
@@ -267,6 +267,17 @@ check("原型修复只在原型退化时执行（core / mp 条件一致）", () 
     );
   }
   return "core / mp 两处条件一致";
+});
+
+check("OTPAuthURI 类型桥不使用 as unknown as", () => {
+  // 整体断言会吞掉 core build/parse 的签名漂移；只允许对 parse 返回值做一次投影
+  const text = stripComments(readText(BARREL));
+  if (/CoreOTPAuthURI\s+as\s+unknown\s+as/.test(text)) {
+    throw new Error(
+      "src/index.ts 用 as unknown as 整体断言 OTPAuthURI；请改为显式 wrapper",
+    );
+  }
+  return "显式 wrapper（parse 仅返回值投影）";
 });
 
 check("零运行时依赖", () => {

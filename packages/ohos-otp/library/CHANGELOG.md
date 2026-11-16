@@ -12,6 +12,9 @@
 - `Secret.fromBytes` 非字节容器 → `INVALID_SECRET_CONTAINER`；`ArrayBuffer` 入参改为真正的拷贝语义
 - `OTPAuthURI.parse` 的 `digits` / `period` / `counter` 只认纯十进制整数；`OTPAuthURI.build`
   对非法参数改为抛错
+- `OTPAuthURI` label 语义：无原始冒号的 label 一律视为 account；仅当 query `issuer` 与 label
+  前缀一致时才把首个 `%3A` 当历史分隔符（仅有 label 前缀的旧式 URI 会丢 issuer）
+- `build` / `toURI()` 在 `account` 为空时不再把 issuer 写进 label
 - `HOTP.verify` 不再接受 `timestamp`、`TOTP.verify` 不再接受 `counter`（对象字面量会编译失败）
 - `OtpError.name` 由 `'Error'` 改为 `'OtpError'`（provider 错误契约，三端一致）
 - 非字符串入参不再漏原生 `TypeError`：`secret` → `INVALID_SECRET_CONTAINER`、`token` →
@@ -53,6 +56,9 @@
 - `syncClockOffset(1.5)` 改报 `INVALID_CLOCK_OFFSET`（此前误用 `INVALID_WINDOW`）
 - strict 单字符 secret 与宽松模式同码（`SECRET_TOO_SHORT`）
 - epoch 0（1970-01-01）为合法时间戳
+- `OTPAuthURI.parse` 的 `issuer=` 空 query 值按「未提供」处理，不再抹掉 label 里的合法 issuer
+- `OTPAuthURI.build` / `toURI()` 不再漏原生 `URIError`：孤立代理字符收敛为 `INVALID_OTPAUTH_URI`
+- 历史 `%3A` 分隔符识别改为大小写不敏感扫描：小写后会变长的字符（`İ`）不再导致下标错位、丢 issuer
 
 ## 1.1.1 - 2026-11-12
 
