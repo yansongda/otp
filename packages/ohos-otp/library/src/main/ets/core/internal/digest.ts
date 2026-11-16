@@ -1,4 +1,4 @@
-// AUTO-GENERATED from packages/core/src/internal/digest.ts (core@1ccc990). DO NOT EDIT. Run: bun run sync:core
+// AUTO-GENERATED from packages/core/src/internal/digest.ts (core@8a0ca9b). DO NOT EDIT. Run: bun run sync:core
 /**
  * 摘要长度（字节）→ engine 用它校验 provider 返回值是否与算法匹配。
  *

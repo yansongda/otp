@@ -1,4 +1,4 @@
-// AUTO-GENERATED from packages/core/src/otpauth-uri.ts (core@1ccc990). DO NOT EDIT. Run: bun run sync:core
+// AUTO-GENERATED from packages/core/src/otpauth-uri.ts (core@8a0ca9b). DO NOT EDIT. Run: bun run sync:core
 /**
  * OTPAuthURI：otpauth:// URI 解析与生成（零平台依赖）。
  * 遵循 Google Authenticator Key URI Format（IANA Provisional #13829）；
@@ -23,6 +23,39 @@ function decodePart(raw: string): string {
   } catch {
     return raw;
   }
+}
+
+/**
+ * 百分号编码；`encodeURIComponent` 遇到孤立代理字符（未配对的 UTF-16 半字）会抛原生 `URIError`。
+ * 公开契约是「一切失败均抛 OtpError」（`toURI()` 也走这里），因此收敛为 `INVALID_OTPAUTH_URI`
+ * ——该 URI 无法被任何扫码方还原，属构建期非法输入，而不是 crypto 或 base32 的问题。
+ */
+function encodePart(raw: string): string {
+  try {
+    return encodeURIComponent(raw);
+  } catch {
+    return otpFail("INVALID_OTPAUTH_URI");
+  }
+}
+
+/**
+ * 不区分大小写查找首个 `%3A` 的下标；找不到返回 -1。
+ * 不用 `labelRaw.toLowerCase().indexOf("%3a")`：部分字符（`İ`、`ẞ`）小写后会改变长度，
+ * 使下标与原始串错位，历史分隔符识别随之失效（会退化保留完整 account，不会截断，但会丢 issuer）。
+ */
+function indexOfPercent3A(input: string): number {
+  for (let i = 0; i + 2 < input.length; i++) {
+    if (input.charAt(i) !== "%") {
+      continue;
+    }
+    if (
+      input.charAt(i + 1) === "3" &&
+      input.charAt(i + 2).toLowerCase() === "a"
+    ) {
+      return i;
+    }
+  }
+  return -1;
 }
 
 /**
@@ -53,8 +86,14 @@ export class OTPAuthURI {
    * 无原始冒号的 label 一律视为 account；仅当 query issuer 存在且与 label 前缀一致时，
    * 才把历史形式 `issuer%3Aaccount` 的首个 %3A 当作分隔符（否则不猜，保留完整 account）。
    * options.strict === true 时 secret 必须是规范 base32，否则 INVALID_BASE32_PADDING。
+   * 入参不是字符串（JS 调用方）→ INVALID_OTPAUTH_URI，不漏原生 TypeError。
    */
   static parse(uri: string, options?: ParseOptions): OtpAuthParams {
+    // ⓪ 先判容器：TS 类型只约束编译期，`uri.toLowerCase()` 在非字符串入参上会漏 TypeError
+    if (typeof uri !== "string") {
+      otpFail("INVALID_OTPAUTH_URI");
+    }
+
     // ① scheme 大小写不敏感
     const prefix = "otpauth://";
     if (uri.toLowerCase().indexOf(prefix) !== 0) {
@@ -122,7 +161,7 @@ export class OTPAuthURI {
       // 同时存在、且与 label 前缀一致时，才能安全地把它当分隔符。否则宁可保留完整 account，
       // 也不猜——build 产物把 account 内的冒号编码为 %3A，猜错会把 account 截断。
       const issuerQueryForLabel = params.get("issuer");
-      const pctIndex = labelRaw.toLowerCase().indexOf("%3a");
+      const pctIndex = indexOfPercent3A(labelRaw);
       if (
         pctIndex !== -1 &&
         issuerQueryForLabel !== undefined &&
@@ -226,6 +265,8 @@ export class OTPAuthURI {
    * account 为空时整个 label 省略（不把 issuer 写进 label）。algorithm 始终输出，
    * digits 仅 !== 6、period 仅 TOTP 且 !== 30 时输出（与 GA 二维码惯例一致），HOTP 始终输出 counter。
    * secret 先经 Base32 规范化（与 parse 对称）；非法 base32 抛对应错误码。
+   * 非字符串 `secret`（JS 调用方）→ INVALID_SECRET_CONTAINER；非字符串 / 无法百分号编码的
+   * `issuer`·`account`（含孤立代理字符）→ INVALID_OTPAUTH_URI，绝不静默写成 "null"。
    *
    * 校验与 parse 对称：build 的产物必须能被 parse 接受，否则下游扫码方会拿到非法 URI。
    * params.label 是 parse 的回填字段（原始 label），build 一律由 issuer/account 派生，忽略该字段。
@@ -236,6 +277,10 @@ export class OTPAuthURI {
     if (type !== "totp" && type !== "hotp") {
       otpFail("UNSUPPORTED_OTPAUTH_TYPE");
     }
+    // 运行时（JS 调用方）可能传非字符串：先判容器再 decode，避免漏原生 TypeError
+    if (typeof params.secret !== "string") {
+      otpFail("INVALID_SECRET_CONTAINER");
+    }
     const secret = encode(decode(params.secret));
     if (!isValidAlgorithm(params.algorithm)) {
       otpFail("INVALID_ALGORITHM");
@@ -245,6 +290,10 @@ export class OTPAuthURI {
     }
     const issuer = params.issuer === undefined ? "" : params.issuer;
     const account = params.account === undefined ? "" : params.account;
+    // 非字符串（如 null）绝不能静默变成 "null" 写进 URI：它属于 label 参数非法
+    if (typeof issuer !== "string" || typeof account !== "string") {
+      otpFail("INVALID_OTPAUTH_URI");
+    }
 
     // label：仅当 account 非空时输出（issuer:account 百分号编码、分隔冒号保留）。
     // account 为空时不把 issuer 写进 label：规范里无原始冒号的 label 就是 account，
@@ -252,15 +301,15 @@ export class OTPAuthURI {
     let label = "";
     if (account !== "") {
       if (issuer !== "") {
-        label += `${encodeURIComponent(issuer)}:`;
+        label += `${encodePart(issuer)}:`;
       }
-      label += encodeURIComponent(account);
+      label += encodePart(account);
     }
 
     const parts: string[] = [];
     parts.push(`secret=${secret}`);
     if (issuer !== "") {
-      parts.push(`issuer=${encodeURIComponent(issuer)}`);
+      parts.push(`issuer=${encodePart(issuer)}`);
     }
     parts.push(`algorithm=${params.algorithm}`);
     if (params.digits !== DEFAULT_DIGITS) {

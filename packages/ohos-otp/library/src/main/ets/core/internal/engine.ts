@@ -1,4 +1,4 @@
-// AUTO-GENERATED from packages/core/src/internal/engine.ts (core@1ccc990). DO NOT EDIT. Run: bun run sync:core
+// AUTO-GENERATED from packages/core/src/internal/engine.ts (core@8a0ca9b). DO NOT EDIT. Run: bun run sync:core
 /**
  * 编排层：counter → code 全链路（纯函数，接收注入 provider，零平台依赖）。
  * 取模只在 digits.format 做一次；verify 扫完全部候选后才返回首个命中 delta（恒定时间）。
@@ -50,9 +50,12 @@ export function generate(
   return formatDigits(truncateApply(digest), params.digits);
 }
 
-/** token 必须为纯数字且非空；逐字符校验，避免正则。 */
+/** token 必须为纯数字且非空；逐字符校验，避免正则。
+ * 先判容器：JS 调用方可能传 `undefined` / `null` / 数字，同样归为 INVALID_TOKEN，
+ * 不露原生 TypeError（`token.length` 在非字符串上是 undefined / 抛错）。
+ */
 function isNumericToken(token: string): boolean {
-  if (token.length === 0) {
+  if (typeof token !== "string" || token.length === 0) {
     return false;
   }
   for (let i = 0; i < token.length; i++) {
@@ -80,6 +83,7 @@ export function verify(
 ): number | null {
   // 校验顺序遵循 errors.ts 的优先级：配置类（counter / window）先于输入类（token），
   // 避免调用方写错参数时被用户输入错误掩盖。
+  // token 的非字符串形态（JS 调用方）与格式非数字同归 INVALID_TOKEN（isNumericToken 内先判容器）。
   if (!isSafeCounter(counter)) {
     otpFail("INVALID_COUNTER");
   }
