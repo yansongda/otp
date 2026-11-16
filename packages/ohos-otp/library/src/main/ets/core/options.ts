@@ -1,4 +1,4 @@
-// AUTO-GENERATED from packages/core/src/options.ts (core@5fb4243-dirty). DO NOT EDIT. Run: bun run sync:core
+// AUTO-GENERATED from packages/core/src/options.ts (core@9f7b962). DO NOT EDIT. Run: bun run sync:core
 /**
  * 对外 DTO 与内部常量。
  *
