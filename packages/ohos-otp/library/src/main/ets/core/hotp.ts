@@ -1,4 +1,4 @@
-// AUTO-GENERATED from packages/core/src/hotp.ts (core@9f7b962-dirty). DO NOT EDIT. Run: bun run sync:core
+// AUTO-GENERATED from packages/core/src/hotp.ts (core@1ccc990). DO NOT EDIT. Run: bun run sync:core
 /**
  * HOTP（RFC 4226）公开类。默认 provider 经 requireHmac() 取用。
  */

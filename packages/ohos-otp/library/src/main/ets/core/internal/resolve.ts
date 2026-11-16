@@ -1,4 +1,4 @@
-// AUTO-GENERATED from packages/core/src/internal/resolve.ts (core@9f7b962-dirty). DO NOT EDIT. Run: bun run sync:core
+// AUTO-GENERATED from packages/core/src/internal/resolve.ts (core@1ccc990). DO NOT EDIT. Run: bun run sync:core
 /**
  * 构造期共享解析：secret → algorithm → digits → minSecretBits（HOTP / TOTP 共用）。
  *
