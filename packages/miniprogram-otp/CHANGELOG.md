@@ -34,6 +34,8 @@
 - `OtpError.codeString`：保留 core 传入的原始错误码字符串（平台码表是强类型投影，
   未来新增码在枚举尚未同步时仍可拿到真实值）
 - `OtpErrorCode` 取值由 core 唯一提供（barrel 导出），平台层不再手抄码表
+- provider 契约写进 `HmacProvider` / `RandomSource` 的接口注释：`key` / `message` 只读，
+  不得修改或跨调用保留引用（库每次公开调用传一份密钥副本）
 - 新错误码 `INVALID_SECRET_CONTAINER`（secret 容器类型不对）、`INVALID_SECRET_LENGTH`
   （`Secret.generate` 长度越界）、`INVALID_MIN_SECRET_BITS`（`minSecretBits` 参数非法）、
   `INVALID_CLOCK_OFFSET`（时钟偏移参数非法）
@@ -62,6 +64,15 @@
 
 ### Fixed
 
+- provider 错误契约：失败必须抛 `name === "OtpError"` 的错误，engine 只把**未知**错误收敛为
+  `CRYPTO_FAILED`（此前任意 provider 异常原样透传，调用方拿不到 `OtpError`）；provider 的
+  非 `Uint8Array` 返回值同样收敛
+- provider 摘要长度必须与算法匹配（SHA1=20 / SHA256=32 / SHA512=64）：不匹配统一
+  `CRYPTO_FAILED`（此前 SHA256/512 返回 20 字节摘要会被静默截断）
+- 随机源返回值类型与长度校验：非 `Uint8Array`（字符串 / array-like / `null`）或长度不符
+  一律 `CRYPTO_FAILED`（此前字符串可静默产出 0 字节空密钥，`null` 漏 `TypeError`）
+- 纯 JS provider 的算法查表改用 switch：`HASH_SPECS["constructor"]` 会命中
+  `Object.prototype` 继承键，把「算法不被接受」错报成 `CRYPTO_FAILED`
 - `Secret.fromBytes(ArrayBuffer)` 改为拷贝语义（原先是内存别名）：调用方清零 / 改写原
   buffer 不再影响实例密钥
 - `Secret.fromBytes` / `fromBase32` 的容器类型在转换**之前**判定：字符串 / array-like

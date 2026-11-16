@@ -47,6 +47,12 @@
 
 #### Fixed
 
+- provider 错误契约：失败必须抛 `name === 'OtpError'` 的错误，engine 只把未知错误收敛为
+  `CRYPTO_FAILED`；已知错误码原样上抛（保留 `INVALID_ALGORITHM` 等精确码）
+- provider 摘要长度必须与算法匹配（SHA1=20 / SHA256=32 / SHA512=64），不匹配统一 `CRYPTO_FAILED`
+- 随机源返回值非 `Uint8Array` / 长度不符 / 抛出非 `OtpError` 一律收敛为 `CRYPTO_FAILED`
+- ohos `CryptoSource`：未知算法不再静默降级 SHA1，改抛 `INVALID_ALGORITHM`
+  （与 pure-js provider 对齐）；`toMacAlgName` 移到 `try` 外，避免被自身 catch 二次包裹
 - `Secret.fromBytes(ArrayBuffer)` 改为拷贝，调用方清零 / 改写原 buffer 不再影响实例密钥
 - `Secret.fromBytes` / `fromBase32` 的容器类型在转换之前判定：字符串 / array-like 不再被
   静默变成 0 字节或全零密钥

@@ -20,7 +20,7 @@ const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 
 const BASELINE = {
   localTestCases: 287, // library/src/test 的 it( 数量（PC Local Test）
-  deviceTestCases: 37, // library/src/ohosTest 的 it( 数量（真实 crypto，需设备）
+  deviceTestCases: 38, // library/src/ohosTest 的 it( 数量（真实 crypto，需设备）
   errorCodeMembers: 22, // OtpErrorCode 成员数：取值冻结，仅允许显式新增（现含 INVALID_SECRET_CONTAINER / INVALID_MIN_SECRET_BITS / INVALID_CLOCK_OFFSET / INVALID_SECRET_LENGTH）
 };
 

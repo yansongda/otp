@@ -11,7 +11,7 @@ import { cryptoFramework } from '@kit.CryptoArchitectureKit';
 import { HmacProvider, RandomSource, registerHmac, registerRandom } from '../core/crypto';
 import { otpFail } from '../core/errors';
 
-/** 将算法名映射为 cryptoFramework 的 HMAC 算法名。 */
+/** 将算法名映射为 cryptoFramework 的 HMAC 算法名；未知算法必须失败，绝不静默降级。 */
 function toMacAlgName(algorithm: string): string {
   switch (algorithm) {
     case 'SHA1':
@@ -21,7 +21,8 @@ function toMacAlgName(algorithm: string): string {
     case 'SHA512':
       return 'SHA512';
     default:
-      return 'SHA1';
+      // 静默回退 SHA1 会让调用方以为在用更强的算法；未知算法是“算法不被接受”
+      return otpFail('INVALID_ALGORITHM');
   }
 }
 
@@ -33,10 +34,13 @@ function toMacAlgName(algorithm: string): string {
  */
 export class CryptoFrameworkHmac implements HmacProvider {
   sign(algorithm: string, key: Uint8Array, message: Uint8Array): Uint8Array {
+    // 未知算法在 try 外抛出：它是参数错误而不是 platform crypto 异常，
+    // 放进来会被本方法的 catch 再包一次。
+    const macAlg: string = toMacAlgName(algorithm);
     try {
       const gen = cryptoFramework.createSymKeyGenerator('HMAC');
       const symKey = gen.convertKeySync({ data: key });
-      const mac = cryptoFramework.createMac(toMacAlgName(algorithm));
+      const mac = cryptoFramework.createMac(macAlg);
       mac.initSync(symKey);
       mac.updateSync({ data: message });
       return new Uint8Array(mac.doFinalSync().data);

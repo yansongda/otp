@@ -3,7 +3,9 @@
  * 默认 provider 由 src/index 的 installPureJsHmac() 注册。
  */
 import { describe, expect, it } from "bun:test";
+import type { HmacProvider } from "../../src/crypto";
 import { HOTP } from "../../src/index";
+import { PureJsHmac } from "../../src/pure-js/pure-js-hmac";
 import { expectCode } from "./helpers";
 import { BOUNDARY_COUNTERS, RFC4226_SHA1_6DIGIT, SEEDS } from "./vectors";
 
@@ -265,5 +267,22 @@ describe("hotp", () => {
       () => HOTP.fromURI(`otpauth://totp/alice?secret=${SEEDS.SHA1_BASE32}`),
       "UNSUPPORTED_OTPAUTH_TYPE",
     );
+  });
+
+  it("mutatingProvider_cannotCorruptLaterCalls", () => {
+    // provider 契约（crypto.ts）：key / message 只读。库每次公开调用给一份临时副本，
+    // 不在实例里缓存可被 provider 改写的密钥；这里故意在算完后把入参密钥清零。
+    const pure = new PureJsHmac();
+    const mutating: HmacProvider = {
+      sign(algorithm, key, message) {
+        const digest = pure.sign(algorithm, key, message);
+        key.fill(0);
+        return digest;
+      },
+    };
+    const h = new HOTP({ secret: SEEDS.SHA1_BASE32, counter: 0 }, mutating);
+    expect(h.generate()).toBe("755224");
+    // 第二次调用仍必须得到 RFC 4226 向量：密钥必须是每次从 Secret 取的新副本
+    expect(h.generate()).toBe("755224");
   });
 });

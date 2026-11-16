@@ -166,7 +166,7 @@ try {
 | `SECRET_TOO_WEAK`          | `minSecretBits` 校验失败（仅强度问题）                                                                                                                                         |
 | `INVALID_SECRET_LENGTH`    | `Secret.generate(bytes)` 的 bytes 非 [1,4096] 整数（平台随机源长度越界同码）                                                                                                   |
 | `INVALID_MIN_SECRET_BITS`  | `minSecretBits` 非非负安全整数（fail-closed，不静默关闭校验）                                                                                                                  |
-| `INVALID_ALGORITHM`        | 非 SHA1 / SHA256 / SHA512                                                                                                                                                      |
+| `INVALID_ALGORITHM`        | 非 SHA1 / SHA256 / SHA512（含 provider 的未知算法：不静默降级）                                                                                                                |
 | `INVALID_DIGITS`           | 非 6 / 7 / 8                                                                                                                                                                   |
 | `INVALID_PERIOD`           | 周期不是正安全整数                                                                                                                                                             |
 | `INVALID_T0`               | `t0` 不是非负安全整数                                                                                                                                                          |
@@ -175,7 +175,7 @@ try {
 | `INVALID_CLOCK_OFFSET`     | `clockOffsetMs` 非安全整数、`syncClockOffset` delta 非安全整数/溢出，或偏移使 `timestamp`/当前时刻变为负值或超出安全整数范围                                                   |
 | `INVALID_WINDOW`           | window 不是 [0, 10]（`MAX_VERIFY_WINDOW`）内的整数                                                                                                                             |
 | `INVALID_TOKEN`            | token 不是字符串、非纯数字，或长度不等于 digits                                                                                                                                |
-| `CRYPTO_FAILED`            | 内部 HMAC 失败（原生 crypto 异常）；不泄漏密钥                                                                                                                                 |
+| `CRYPTO_FAILED`            | provider 失败：原生 crypto 异常、摘要长度与算法不匹配、随机源抛出非 `OtpError` 或返回非 `Uint8Array` / 长度不符；消息固定，不泄漏密钥                                          |
 | `CRYPTO_NOT_INITIALIZED`   | 未注册 provider；应从包 barrel 导入                                                                                                                                            |
 | `INVALID_OTPAUTH_URI`      | URI 不是字符串、不以 `otpauth://` 开头（大小写不敏感），或 build 的 issuer·account 非字符串 / 无法百分号编码                                                                   |
 | `UNSUPPORTED_OTPAUTH_TYPE` | 类型不是 `totp` / `hotp`（parse 与 build）                                                                                                                                     |

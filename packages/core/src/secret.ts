@@ -67,7 +67,24 @@ export class Secret {
     if (!Number.isSafeInteger(bytes) || bytes < 1 || bytes > 4096) {
       otpFail("INVALID_SECRET_LENGTH");
     }
-    return new Secret(new Uint8Array(requireRandom().random(bytes)));
+    let generated: Uint8Array;
+    try {
+      generated = requireRandom().random(bytes);
+    } catch (error) {
+      // 随机源契约：失败必须抛 name === "OtpError" 的错误（core otpFail / 平台 OtpError）；
+      // 其余异常（原生 TypeError 等）视为实现缺陷，与 HmacProvider 同一收敛策略。
+      if (error instanceof Error && error.name === "OtpError") {
+        throw error;
+      }
+      otpFail("CRYPTO_FAILED");
+    }
+    // 先判类型再取 length：字符串 / array-like 的 length 可能「恰好合法」，
+    // 而 new Uint8Array(字符串) 会得到 0 字节（空密钥，HMAC 退化为全零密钥）；
+    // null / undefined 则连 .length 都取不到，会漏出 TypeError 而不是 OtpError。
+    if (!(generated instanceof Uint8Array) || generated.length !== bytes) {
+      otpFail("CRYPTO_FAILED");
+    }
+    return new Secret(new Uint8Array(generated));
   }
 
   /** 字节视图：返回拷贝，外部改动不影响内部。 */

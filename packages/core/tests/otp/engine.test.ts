@@ -109,6 +109,82 @@ describe("engine", () => {
     expect(verify(provider, params6, "287082", 1, 10)).toBe(0);
   });
 
+  it("generate_providerFailure_normalizedToCryptoFailed", () => {
+    // 非 OtpError 的任意值必须收敛为 CRYPTO_FAILED，不得穿透原始错误类型
+    const broken = {
+      sign(): Uint8Array {
+        throw new Error("native hmac exploded");
+      },
+    };
+    expectCode(() => generate(broken, params6, 0), "CRYPTO_FAILED");
+  });
+
+  it("generate_providerOtpError_passesThrough", () => {
+    // 平台/core 的 OtpError（name 固定）属“已知错误”：保留精确码并原样上抛
+    const providerError = new Error("INVALID_ALGORITHM");
+    providerError.name = "OtpError";
+    const broken = {
+      sign(): Uint8Array {
+        throw providerError;
+      },
+    };
+    let thrown: unknown = null;
+    try {
+      generate(broken, params6, 0);
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBe(providerError);
+  });
+
+  it("generate_providerNonError_normalizedToCryptoFailed", () => {
+    // provider 抛字符串 / null 等非 Error 值同样收敛
+    const broken = {
+      sign(): Uint8Array {
+        throw "boom";
+      },
+    };
+    expectCode(() => generate(broken, params6, 0), "CRYPTO_FAILED");
+  });
+
+  it("generate_providerWrongReturnType_normalizedToCryptoFailed", () => {
+    // provider 违反返回值契约（非 Uint8Array）→ CRYPTO_FAILED，不越界读
+    const broken = {
+      sign(): Uint8Array {
+        return null as unknown as Uint8Array;
+      },
+    };
+    expectCode(() => generate(broken, params6, 0), "CRYPTO_FAILED");
+  });
+
+  it("generate_providerShortDigest_throws", () => {
+    // provider 违反摘要长度契约（< 20 字节）→ CRYPTO_FAILED，不越界读
+    const shortDigest = {
+      sign(): Uint8Array {
+        return new Uint8Array(16);
+      },
+    };
+    expectCode(() => generate(shortDigest, params6, 0), "CRYPTO_FAILED");
+  });
+
+  it("generate_providerDigestLengthMustMatchAlgorithm", () => {
+    // 摘要长度必须与算法匹配（SHA1=20 / SHA256=32 / SHA512=64）；否则截断会读到缺位
+    const wrongSha1 = {
+      sign(): Uint8Array {
+        return new Uint8Array(32);
+      },
+    };
+    expectCode(() => generate(wrongSha1, params6, 0), "CRYPTO_FAILED");
+
+    const wrongSha256 = {
+      sign(): Uint8Array {
+        return new Uint8Array(20);
+      },
+    };
+    const params256 = { algorithm: "SHA256", digits: 6, key };
+    expectCode(() => generate(wrongSha256, params256, 0), "CRYPTO_FAILED");
+  });
+
   it("verify_nonStringToken_throwsInvalidToken", () => {
     // JS 调用方可能传 null / 数字：先判容器再取 length，不得漏原生 TypeError；
     // 归为 INVALID_TOKEN（token 格式非法），与「非纯数字 / 长度不符」同码

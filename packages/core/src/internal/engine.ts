@@ -7,6 +7,7 @@ import type { HmacProvider } from "../crypto";
 import { otpFail } from "../errors";
 import { MAX_VERIFY_WINDOW } from "../options";
 import { isSafeCounter, toBytes } from "./counter";
+import { digestLengthOf } from "./digest";
 import { format as formatDigits } from "./digits";
 import { constantTimeEquals } from "./time-step";
 import { apply as truncateApply } from "./truncate";
@@ -22,7 +23,29 @@ export function generate(
   params: EngineParams,
   counter: number,
 ): string {
-  const digest = provider.sign(params.algorithm, params.key, toBytes(counter));
+  const message = toBytes(counter);
+  let digest: Uint8Array;
+  try {
+    digest = provider.sign(params.algorithm, params.key, message);
+  } catch (error) {
+    // provider 契约：失败必须抛 name === "OtpError" 的错误（core otpFail / 平台 OtpError）。
+    // 已知错误原样上抛（保留 INVALID_ALGORITHM / CRYPTO_FAILED 等精确码）；
+    // 其他值（TypeError、字符串、null…）视为 provider 实现缺陷，统一收敛。
+    if (error instanceof Error && error.name === "OtpError") {
+      throw error;
+    }
+    otpFail("CRYPTO_FAILED");
+  }
+  if (!(digest instanceof Uint8Array)) {
+    // provider 违反返回值契约（非 Uint8Array）同样视为 crypto 层缺陷
+    otpFail("CRYPTO_FAILED");
+  }
+  const expectedDigestLength = digestLengthOf(params.algorithm);
+  if (expectedDigestLength === 0 || digest.length !== expectedDigestLength) {
+    // 摘要长度必须与算法匹配：长度不对时截断会读到缺位（静默产出错误码），
+    // 过短已在 truncate 内兜底，这里统一收敛为同一个错误码。
+    otpFail("CRYPTO_FAILED");
+  }
   return formatDigits(truncateApply(digest), params.digits);
 }
 
