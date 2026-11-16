@@ -598,4 +598,106 @@ describe("otpauth-uri", () => {
     expect(p.issuer).toBe("AC:ME");
     expect(p.account).toBeUndefined();
   });
+
+  it("parse_nonStringUri_failsClosed", () => {
+    // TS 类型只约束编译期：JS 调用方传数字 / null 时不得漏原生 TypeError
+    for (const bad of [123, null, undefined, {}]) {
+      expectCode(
+        () => OTPAuthURI.parse(bad as unknown as string),
+        "INVALID_OTPAUTH_URI",
+      );
+    }
+  });
+
+  it("build_nonStringSecret_failsClosed", () => {
+    // 非字符串 secret 属「secret 容器类型不对」，与 fromBase32 / fromBytes 同码
+    expectCode(
+      () =>
+        OTPAuthURI.build({
+          type: OtpType.TOTP,
+          secret: 123 as unknown as string,
+          algorithm: OtpAlgorithm.SHA1,
+          digits: 6,
+        }),
+      "INVALID_SECRET_CONTAINER",
+    );
+  });
+
+  it("build_nonStringIssuerOrAccount_failsClosed", () => {
+    // null 绝不得静默变成 "null" 写进 URI（issuer 与 account 两个位置都要拦）
+    expectCode(
+      () =>
+        OTPAuthURI.build({
+          type: OtpType.TOTP,
+          secret: "JBSWY3DPEHPK3PXP",
+          algorithm: OtpAlgorithm.SHA1,
+          digits: 6,
+          issuer: null as unknown as string,
+          account: "bob",
+        }),
+      "INVALID_OTPAUTH_URI",
+    );
+    expectCode(
+      () =>
+        OTPAuthURI.build({
+          type: OtpType.TOTP,
+          secret: "JBSWY3DPEHPK3PXP",
+          algorithm: OtpAlgorithm.SHA1,
+          digits: 6,
+          issuer: "ACME",
+          account: null as unknown as string,
+        }),
+      "INVALID_OTPAUTH_URI",
+    );
+  });
+
+  it("build_unencodableLabel_failsClosed", () => {
+    // 孤立代理字符（如被 slice 截断的 emoji）会让 encodeURIComponent 抛原生 URIError；
+    // 公开契约是「一切失败均抛 OtpError」，这里收敛为 INVALID_OTPAUTH_URI
+    expectCode(
+      () =>
+        OTPAuthURI.build({
+          type: OtpType.TOTP,
+          secret: "JBSWY3DPEHPK3PXP",
+          algorithm: OtpAlgorithm.SHA1,
+          digits: 6,
+          account: "👨‍👩‍👧".slice(0, 1),
+        }),
+      "INVALID_OTPAUTH_URI",
+    );
+    expectCode(
+      () =>
+        OTPAuthURI.build({
+          type: OtpType.TOTP,
+          secret: "JBSWY3DPEHPK3PXP",
+          algorithm: OtpAlgorithm.SHA1,
+          digits: 6,
+          issuer: "\uD800",
+        }),
+      "INVALID_OTPAUTH_URI",
+    );
+  });
+
+  it("parse_legacySeparator_survivesCaseExpandingChars", () => {
+    // 'İ' 小写后会多出一个组合字符（长度变化），旧实现用 toLowerCase 取下标会错位、\n    // 把历史分隔符识别失败；这里改用大小写不敏感的手工扫描，必须仍能切开
+    const p = OTPAuthURI.parse(
+      "otpauth://totp/%C4%B0%3Aacct%3Abob?secret=JBSWY3DPEHPK3PXP&issuer=%C4%B0",
+    );
+    expect(p.issuer).toBe("İ");
+    expect(p.account).toBe("acct:bob");
+  });
+
+  it("parse_inapplicableParamsAreIgnored", () => {
+    // type 不适用的参数被忽略（TOTP 的 counter / HOTP 的 period）；取值不影响结果
+    const totp = OTPAuthURI.parse(
+      "otpauth://totp/a?secret=JBSWY3DPEHPK3PXP&counter=42",
+    );
+    expect(totp.counter).toBeUndefined();
+    expect(totp.period).toBe(30);
+    const hotp = OTPAuthURI.parse(
+      "otpauth://hotp/a?secret=JBSWY3DPEHPK3PXP&period=60",
+    );
+    expect(hotp.period).toBeUndefined();
+    expect(hotp.counter).toBe(0);
+  });
 });

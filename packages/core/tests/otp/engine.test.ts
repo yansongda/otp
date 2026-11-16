@@ -184,4 +184,15 @@ describe("engine", () => {
     const params256 = { algorithm: "SHA256", digits: 6, key };
     expectCode(() => generate(wrongSha256, params256, 0), "CRYPTO_FAILED");
   });
+
+  it("verify_nonStringToken_throwsInvalidToken", () => {
+    // JS 调用方可能传 null / 数字：先判容器再取 length，不得漏原生 TypeError；
+    // 归为 INVALID_TOKEN（token 格式非法），与「非纯数字 / 长度不符」同码
+    for (const bad of [null, undefined, 123, {}]) {
+      expectCode(
+        () => verify(provider, params6, bad as unknown as string, 1, 0),
+        "INVALID_TOKEN",
+      );
+    }
+  });
 });

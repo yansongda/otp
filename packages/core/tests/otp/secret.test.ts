@@ -179,4 +179,15 @@ describe("secret", () => {
     const secret = Secret.fromBase32(SEEDS.SHA1_BASE32);
     expect(String(secret) === "[object Object]").toBe(true);
   });
+
+  it("fromBase32_nonStringContainer_failsClosed", () => {
+    // 非字符串入参不得漏原生 TypeError（normalize 的 input.replace）；
+    // 与 fromBytes 的非字节容器同码：都是「secret 容器类型不对」
+    for (const bad of [123, null, undefined]) {
+      expectCode(
+        () => Secret.fromBase32(bad as unknown as string),
+        "INVALID_SECRET_CONTAINER",
+      );
+    }
+  });
 });

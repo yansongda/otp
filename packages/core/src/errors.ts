@@ -13,12 +13,16 @@
  *   构造 TOTP：secret 解析 → INVALID_ALGORITHM → INVALID_DIGITS →
  *             INVALID_MIN_SECRET_BITS → SECRET_TOO_WEAK → INVALID_PERIOD →
  *             INVALID_T0 → INVALID_CLOCK_OFFSET
- *   URI parse：INVALID_OTPAUTH_URI → UNSUPPORTED_OTPAUTH_TYPE → secret 解析 →
- *             INVALID_ALGORITHM → INVALID_DIGITS → INVALID_PERIOD | INVALID_COUNTER
- *   URI build：UNSUPPORTED_OTPAUTH_TYPE → secret 解析 → INVALID_ALGORITHM →
- *             INVALID_DIGITS → INVALID_PERIOD | INVALID_COUNTER
+ *   URI parse：INVALID_OTPAUTH_URI（入参非字符串 / 前缀非法）→ UNSUPPORTED_OTPAUTH_TYPE →
+ *             secret 解析 → INVALID_ALGORITHM → INVALID_DIGITS →
+ *             INVALID_PERIOD | INVALID_COUNTER
+ *   URI build：UNSUPPORTED_OTPAUTH_TYPE → INVALID_SECRET_CONTAINER（secret 非字符串）→
+ *             secret 解析 → INVALID_ALGORITHM → INVALID_DIGITS →
+ *             INVALID_OTPAUTH_URI（issuer/account 非字符串或无法百分号编码）→
+ *             INVALID_PERIOD | INVALID_COUNTER
  *   verify：INVALID_TIMESTAMP（仅 TOTP 显式 timestamp）→ INVALID_CLOCK_OFFSET（TOTP
  *           叠加 clockOffsetMs 后越界）→ INVALID_COUNTER → INVALID_WINDOW → INVALID_TOKEN
+ *           （含 token 非字符串）
  *
  * 两个原则：
  * 1) 配置/构造期错误先于用户输入错误，避免「调用方写错参数」被「用户输错 token」掩盖；
@@ -29,7 +33,8 @@
 export const OtpErrorCode = {
   // secret 缺失 / 解码后为空 / 字节容器长度为 0
   EMPTY_SECRET: "EMPTY_SECRET",
-  // 字节容器类型不对（字符串 / array-like / null 等）：与「空密钥」区分，避免调用方误判
+  // secret 容器类型不对（`fromBase32` 非字符串 / `fromBytes` 非 Uint8Array·ArrayBuffer /
+  // `OTPAuthURI.build` 的 secret 非字符串）：与「空密钥」区分，避免调用方误判
   INVALID_SECRET_CONTAINER: "INVALID_SECRET_CONTAINER",
   INVALID_BASE32_CHAR: "INVALID_BASE32_CHAR",
   // 严格 base32 专用：归一化后尾长 ∉ {0,2,4,5,7}，或末尾填充位非 0（宽松模式静默补 0）；
@@ -53,9 +58,11 @@ export const OtpErrorCode = {
   // 或 TOTP 的 timestamp + clockOffsetMs 叠加后超出安全整数
   INVALID_CLOCK_OFFSET: "INVALID_CLOCK_OFFSET",
   INVALID_WINDOW: "INVALID_WINDOW",
+  // token 非纯数字 / 长度不等于 digits / 非字符串（JS 调用方）
   INVALID_TOKEN: "INVALID_TOKEN",
   CRYPTO_FAILED: "CRYPTO_FAILED",
   CRYPTO_NOT_INITIALIZED: "CRYPTO_NOT_INITIALIZED",
+  // URI 非字符串 / 不以 otpauth:// 开头 / build 的 issuer·account 非字符串或含无法百分号编码的字符
   INVALID_OTPAUTH_URI: "INVALID_OTPAUTH_URI",
   UNSUPPORTED_OTPAUTH_TYPE: "UNSUPPORTED_OTPAUTH_TYPE",
   NOT_IMPLEMENTED: "NOT_IMPLEMENTED",

@@ -21,8 +21,13 @@ export class Secret {
    * 从 base32 字符串构造，默认宽松解析（容忍大小写 / 空白 / 填充）；空结果抛 EMPTY_SECRET。
    * options.strict === true 时追加规范形式校验，不合规抛 INVALID_BASE32_PADDING
    * —— 用于拒绝被截断 / 被改写的 secret 的导入边界。
+   * 入参不是字符串（JS 调用方）→ INVALID_SECRET_CONTAINER：与 fromBytes 的非字节容器同码，
+   * 避免 `normalize()` 漏出「input.replace is not a function」这类原生 TypeError。
    */
   static fromBase32(input: string, options?: ParseOptions): Secret {
+    if (typeof input !== "string") {
+      otpFail("INVALID_SECRET_CONTAINER");
+    }
     const strict = options !== undefined && options.strict === true;
     return new Secret(strict ? decodeStrict(input) : decode(input));
   }
@@ -32,6 +37,7 @@ export class Secret {
    * 运行时只接受 Uint8Array / ArrayBuffer（其余抛 INVALID_SECRET_CONTAINER）：微信端是
    * JS 调用，字符串与 array-like 的 length 可能恰好合法，`new Uint8Array(字符串)` 会得到
    * 0 字节（空密钥）、array-like 会得到全零密钥，因此在转换之前先判类型，避免静默 fail-open。
+   * （`fromBase32` 的非字符串入参复用同一个错误码：两者都是「secret 容器类型不对」。）
    *
    * 注意：`new Uint8Array(arrayBuffer)` 只是视图而非拷贝——ArrayBuffer 入参必须先包一层
    * 视图再拷贝，否则调用方后续改写/清零该 buffer 会直接改动实例内密钥。
