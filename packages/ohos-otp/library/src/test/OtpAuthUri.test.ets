@@ -56,9 +56,9 @@ export default function otpAuthUriTest() {
     });
 
     it('parse_labelPercent3ASeparator', 0, () => {
-      // label 用 %3A 分隔 issuer/account
+      // 历史形态：分隔符整体编码为 %3A，且 query issuer 与 label 前缀一致 → 才当分隔符
       const p: OtpAuthParams = OTPAuthURI.parse(
-        'otpauth://totp/ACME%3Aco@example.com?secret=JBSWY3DPEHPK3PXP'
+        'otpauth://totp/ACME%3Aco@example.com?secret=JBSWY3DPEHPK3PXP&issuer=ACME'
       );
       expect(p.type).assertEqual(OtpType.TOTP);
       expect(p.issuer).assertEqual('ACME');
@@ -139,6 +139,33 @@ export default function otpAuthUriTest() {
 
     it('parse_failInvalidCounter', 0, () => {
       expectThrowsCode(() => OTPAuthURI.parse('otpauth://hotp/alice?secret=JBSWY3DPEHPK3PXP&counter=-1'),
+        OtpErrorCode.INVALID_COUNTER);
+    });
+
+    it('parse_failUnsafeCounter', 0, () => {
+      // > 2^53-1 的 counter 会丢精度：与 build / HOTP 构造器同口径拒绝
+      expectThrowsCode(() => OTPAuthURI.parse(
+        'otpauth://hotp/alice?secret=JBSWY3DPEHPK3PXP&counter=9007199254740993'),
+        OtpErrorCode.INVALID_COUNTER);
+    });
+
+    it('parse_failUnsafePeriod', 0, () => {
+      // period 必须是正安全整数
+      expectThrowsCode(() => OTPAuthURI.parse(
+        'otpauth://totp/alice?secret=JBSWY3DPEHPK3PXP&period=1e300'),
+        OtpErrorCode.INVALID_PERIOD);
+    });
+
+    it('parse_nonDecimalNumerics_throws', 0, () => {
+      // 导入边界只认纯十进制：0x / 科学计数 / 小数一律拒绝（Number() 会把它们静默放宽）。
+      expectThrowsCode(() => OTPAuthURI.parse(
+        'otpauth://totp/alice?secret=JBSWY3DPEHPK3PXP&digits=0x7'),
+        OtpErrorCode.INVALID_DIGITS);
+      expectThrowsCode(() => OTPAuthURI.parse(
+        'otpauth://totp/alice?secret=JBSWY3DPEHPK3PXP&period=1e3'),
+        OtpErrorCode.INVALID_PERIOD);
+      expectThrowsCode(() => OTPAuthURI.parse(
+        'otpauth://hotp/alice?secret=JBSWY3DPEHPK3PXP&counter=0x2A'),
         OtpErrorCode.INVALID_COUNTER);
     });
 
@@ -255,6 +282,18 @@ export default function otpAuthUriTest() {
       };
       const back: OtpAuthParams = OTPAuthURI.parse(OTPAuthURI.build(p));
       assertParamsEqual(back, p);
+    });
+
+    it('parse_inapplicableParamsIgnored', 0, () => {
+      // type 不适用的 query 参数被忽略（TOTP 的 counter / HOTP 的 period）
+      const totp: OtpAuthParams = OTPAuthURI.parse(
+        'otpauth://totp/a?secret=JBSWY3DPEHPK3PXP&counter=42');
+      expect(totp.counter).assertUndefined();
+      expect(totp.period).assertEqual(30);
+      const hotp: OtpAuthParams = OTPAuthURI.parse(
+        'otpauth://hotp/a?secret=JBSWY3DPEHPK3PXP&period=60');
+      expect(hotp.period).assertUndefined();
+      expect(hotp.counter).assertEqual(0);
     });
   });
 }

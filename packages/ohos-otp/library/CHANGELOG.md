@@ -4,11 +4,31 @@
 
 #### Breaking changes
 
+- `verify({ window })`：**新增上限 10**（`MAX_VERIFY_WINDOW`；此前无上限，超出抛 `INVALID_WINDOW`）
+- 时间参数统一要求安全整数：`timestamp`（非负）、`period`（正）、`t0`（非负）、`clockOffsetMs`；
+  小数 / `NaN` / 超大值不再静默接受
+- 错误码归因调整：`Secret.generate` 长度越界 → `INVALID_SECRET_LENGTH`；`clockOffsetMs` 非法、
+  同步偏移越界 → `INVALID_CLOCK_OFFSET`；`minSecretBits` 非法 → `INVALID_MIN_SECRET_BITS`（fail-closed）
+- `Secret.fromBytes` 非字节容器 → `INVALID_SECRET_CONTAINER`；`ArrayBuffer` 入参改为真正的拷贝语义
+- `OTPAuthURI.parse` 的 `digits` / `period` / `counter` 只认纯十进制整数；`OTPAuthURI.build`
+  对非法参数改为抛错
+- `HOTP.verify` 不再接受 `timestamp`、`TOTP.verify` 不再接受 `counter`（对象字面量会编译失败）
 - `OtpError.name` 由 `'Error'` 改为 `'OtpError'`（provider 错误契约，三端一致）
+- 非字符串入参不再漏原生 `TypeError`：`secret` → `INVALID_SECRET_CONTAINER`、`token` →
+  `INVALID_TOKEN`、`uri` / `build` 的 `issuer`·`account` → `INVALID_OTPAUTH_URI`
+- `verify` 校验顺序改为「配置类先于输入类」：坏 token 与坏 `counter` / `window` 同时出现时
+  返回 `INVALID_COUNTER` / `INVALID_WINDOW`（此前 `INVALID_TOKEN`）
+- `OTPAuthURI.parse` 的 `counter > 2^53-1` 现在抛 `INVALID_COUNTER`（此前接受且丢精度）
+- `TOTP.generate/verify(timestamp: 0)`（epoch 0）现在合法
+- `strict` 模式解单字符 secret：`INVALID_BASE32_PADDING` → `SECRET_TOO_SHORT`
 
 #### Added
 
+- 新错误码 `INVALID_SECRET_CONTAINER`（secret 容器类型不对）、`INVALID_SECRET_LENGTH`
+  （`Secret.generate` 长度越界）、`INVALID_MIN_SECRET_BITS`（`minSecretBits` 参数非法）、
+  `INVALID_CLOCK_OFFSET`（时钟偏移参数非法）
 - `OtpError.codeString`：保留 core 传入的原始错误码字符串（枚举尚未同步时仍能拿到真实值）
+- 导出 `MAX_VERIFY_WINDOW`、`HotpVerifyOptions`、`TotpVerifyOptions`
 
 #### Changed
 
@@ -18,6 +38,21 @@
   `new OtpError(...)`
 - 原型链修复只在原型退化为 `Error.prototype` 时执行（无条件 `setPrototypeOf` 会破坏
   `OtpError` 子类的 `instanceof` 与原型方法）
+- `{ strict }` 改为 fail-closed：非 boolean（`1` / `"true"`）按 strict 处理
+- 可选 `options` 传 `null` 等价于未传；`OTPAuthURI.build` 的 `params` 传非对象 → `INVALID_OTPAUTH_URI`
+- `syncClockOffset` 的 delta 非安全整数 / 累加溢出 → `INVALID_CLOCK_OFFSET`
+
+#### Fixed
+
+- `Secret.fromBytes(ArrayBuffer)` 改为拷贝，调用方清零 / 改写原 buffer 不再影响实例密钥
+- `Secret.fromBytes` / `fromBase32` 的容器类型在转换之前判定：字符串 / array-like 不再被
+  静默变成 0 字节或全零密钥
+- `TOTP` 显式 `timestamp` 合法但叠加 `clockOffsetMs` 后为负 → `INVALID_CLOCK_OFFSET`
+- `minSecretBits` 非法值 fail-closed（此前 `NaN > 0` 为 false 会静默关闭强度校验）
+- `Secret.generate(bytes)` 长度越界改报 `INVALID_SECRET_LENGTH`（此前误用 `SECRET_TOO_WEAK`）
+- `syncClockOffset(1.5)` 改报 `INVALID_CLOCK_OFFSET`（此前误用 `INVALID_WINDOW`）
+- strict 单字符 secret 与宽松模式同码（`SECRET_TOO_SHORT`）
+- epoch 0（1970-01-01）为合法时间戳
 
 ## 1.1.1 - 2026-11-12
 

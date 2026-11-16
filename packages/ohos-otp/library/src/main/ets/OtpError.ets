@@ -1,5 +1,5 @@
 /**
- * 统一错误模型：错误码枚举（18 个，字符串值）+ OtpError。
+ * 统一错误模型：错误码枚举（22 个，字符串值）+ OtpError。
  * 消息文案固定，绝不包含 secret/token/派生密钥等用户输入。
  *
  * 取值唯一来源是 core（packages/core/src/errors.ts）：
@@ -10,23 +10,36 @@
  * 「provider 实现缺陷（收敛为 CRYPTO_FAILED）」，不得删除。
  */
 export enum OtpErrorCode {
-  // secret 缺失 / 解码后为空
+  // secret 缺失 / 解码后为空 / 字节容器长度为 0
   EMPTY_SECRET = 'EMPTY_SECRET',
+  // secret 容器类型不对（`fromBase32` 非字符串 / `fromBytes` 非 Uint8Array·ArrayBuffer /
+  // `OTPAuthURI.build` 的 secret 非字符串）：与「空密钥」区分
+  INVALID_SECRET_CONTAINER = 'INVALID_SECRET_CONTAINER',
   INVALID_BASE32_CHAR = 'INVALID_BASE32_CHAR',
   // 严格 base32 专用：归一化后尾长 ∉ {0,2,4,5,7}，或末尾填充位非 0（宽松模式静默补 0）
   INVALID_BASE32_PADDING = 'INVALID_BASE32_PADDING',
   SECRET_TOO_SHORT = 'SECRET_TOO_SHORT',
+  // 仅用于 { minSecretBits } 强度校验
   SECRET_TOO_WEAK = 'SECRET_TOO_WEAK',
+  // Secret.generate(bytes) / 随机源：bytes 不是 [1, 4096] 整数
+  INVALID_SECRET_LENGTH = 'INVALID_SECRET_LENGTH',
+  // minSecretBits 不是非负安全整数（参数错误；密钥本身强度不足才是 SECRET_TOO_WEAK）
+  INVALID_MIN_SECRET_BITS = 'INVALID_MIN_SECRET_BITS',
   INVALID_ALGORITHM = 'INVALID_ALGORITHM',
   INVALID_DIGITS = 'INVALID_DIGITS',
   INVALID_PERIOD = 'INVALID_PERIOD',
   INVALID_T0 = 'INVALID_T0',
   INVALID_COUNTER = 'INVALID_COUNTER',
+  // 仅用于时间戳（epoch ms）
   INVALID_TIMESTAMP = 'INVALID_TIMESTAMP',
+  // clockOffsetMs 非安全整数，或 syncClockOffset 的 delta 非安全整数 / 累加结果超出安全整数
+  INVALID_CLOCK_OFFSET = 'INVALID_CLOCK_OFFSET',
   INVALID_WINDOW = 'INVALID_WINDOW',
+  // token 非纯数字 / 长度不等于 digits / 非字符串（JS 调用方）
   INVALID_TOKEN = 'INVALID_TOKEN',
   CRYPTO_FAILED = 'CRYPTO_FAILED',
   CRYPTO_NOT_INITIALIZED = 'CRYPTO_NOT_INITIALIZED',
+  // URI 非字符串 / 不以 otpauth:// 开头 / build 的 issuer·account 非字符串或无法百分号编码
   INVALID_OTPAUTH_URI = 'INVALID_OTPAUTH_URI',
   UNSUPPORTED_OTPAUTH_TYPE = 'UNSUPPORTED_OTPAUTH_TYPE',
   NOT_IMPLEMENTED = 'NOT_IMPLEMENTED'
@@ -50,16 +63,20 @@ export class OtpError extends Error {
 export function asOtpErrorCode(code: string): OtpErrorCode {
   switch (code) {
     case 'EMPTY_SECRET': return OtpErrorCode.EMPTY_SECRET;
+    case 'INVALID_SECRET_CONTAINER': return OtpErrorCode.INVALID_SECRET_CONTAINER;
     case 'INVALID_BASE32_CHAR': return OtpErrorCode.INVALID_BASE32_CHAR;
     case 'INVALID_BASE32_PADDING': return OtpErrorCode.INVALID_BASE32_PADDING;
     case 'SECRET_TOO_SHORT': return OtpErrorCode.SECRET_TOO_SHORT;
     case 'SECRET_TOO_WEAK': return OtpErrorCode.SECRET_TOO_WEAK;
+    case 'INVALID_SECRET_LENGTH': return OtpErrorCode.INVALID_SECRET_LENGTH;
+    case 'INVALID_MIN_SECRET_BITS': return OtpErrorCode.INVALID_MIN_SECRET_BITS;
     case 'INVALID_ALGORITHM': return OtpErrorCode.INVALID_ALGORITHM;
     case 'INVALID_DIGITS': return OtpErrorCode.INVALID_DIGITS;
     case 'INVALID_PERIOD': return OtpErrorCode.INVALID_PERIOD;
     case 'INVALID_T0': return OtpErrorCode.INVALID_T0;
     case 'INVALID_COUNTER': return OtpErrorCode.INVALID_COUNTER;
     case 'INVALID_TIMESTAMP': return OtpErrorCode.INVALID_TIMESTAMP;
+    case 'INVALID_CLOCK_OFFSET': return OtpErrorCode.INVALID_CLOCK_OFFSET;
     case 'INVALID_WINDOW': return OtpErrorCode.INVALID_WINDOW;
     case 'INVALID_TOKEN': return OtpErrorCode.INVALID_TOKEN;
     case 'CRYPTO_FAILED': return OtpErrorCode.CRYPTO_FAILED;

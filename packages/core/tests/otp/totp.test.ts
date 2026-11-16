@@ -139,8 +139,26 @@ describe("totp", () => {
   it("syncClockOffset_nonInteger_throws", () => {
     expectCode(
       () => new TOTP({ secret: SEEDS.SHA1_BASE32 }).syncClockOffset(1.5),
-      "INVALID_WINDOW",
+      "INVALID_CLOCK_OFFSET",
     );
+  });
+
+  it("syncClockOffset_unsafeDelta_throws", () => {
+    // delta 本身也必须是安全整数：2^53 已是不可精确表示的整数
+    const t = new TOTP({ secret: SEEDS.SHA1_BASE32 });
+    expectCode(
+      () => t.syncClockOffset(Number.MAX_SAFE_INTEGER + 1),
+      "INVALID_CLOCK_OFFSET",
+    );
+    expect(t.clockOffsetMs).toBe(0);
+  });
+
+  it("syncClockOffset_unsafeResult_throws", () => {
+    // delta × period × 1000 超出安全整数时必须在源头拒绝，
+    // 否则后续以不相关的 INVALID_COUNTER / 错误码漂移的形式暴露。
+    const t = new TOTP({ secret: SEEDS.SHA1_BASE32 });
+    expectCode(() => t.syncClockOffset(10 ** 15), "INVALID_CLOCK_OFFSET");
+    expect(t.clockOffsetMs).toBe(0);
   });
 
   it("t0_1_period30_timestamp31000", () => {
@@ -225,10 +243,33 @@ describe("totp", () => {
     );
   });
 
+  it("ctor_clockOffsetFraction_throws", () => {
+    // 小数毫秒偏移无意义：构造期即拒绝，避免运行时以 INVALID_COUNTER 暴露
+    expectCode(
+      () => new TOTP({ secret: SEEDS.SHA1_BASE32, clockOffsetMs: 0.5 }),
+      "INVALID_CLOCK_OFFSET",
+    );
+  });
+
+  it("ctor_clockOffsetUnsafe_throws", () => {
+    expectCode(
+      () => new TOTP({ secret: SEEDS.SHA1_BASE32, clockOffsetMs: 1e300 }),
+      "INVALID_CLOCK_OFFSET",
+    );
+    expectCode(
+      () =>
+        new TOTP({
+          secret: SEEDS.SHA1_BASE32,
+          clockOffsetMs: Number.MAX_SAFE_INTEGER + 1,
+        }),
+      "INVALID_CLOCK_OFFSET",
+    );
+  });
+
   it("ctor_clockOffsetNaN_throws", () => {
     expectCode(
       () => new TOTP({ secret: SEEDS.SHA1_BASE32, clockOffsetMs: Number.NaN }),
-      "INVALID_TIMESTAMP",
+      "INVALID_CLOCK_OFFSET",
     );
   });
 
@@ -239,7 +280,7 @@ describe("totp", () => {
           secret: SEEDS.SHA1_BASE32,
           clockOffsetMs: Number.POSITIVE_INFINITY,
         }),
-      "INVALID_TIMESTAMP",
+      "INVALID_CLOCK_OFFSET",
     );
   });
 
@@ -267,10 +308,173 @@ describe("totp", () => {
     ).toBe("287082");
   });
 
-  it("timeInputs_invalid_throw", () => {
+  it("ctor_periodUnsafe_throws", () => {
+    expectCode(
+      () => new TOTP({ secret: SEEDS.SHA1_BASE32, period: 1e300 }),
+      "INVALID_PERIOD",
+    );
+    expectCode(
+      () => new TOTP({ secret: SEEDS.SHA1_BASE32, t0: 1e300 }),
+      "INVALID_T0",
+    );
+  });
+
+  it("ctor_multiInvalid_followsPriorityTable", () => {
+    // errors.ts 构造 TOTP 顺序：secret → algorithm → digits → minSecretBits →
+    // SECRET_TOO_WEAK → period → t0 → clockOffsetMs。
+    expectCode(
+      () =>
+        new TOTP({
+          secret: "AB1",
+          algorithm: "MD5",
+          digits: 5,
+          minSecretBits: Number.NaN,
+          period: 0,
+          t0: -1,
+          clockOffsetMs: 0.5,
+        }),
+      "INVALID_BASE32_CHAR",
+    );
+    expectCode(
+      () =>
+        new TOTP({
+          secret: SEEDS.SHA1_BASE32,
+          algorithm: "MD5",
+          digits: 5,
+          period: 0,
+        }),
+      "INVALID_ALGORITHM",
+    );
+    expectCode(
+      () => new TOTP({ secret: SEEDS.SHA1_BASE32, digits: 5, period: 0 }),
+      "INVALID_DIGITS",
+    );
+    expectCode(
+      () =>
+        new TOTP({
+          secret: SEEDS.SHA1_BASE32,
+          minSecretBits: Number.NaN,
+          period: 0,
+        }),
+      "INVALID_MIN_SECRET_BITS",
+    );
+    expectCode(
+      () =>
+        new TOTP({
+          secret: SEEDS.SHA1_BASE32,
+          minSecretBits: 4096,
+          period: 0,
+        }),
+      "SECRET_TOO_WEAK",
+    );
+    expectCode(
+      () =>
+        new TOTP({
+          secret: SEEDS.SHA1_BASE32,
+          period: 0,
+          t0: -1,
+          clockOffsetMs: 0.5,
+        }),
+      "INVALID_PERIOD",
+    );
+    expectCode(
+      () => new TOTP({ secret: SEEDS.SHA1_BASE32, t0: -1, clockOffsetMs: 0.5 }),
+      "INVALID_T0",
+    );
+    expectCode(
+      () => new TOTP({ secret: SEEDS.SHA1_BASE32, clockOffsetMs: 0.5 }),
+      "INVALID_CLOCK_OFFSET",
+    );
+  });
+
+  it("verify_configErrorsPrecedeTokenErrors", () => {
+    // verify 顺序：timestamp → clockOffset → counter → window → token
     const t = new TOTP({ secret: SEEDS.SHA1_BASE32 });
-    expectCode(() => t.generate(0), "INVALID_TIMESTAMP");
-    expectCode(() => t.remaining(0), "INVALID_TIMESTAMP");
+    expectCode(
+      () => t.verify("zzz", { timestamp: -1, window: 11 }),
+      "INVALID_TIMESTAMP",
+    );
+    expectCode(
+      () => t.verify("zzz", { timestamp: 59000, window: 11 }),
+      "INVALID_WINDOW",
+    );
+  });
+
+  it("timeInputs_invalid_throw", () => {
+    // epoch 0 合法（1970-01-01），非负安全整数之外一律拒绝（小数毫秒无意义）
+    const t = new TOTP({ secret: SEEDS.SHA1_BASE32 });
+    expect(t.generate(0)).toBe("755224");
+    expectCode(() => t.generate(-1), "INVALID_TIMESTAMP");
+    expectCode(() => t.generate(1.5), "INVALID_TIMESTAMP");
+    expectCode(() => t.generate(1e300), "INVALID_TIMESTAMP");
+    expectCode(() => t.remaining(-1), "INVALID_TIMESTAMP");
     expectCode(() => t.progress(-1), "INVALID_TIMESTAMP");
+  });
+
+  it("ctor_nullOptions_failsClosedAsMissingSecret", () => {
+    // JS 调用方传 null / 非对象（JSON.parse("null")）不得漏原生 TypeError：
+    // 按「未提供任何选项」处理 → INVALID_SECRET_CONTAINER
+    for (const options of [null, undefined, 5, "x"]) {
+      expectCode(
+        () => new TOTP(options as unknown as { secret: string }),
+        "INVALID_SECRET_CONTAINER",
+      );
+    }
+  });
+
+  it("verify_nullOptions_behavesLikeUndefined", () => {
+    // `verify(token, null)` 等价于未传 options（timestamp 取当前时刻、window 0）
+    const t = new TOTP({ secret: SEEDS.SHA1_BASE32 });
+    expect(t.verify(t.generate(), null)).toBe(0);
+  });
+
+  it("verify_windowExceedsCap_throws", () => {
+    // window 来自外部输入时不得当计算炸弹：上限 MAX_VERIFY_WINDOW = 10 步
+    const t = new TOTP({ secret: SEEDS.SHA1_BASE32 });
+    expectCode(
+      () => t.verify("287082", { timestamp: 59000, window: 11 }),
+      "INVALID_WINDOW",
+    );
+    expect(t.verify("287082", { timestamp: 59000, window: 10 })).toBe(0);
+  });
+
+  it("timestampNegative_notMaskedByClockOffset", () => {
+    // 显式 timestamp 先按口径校验：负数不得因为正偏移「抵消」而静默通过
+    const t = new TOTP({ secret: SEEDS.SHA1_BASE32, clockOffsetMs: 10000 });
+    expectCode(() => t.generate(-10000), "INVALID_TIMESTAMP");
+    expectCode(
+      () => t.verify("755224", { timestamp: -10000 }),
+      "INVALID_TIMESTAMP",
+    );
+    expectCode(() => t.remaining(-10000), "INVALID_TIMESTAMP");
+    expectCode(() => t.progress(-10000), "INVALID_TIMESTAMP");
+  });
+
+  it("timestampOffsetOverflow_throwsClockOffset", () => {
+    // 入参合法但叠加偏移后越界属偏移配置问题：不得把入参误报成 INVALID_TIMESTAMP
+    const t = new TOTP({ secret: SEEDS.SHA1_BASE32, clockOffsetMs: 10 });
+    expectCode(
+      () => t.generate(Number.MAX_SAFE_INTEGER),
+      "INVALID_CLOCK_OFFSET",
+    );
+    expectCode(
+      () => t.verify("755224", { timestamp: Number.MAX_SAFE_INTEGER }),
+      "INVALID_CLOCK_OFFSET",
+    );
+  });
+
+  it("clockOffsetNegative_pushesTimestampBelowEpoch_throwsClockOffset", () => {
+    // 对称场景：入参 timestamp=0 合法，负偏移把它推到 epoch 0 之前 → 仍归因偏移配置
+    const t = new TOTP({ secret: SEEDS.SHA1_BASE32, clockOffsetMs: -1 });
+    expectCode(() => t.generate(0), "INVALID_CLOCK_OFFSET");
+    expectCode(
+      () => t.verify("755224", { timestamp: 0 }),
+      "INVALID_CLOCK_OFFSET",
+    );
+    expectCode(() => t.remaining(0), "INVALID_CLOCK_OFFSET");
+    expectCode(() => t.progress(0), "INVALID_CLOCK_OFFSET");
+
+    // 入参本身非法时仍优先报 INVALID_TIMESTAMP（不被偏移掩盖）
+    expectCode(() => t.generate(-1), "INVALID_TIMESTAMP");
   });
 });

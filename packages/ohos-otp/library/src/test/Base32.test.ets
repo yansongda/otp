@@ -175,10 +175,8 @@ export default function base32Test() {
     });
 
     it('decodeStrict_rejectsImpossibleTailLength', 0, () => {
-      // RFC 4648 §6 只可能产生 len%8 ∈ {0,2,4,5,7}；{1,3,6} 属结构性非法。
-      expectThrowsCode(() => {
-        decodeStrict('A');
-      }, OtpErrorCode.INVALID_BASE32_PADDING);
+      // RFC 4648 §6 只可能产生 len%8 ∈ {0,2,4,5,7}；{3,6} 属结构性非法。
+      // 尾长 1（单字符）见下面「同输入同码」用例：解码后 0 字节 → SECRET_TOO_SHORT。
       expectThrowsCode(() => {
         decodeStrict('AAA');
       }, OtpErrorCode.INVALID_BASE32_PADDING);
@@ -206,14 +204,14 @@ export default function base32Test() {
       }, OtpErrorCode.EMPTY_SECRET);
     });
 
-    it('decodeStrict_differsFromLenientOnSingleChar', 0, () => {
-      // 锁死唯一的「同输入不同码」：'A' 宽松→SECRET_TOO_SHORT，strict→INVALID_BASE32_PADDING。
+    it('decodeStrict_sameInputSameCodeAsLenient', 0, () => {
+      // 同一致命输入不因 strict 开关不同而换码：'A' 两种模式都是 SECRET_TOO_SHORT。
       expectThrowsCode(() => {
         decode('A');
       }, OtpErrorCode.SECRET_TOO_SHORT);
       expectThrowsCode(() => {
         decodeStrict('A');
-      }, OtpErrorCode.INVALID_BASE32_PADDING);
+      }, OtpErrorCode.SECRET_TOO_SHORT);
     });
 
     it('decodeIllegalChar_AB1', 0, () => {

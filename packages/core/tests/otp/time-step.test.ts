@@ -38,12 +38,24 @@ describe("time-step", () => {
     expect(progress(31000, 1, 30)).toBe(0);
   });
 
+  it("step_epochZeroIsValid", () => {
+    // epoch 0 = 1970-01-01T00:00:00Z 是合法时刻，只有负值 / 非有限数才非法
+    expect(step(0, 0, 30)).toBe(0);
+    expect(remainingSec(0, 0, 30)).toBe(30);
+    expect(progress(0, 0, 30)).toBe(0);
+  });
+
   it("step_invalidTimestamp_throws", () => {
-    expectCode(() => step(0, 0, 30), "INVALID_TIMESTAMP");
     expectCode(() => step(-1, 0, 30), "INVALID_TIMESTAMP");
+    expectCode(() => step(1.5, 0, 30), "INVALID_TIMESTAMP");
+    expectCode(() => step(1e300, 0, 30), "INVALID_TIMESTAMP");
     expectCode(() => step(Number.NaN, 0, 30), "INVALID_TIMESTAMP");
     expectCode(
       () => step(Number.POSITIVE_INFINITY, 0, 30),
+      "INVALID_TIMESTAMP",
+    );
+    expectCode(
+      () => step(Number.MAX_SAFE_INTEGER + 1, 0, 30),
       "INVALID_TIMESTAMP",
     );
   });
@@ -51,11 +63,14 @@ describe("time-step", () => {
   it("step_invalidT0_throws", () => {
     expectCode(() => step(59000, -1, 30), "INVALID_T0");
     expectCode(() => step(59000, 1.5, 30), "INVALID_T0");
+    expectCode(() => step(59000, 1e300, 30), "INVALID_T0");
   });
 
   it("step_invalidPeriod_throws", () => {
     expectCode(() => step(59000, 0, 0), "INVALID_PERIOD");
     expectCode(() => step(59000, 0, -30), "INVALID_PERIOD");
+    expectCode(() => step(59000, 0, 1.5), "INVALID_PERIOD");
+    expectCode(() => step(59000, 0, 1e300), "INVALID_PERIOD");
   });
 
   it("constantTimeEquals", () => {

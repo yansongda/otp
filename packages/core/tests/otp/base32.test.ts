@@ -109,7 +109,7 @@ describe("base32", () => {
   });
 
   it("decodeStrict_rejectsImpossibleTailLength", () => {
-    expectCode(() => decodeStrict("A"), "INVALID_BASE32_PADDING");
+    // 尾长 3 / 6 属结构性非法；尾长 1（单字符）见下条同码用例
     expectCode(() => decodeStrict("AAA"), "INVALID_BASE32_PADDING");
     expectCode(() => decodeStrict("MZXW6Y"), "INVALID_BASE32_PADDING");
   });
@@ -124,9 +124,10 @@ describe("base32", () => {
     expectCode(() => decodeStrict("===="), "EMPTY_SECRET");
   });
 
-  it("decodeStrict_differsFromLenientOnSingleChar", () => {
+  it("decodeStrict_sameInputSameCodeAsLenient", () => {
+    // 同一致命输入不因 strict 开关不同而换码：'A' 两种模式都是 SECRET_TOO_SHORT
     expectCode(() => decode("A"), "SECRET_TOO_SHORT");
-    expectCode(() => decodeStrict("A"), "INVALID_BASE32_PADDING");
+    expectCode(() => decodeStrict("A"), "SECRET_TOO_SHORT");
   });
 
   it("encodeDecodeRoundTrip_Seeds", () => {

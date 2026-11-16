@@ -109,9 +109,23 @@ export default function timeStepTest() {
     });
 
     // ── 非法输入 ──
+    it('stepEpochZeroIsValid', 0, () => {
+      // epoch 0 = 1970-01-01T00:00:00Z 合法；只有负值 / 非有限数才非法
+      expect(step(0, 0, 30)).assertEqual(0);
+      expect(remainingSec(0, 0, 30)).assertEqual(30);
+      expect(progress(0, 0, 30)).assertEqual(0);
+    });
     it('stepInvalidTimestamp', 0, () => {
-      // epochMs = 0 不满足 > 0 → INVALID_TIMESTAMP
-      expect(() => { step(0, 0, 30); }).assertThrowError('INVALID_TIMESTAMP');
+      // epochMs = -1 → INVALID_TIMESTAMP
+      expect(() => { step(-1, 0, 30); }).assertThrowError('INVALID_TIMESTAMP');
+    });
+    it('stepInvalidTimestampFractionOrUnsafe', 0, () => {
+      // 小数 / 超安全整数的时间戳无意义 → INVALID_TIMESTAMP
+      expect(() => { step(1.5, 0, 30); }).assertThrowError('INVALID_TIMESTAMP');
+      expect(() => { step(1e300, 0, 30); }).assertThrowError('INVALID_TIMESTAMP');
+    });
+    it('stepInvalidT0Unsafe', 0, () => {
+      expect(() => { step(1, 1e300, 30); }).assertThrowError('INVALID_T0');
     });
     it('stepInvalidT0', 0, () => {
       // t0 = -1 不满足 ≥ 0 → INVALID_T0
