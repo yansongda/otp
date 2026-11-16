@@ -92,32 +92,32 @@ try {
 
 ### 类与方法
 
-| API                                                                    | 说明                                                                                            |
-| ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `new TOTP(options: TotpOptions)`                                       | 构造 TOTP；选项在构造期同步校验，非法即抛 `OtpError`                                            |
-| `totp.generate(timestampMs?: number): string`                          | 生成当前（或指定时刻）验证码；`digits` 位零填充字符串                                           |
-| `totp.verify(token: string, options?: VerifyOptions): number \| null`  | 恒定时间比对；返回漂移 delta（`0`=当前步，`-1`=上一步），未命中返回 `null`                      |
-| `totp.remaining(timestampMs?: number): number`                         | 当前窗口剩余整秒，取值 `[1, period]`                                                            |
-| `totp.progress(timestampMs?: number): number`                          | 当前窗口进度，取值 `[0, 1)`                                                                     |
-| `totp.syncClockOffset(delta: number): void`                            | 向码源时钟对齐：`clockOffsetMs += delta * period * 1000`（delta = 码源 counter − 本地 counter） |
-| `totp.clockOffsetMs: number`                                           | 当前时钟偏移（毫秒）                                                                            |
-| `totp.toURI(): string` / `TOTP.fromURI(uri: string): TOTP`             | 序列化为 / 从 `otpauth://totp/...` URI 恢复                                                     |
-| `new HOTP(options: HotpOptions)`                                       | 构造 HOTP                                                                                       |
-| `hotp.generate(counter?: number): string`                              | 生成验证码（缺省用构造值）                                                                      |
-| `hotp.verify(token: string, options?: VerifyOptions): number \| null`  | 恒定时间比对；返回 counter 偏移或 `null`                                                        |
-| `hotp.toURI(): string` / `HOTP.fromURI(uri: string): HOTP`             | 序列化为 / 从 `otpauth://hotp/...` URI 恢复                                                     |
-| `Secret.fromBase32(s: string, options?: ParseOptions): Secret`         | 从 base32 字符串构造（默认宽松：大小写/空白/填充；`{ strict: true }` 额外要求规范尾部）         |
-| `Secret.fromBytes(bytes: Uint8Array): Secret`                          | 从字节数组构造（拷贝语义）                                                                      |
-| `Secret.generate(bytes: number = 20): Secret`                          | 经注册的随机源生成随机 secret                                                                   |
-| `secret.toBase32(): string`                                            | 规范化大写、无填充 base32                                                                       |
-| `secret.bytes` / `secret.byteLength` / `secret.bitLength`              | 强度自省（bytes 为拷贝）                                                                        |
-| `secret.toJSON(): string`                                              | 序列化脱敏——`JSON.stringify` 时返回 `'[REDACTED]'`                                              |
-| `OTPAuthURI.parse(uri: string, options?: ParseOptions): OtpAuthParams` | 解析 `otpauth://` URI（未知 query 参数忽略；`{ strict: true }` 校验 secret 尾部）               |
-| `OTPAuthURI.build(params: OtpAuthParams): string`                      | 生成规范 `otpauth://` URI                                                                       |
-| `interface ParseOptions { strict?: boolean }`                          | `Secret.fromBase32` / `OTPAuthURI.parse` 共用的解析选项；缺省为宽松                             |
-| `enum OtpAlgorithm { SHA1, SHA256, SHA512 }`                           | 算法枚举（字符串值）                                                                            |
-| `enum OtpType { TOTP = 'totp', HOTP = 'hotp' }`                        | URI 类型枚举（字符串值）                                                                        |
-| `class OtpError extends Error { readonly code: OtpErrorCode }`         | 统一错误模型；按 `code` 精确分支                                                                |
+| API                                                                                         | 说明                                                                                            |
+| ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `new TOTP(options: TotpOptions)`                                                            | 构造 TOTP；选项在构造期同步校验，非法即抛 `OtpError`                                            |
+| `totp.generate(timestampMs?: number): string`                                               | 生成当前（或指定时刻）验证码；`digits` 位零填充字符串                                           |
+| `totp.verify(token: string, options?: VerifyOptions): number \| null`                       | 恒定时间比对；返回漂移 delta（`0`=当前步，`-1`=上一步），未命中返回 `null`                      |
+| `totp.remaining(timestampMs?: number): number`                                              | 当前窗口剩余整秒，取值 `[1, period]`                                                            |
+| `totp.progress(timestampMs?: number): number`                                               | 当前窗口进度，取值 `[0, 1)`                                                                     |
+| `totp.syncClockOffset(delta: number): void`                                                 | 向码源时钟对齐：`clockOffsetMs += delta * period * 1000`（delta = 码源 counter − 本地 counter） |
+| `totp.clockOffsetMs: number`                                                                | 当前时钟偏移（毫秒）                                                                            |
+| `totp.toURI(): string` / `TOTP.fromURI(uri: string): TOTP`                                  | 序列化为 / 从 `otpauth://totp/...` URI 恢复                                                     |
+| `new HOTP(options: HotpOptions)`                                                            | 构造 HOTP                                                                                       |
+| `hotp.generate(counter?: number): string`                                                   | 生成验证码（缺省用构造值）                                                                      |
+| `hotp.verify(token: string, options?: VerifyOptions): number \| null`                       | 恒定时间比对；返回 counter 偏移或 `null`                                                        |
+| `hotp.toURI(): string` / `HOTP.fromURI(uri: string): HOTP`                                  | 序列化为 / 从 `otpauth://hotp/...` URI 恢复                                                     |
+| `Secret.fromBase32(s: string, options?: ParseOptions): Secret`                              | 从 base32 字符串构造（默认宽松：大小写/空白/填充；`{ strict: true }` 额外要求规范尾部）         |
+| `Secret.fromBytes(bytes: Uint8Array): Secret`                                               | 从字节数组构造（拷贝语义）                                                                      |
+| `Secret.generate(bytes: number = 20): Secret`                                               | 经注册的随机源生成随机 secret                                                                   |
+| `secret.toBase32(): string`                                                                 | 规范化大写、无填充 base32                                                                       |
+| `secret.bytes` / `secret.byteLength` / `secret.bitLength`                                   | 强度自省（bytes 为拷贝）                                                                        |
+| `secret.toJSON(): string`                                                                   | 序列化脱敏——`JSON.stringify` 时返回 `'[REDACTED]'`                                              |
+| `OTPAuthURI.parse(uri: string, options?: ParseOptions): OtpAuthParams`                      | 解析 `otpauth://` URI（未知 query 参数忽略；`{ strict: true }` 校验 secret 尾部）               |
+| `OTPAuthURI.build(params: OtpAuthParams): string`                                           | 生成规范 `otpauth://` URI                                                                       |
+| `interface ParseOptions { strict?: boolean }`                                               | `Secret.fromBase32` / `OTPAuthURI.parse` 共用的解析选项；缺省为宽松                             |
+| `enum OtpAlgorithm { SHA1, SHA256, SHA512 }`                                                | 算法枚举（字符串值）                                                                            |
+| `enum OtpType { TOTP = 'totp', HOTP = 'hotp' }`                                             | URI 类型枚举（字符串值）                                                                        |
+| `class OtpError extends Error { readonly code: OtpErrorCode; readonly codeString: string }` | 统一错误模型；按 `code` 精确分支；`codeString` 保留未映射的原始码                               |
 
 ### 严格 base32 解析
 
@@ -145,7 +145,7 @@ try {
 
 ## 错误处理与故障排查
 
-一切失败均抛 `OtpError`，携带固定 `code`（字符串）；错误消息绝不包含 secret、token 或密钥材料。下表覆盖全部 18 个错误码（`OtpErrorCode` 经 barrel 导出）。`NOT_IMPLEMENTED` 为内部预留占位，库内无抛出点，正常使用不会遇到。
+一切失败均抛 `OtpError`，携带固定 `code`（字符串）；错误消息绝不包含 secret、token 或密钥材料。下表覆盖全部 18 个错误码（`OtpErrorCode` 经 barrel 导出）。`NOT_IMPLEMENTED` 只是「枚举映射不到」时的兜底（库内不抛出），`OtpError.codeString` 始终保留原始错误码字符串。
 
 | `OtpErrorCode`             | 现象                                          | 根因                                                  | 处置                                                                    |
 | -------------------------- | --------------------------------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------- |

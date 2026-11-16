@@ -1,5 +1,6 @@
 /**
- * OtpError 错误模型测试：instanceof 双真 + 18 个枚举成员 + asOtpErrorCode 映射逐一断言（防枚举/映射漂移）。
+ * OtpError 错误模型测试：instanceof 双真 + 18 个枚举成员 + asOtpErrorCode 映射逐一断言（防枚举/映射漂移），
+ * 以及 codeString 在「未知码兜底」场景下仍保留原始字符串。
  * 若 instanceof OtpError 断言失败，属设计性偏差，须停下上报，不静默改设计。
  */
 import { describe, it, expect } from '@ohos/hypium';
@@ -11,6 +12,7 @@ export default function otpErrorTest() {
       const err: OtpError = new OtpError(OtpErrorCode.INVALID_DIGITS, 'x');
       expect(err instanceof Error).assertTrue();
       expect(err instanceof OtpError).assertTrue();
+      expect(err.name).assertEqual('OtpError');
       expect(err.code).assertEqual(OtpErrorCode.INVALID_DIGITS);
       expect(err.message).assertEqual('x');
     });
@@ -20,8 +22,8 @@ export default function otpErrorTest() {
         'EMPTY_SECRET', 'INVALID_BASE32_CHAR', 'INVALID_BASE32_PADDING',
         'SECRET_TOO_SHORT', 'SECRET_TOO_WEAK', 'INVALID_ALGORITHM',
         'INVALID_DIGITS', 'INVALID_PERIOD', 'INVALID_T0', 'INVALID_COUNTER',
-        'INVALID_TIMESTAMP', 'INVALID_WINDOW', 'INVALID_TOKEN', 'CRYPTO_FAILED',
-        'CRYPTO_NOT_INITIALIZED', 'INVALID_OTPAUTH_URI',
+        'INVALID_TIMESTAMP', 'INVALID_WINDOW', 'INVALID_TOKEN',
+        'CRYPTO_FAILED', 'CRYPTO_NOT_INITIALIZED', 'INVALID_OTPAUTH_URI',
         'UNSUPPORTED_OTPAUTH_TYPE', 'NOT_IMPLEMENTED'
       ];
       const codes: OtpErrorCode[] = [
@@ -75,6 +77,16 @@ export default function otpErrorTest() {
       }
       expect(isInstance).assertTrue();
       expect(code).assertEqual(OtpErrorCode.INVALID_COUNTER);
+    });
+
+    it('otpError_codeStringPreservesRawCode', 0, () => {
+      const mapped: OtpError = new OtpError(OtpErrorCode.INVALID_DIGITS, 'INVALID_DIGITS');
+      expect(mapped.codeString).assertEqual('INVALID_DIGITS');
+
+      // 未知码（core 未来新增、本枚举尚未同步）：code 兜底 + codeString 保留真实值
+      const unknown: OtpError = new OtpError(asOtpErrorCode('FUTURE_CODE'), 'FUTURE_CODE', 'FUTURE_CODE');
+      expect(unknown.code).assertEqual(OtpErrorCode.NOT_IMPLEMENTED);
+      expect(unknown.codeString).assertEqual('FUTURE_CODE');
     });
 
     it('otpError_messageCustomizableSeparateFromCode', 0, () => {

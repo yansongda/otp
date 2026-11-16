@@ -2,6 +2,29 @@
 
 本文件遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 规范，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### Added
+
+- `OtpError.codeString`：保留 core 传入的原始错误码字符串（平台码表是强类型投影，
+  未来新增码在枚举尚未同步时仍可拿到真实值）
+- `OtpErrorCode` 取值由 core 唯一提供（barrel 导出），平台层不再手抄码表
+
+### Changed
+
+- `OtpError` 的 `name` 固定为 `OtpError`（provider 错误契约：core 的 engine 靠它区分
+  「已知错误原样上抛」与「provider 实现缺陷」）
+- 错误抛出统一走 core 的 `otpFail` → 平台工厂：core 与平台不再有两条错误构造路径
+- 原型链修复改为**只在原型退化为 `Error.prototype` 时**执行（此前无条件
+  `Object.setPrototypeOf` 会把 `OtpError` 子类实例的原型改回基类：`instanceof` 子类失效、
+  原型方法丢失；ES5 + 自定义子类仍需调用方自行修正原型链）
+- `otpFail` 校验工厂返回值：返回非 `Error` 或缺少字符串 `code` 时兜底 core 默认类，
+  调用方始终能拿到 `instanceof Error` + 可分支的 `code`
+
+### Removed
+
+- 类型别名 `OtpFailureCode`（与 `OtpErrorCode` 完全等价，重复声明）
+
 ## [1.0.1] - 2026-11-12
 
 发布链路验证版：无代码变更，用于通过 OIDC Trusted Publishing 完成一次真实发布。

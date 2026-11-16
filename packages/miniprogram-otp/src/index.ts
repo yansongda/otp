@@ -26,8 +26,9 @@ import type {
 
 // 幂等注册；只构造对象并注册，不发起任何 HMAC 计算
 installPureJsHmac();
+// 第三个参数 codeString：保留 core 传入的原始码（平台码表是强类型投影，未来新增码仍可溯源）
 setErrorFactory(
-  (code: string): Error => new OtpError(code as OtpErrorCode, code),
+  (code: string): Error => new OtpError(code as OtpErrorCode, code, code),
 );
 
 export { OtpError, OtpErrorCode } from "./errors";

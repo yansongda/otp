@@ -1,46 +1,37 @@
 /**
- * 统一错误模型：错误码（18 个，字符串值）+ OtpError。
+ * 平台错误模型：错误码唯一来源是 `@yansongda/otp-core`（本包不再抄一份码表），
+ * 这里只保留平台拥有的错误类（code 为 TS 字面量联合）。
  *
- * 错误码取值与 ohos 包 / core 保持一致：18 个码冻结，v1 起仅允许新增；
- * 消息文案固定，绝不包含 secret / token / 派生密钥等用户输入。
+ * 微信编译器可能把 class 降级到 ES5，届时 `extends Error` 会丢原型链：
+ * 只在原型退化为 `Error.prototype` 时修复链，无条件重设会把 `OtpError` 子类实例的
+ * 原型改回基类（`instanceof` 子类失效、原型方法丢失）。
  */
-export const OtpErrorCode = {
-  EMPTY_SECRET: "EMPTY_SECRET",
-  INVALID_BASE32_CHAR: "INVALID_BASE32_CHAR",
-  // 严格 base32 专用：归一化后尾长 ∉ {0,2,4,5,7}，或末尾填充位非 0（宽松模式静默补 0）
-  INVALID_BASE32_PADDING: "INVALID_BASE32_PADDING",
-  SECRET_TOO_SHORT: "SECRET_TOO_SHORT",
-  SECRET_TOO_WEAK: "SECRET_TOO_WEAK",
-  INVALID_ALGORITHM: "INVALID_ALGORITHM",
-  INVALID_DIGITS: "INVALID_DIGITS",
-  INVALID_PERIOD: "INVALID_PERIOD",
-  INVALID_T0: "INVALID_T0",
-  INVALID_COUNTER: "INVALID_COUNTER",
-  INVALID_TIMESTAMP: "INVALID_TIMESTAMP",
-  INVALID_WINDOW: "INVALID_WINDOW",
-  INVALID_TOKEN: "INVALID_TOKEN",
-  CRYPTO_FAILED: "CRYPTO_FAILED",
-  CRYPTO_NOT_INITIALIZED: "CRYPTO_NOT_INITIALIZED",
-  INVALID_OTPAUTH_URI: "INVALID_OTPAUTH_URI",
-  UNSUPPORTED_OTPAUTH_TYPE: "UNSUPPORTED_OTPAUTH_TYPE",
-  NOT_IMPLEMENTED: "NOT_IMPLEMENTED",
-} as const;
 
-export type OtpErrorCode = (typeof OtpErrorCode)[keyof typeof OtpErrorCode];
+import type { OtpErrorCode as OtpErrorCodeType } from "@yansongda/otp-core";
+import { OtpErrorCode } from "@yansongda/otp-core";
+
+export { OtpErrorCode };
 
 /**
  * 统一错误类：调用方可通过 code 精确分支处理。
- *
- * 微信编译器可能把 class 降级到 ES5，届时 extends Error 会丢原型链；
- * 这里显式 setPrototypeOf，保证 instanceof 与 code 都可靠。
+ * codeString 保留原始字符串：外部传入 / 平台映射产生的未知码仍能拿到真实值
+ * （本包 `code` 的联合类型直接复用 core 码表，重建即自动同步；ohos 的 enum 才需手动映射）。
  */
 export class OtpError extends Error {
-  readonly code: OtpErrorCode;
+  readonly code: OtpErrorCodeType;
+  readonly codeString: string;
 
-  constructor(code: OtpErrorCode, message: string) {
+  constructor(
+    code: OtpErrorCodeType,
+    message: string,
+    codeString: string = code,
+  ) {
     super(message);
     this.name = "OtpError";
-    Object.setPrototypeOf(this, OtpError.prototype);
+    if (Object.getPrototypeOf(this) === Error.prototype) {
+      Object.setPrototypeOf(this, OtpError.prototype);
+    }
     this.code = code;
+    this.codeString = codeString;
   }
 }
