@@ -24,10 +24,30 @@ function decodePart(raw: string): string {
   }
 }
 
+/**
+ * URI 数字参数解析：只接受纯十进制数字串（拒绝 0x / 科学计数 / 正负号 / 小数 / 空白）。
+ * 为什么不用 Number()：`Number("0x7") === 7`、`Number("1e3") === 1000`，会把扫码导入边界
+ * 变成宽松解析；返回 null 表示非法，范围与安全整数判定由调用方按各自错误码处理。
+ */
+function parseDecimal(raw: string): number | null {
+  if (raw.length === 0) {
+    return null;
+  }
+  for (let i = 0; i < raw.length; i++) {
+    const c = raw.charCodeAt(i);
+    if (c < 48 || c > 57) {
+      return null;
+    }
+  }
+  const value = Number(raw);
+  return Number.isSafeInteger(value) ? value : null;
+}
+
 export class OTPAuthURI {
   /**
    * 解析 otpauth:// URI 为 OtpAuthParams：scheme 大小写不敏感 → type 限 totp/hotp →
    * label 按**原始串**首个冒号切分后逐段百分号解码（失败回退原串）→ query 手写拆分 →
+   * digits / period / counter 只接受纯十进制整数（拒绝 0x / 科学计数 / 小数）→
    * secret 规范化为大写无填充 base32；未知参数忽略，query 的 issuer 优先于 label 前缀。
    * options.strict === true 时 secret 必须是规范 base32，否则 INVALID_BASE32_PADDING。
    */
@@ -130,12 +150,12 @@ export class OTPAuthURI {
       algorithm = upper;
     }
 
-    // digits：默认 6，仅 6/7/8，否则 INVALID_DIGITS
+    // digits：默认 6，仅 6/7/8，否则 INVALID_DIGITS（只认十进制）
     let digits: number = DEFAULT_DIGITS;
     const digitsRaw = params.get("digits");
     if (digitsRaw !== undefined && digitsRaw !== "") {
-      const d = Number(digitsRaw);
-      if (!isValidDigits(d)) {
+      const d = parseDecimal(digitsRaw);
+      if (d === null || !isValidDigits(d)) {
         otpFail("INVALID_DIGITS");
       }
       digits = d;
@@ -148,8 +168,8 @@ export class OTPAuthURI {
     if (type === "totp") {
       const periodRaw = params.get("period");
       if (periodRaw !== undefined && periodRaw !== "") {
-        const p = Number(periodRaw);
-        if (!Number.isSafeInteger(p) || p <= 0) {
+        const p = parseDecimal(periodRaw);
+        if (p === null || p <= 0) {
           otpFail("INVALID_PERIOD");
         }
         period = p;
@@ -157,8 +177,8 @@ export class OTPAuthURI {
     } else {
       const counterRaw = params.get("counter");
       if (counterRaw !== undefined && counterRaw !== "") {
-        const c = Number(counterRaw);
-        if (!isSafeCounter(c)) {
+        const c = parseDecimal(counterRaw);
+        if (c === null) {
           otpFail("INVALID_COUNTER");
         }
         counter = c;

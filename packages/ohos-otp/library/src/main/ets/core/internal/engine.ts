@@ -1,4 +1,4 @@
-// AUTO-GENERATED from packages/core/src/internal/engine.ts. DO NOT EDIT. Run: bun run sync:core
+// AUTO-GENERATED from packages/core/src/internal/engine.ts (core@5fb4243-dirty). DO NOT EDIT. Run: bun run sync:core
 /**
  * 编排层：counter → code 全链路（纯函数，接收注入 provider，零平台依赖）。
  * 取模只在 digits.format 做一次；verify 扫完全部候选后才返回首个命中 delta（恒定时间）。
@@ -8,6 +8,7 @@ import type { HmacProvider } from "../crypto";
 import { otpFail } from "../errors";
 import { MAX_VERIFY_WINDOW } from "../options";
 import { isSafeCounter, toBytes } from "./counter";
+import { digestLengthOf } from "./digest";
 import { format as formatDigits } from "./digits";
 import { constantTimeEquals } from "./time-step";
 import { apply as truncateApply } from "./truncate";
@@ -38,6 +39,12 @@ export function generate(
   }
   if (!(digest instanceof Uint8Array)) {
     // provider 违反返回值契约（非 Uint8Array）同样视为 crypto 层缺陷
+    otpFail("CRYPTO_FAILED");
+  }
+  const expectedDigestLength = digestLengthOf(params.algorithm);
+  if (expectedDigestLength === 0 || digest.length !== expectedDigestLength) {
+    // 摘要长度必须与算法匹配：长度不对时截断会读到缺位（静默产出错误码），
+    // 过短已在 truncate 内兜底，这里统一收敛为同一个错误码。
     otpFail("CRYPTO_FAILED");
   }
   return formatDigits(truncateApply(digest), params.digits);

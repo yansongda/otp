@@ -393,6 +393,51 @@ describe("otpauth-uri", () => {
     );
   });
 
+  it("parse_nonDecimalNumerics_throw", () => {
+    // 导入边界只认纯十进制：0x / 科学计数 / 小数一律拒绝（Number() 会把它们静默放宽）
+    expectCode(
+      () =>
+        OTPAuthURI.parse(
+          "otpauth://totp/alice?secret=JBSWY3DPEHPK3PXP&digits=0x7",
+        ),
+      "INVALID_DIGITS",
+    );
+    expectCode(
+      () =>
+        OTPAuthURI.parse(
+          "otpauth://totp/alice?secret=JBSWY3DPEHPK3PXP&digits=6.0",
+        ),
+      "INVALID_DIGITS",
+    );
+    expectCode(
+      () =>
+        OTPAuthURI.parse(
+          "otpauth://totp/alice?secret=JBSWY3DPEHPK3PXP&period=0x1E",
+        ),
+      "INVALID_PERIOD",
+    );
+    expectCode(
+      () =>
+        OTPAuthURI.parse(
+          "otpauth://totp/alice?secret=JBSWY3DPEHPK3PXP&period=1e3",
+        ),
+      "INVALID_PERIOD",
+    );
+    expectCode(
+      () =>
+        OTPAuthURI.parse(
+          "otpauth://hotp/alice?secret=JBSWY3DPEHPK3PXP&counter=0x2A",
+        ),
+      "INVALID_COUNTER",
+    );
+    // 前导零仍是十进制：「000042」→ 42
+    expect(
+      OTPAuthURI.parse(
+        "otpauth://hotp/alice?secret=JBSWY3DPEHPK3PXP&counter=000042",
+      ).counter,
+    ).toBe(42);
+  });
+
   it("build_secretErrorPrecedesParamErrors", () => {
     // errors.ts 优先级：解析类先于参数类（与 parse 对称）
     expectCode(

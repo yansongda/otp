@@ -166,4 +166,22 @@ describe("engine", () => {
     };
     expectCode(() => generate(shortDigest, params6, 0), "CRYPTO_FAILED");
   });
+
+  it("generate_providerDigestLengthMustMatchAlgorithm", () => {
+    // 摘要长度必须与算法匹配（SHA1=20 / SHA256=32 / SHA512=64）；否则截断会读到缺位
+    const wrongSha1 = {
+      sign(): Uint8Array {
+        return new Uint8Array(32);
+      },
+    };
+    expectCode(() => generate(wrongSha1, params6, 0), "CRYPTO_FAILED");
+
+    const wrongSha256 = {
+      sign(): Uint8Array {
+        return new Uint8Array(20);
+      },
+    };
+    const params256 = { algorithm: "SHA256", digits: 6, key };
+    expectCode(() => generate(wrongSha256, params256, 0), "CRYPTO_FAILED");
+  });
 });

@@ -22,7 +22,11 @@ export interface HmacProvider {
   sign(algorithm: string, key: Uint8Array, message: Uint8Array): Uint8Array;
 }
 
-/** 随机数抽象接口：必须同步返回 Uint8Array，且长度等于请求的 bytes（否则 CRYPTO_FAILED）。 */
+/**
+ * 随机数抽象接口：必须同步返回 Uint8Array，且长度等于请求的 bytes（否则 CRYPTO_FAILED）。
+ * 失败时必须抛 `name === "OtpError"` 的错误（core otpFail / 平台 OtpError）；
+ * 其余异常视为实现缺陷并收敛为 CRYPTO_FAILED——与 HmacProvider 同一契约。
+ */
 export interface RandomSource {
   random(bytes: number): Uint8Array;
 }

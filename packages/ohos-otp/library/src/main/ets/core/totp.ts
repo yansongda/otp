@@ -1,4 +1,4 @@
-// AUTO-GENERATED from packages/core/src/totp.ts. DO NOT EDIT. Run: bun run sync:core
+// AUTO-GENERATED from packages/core/src/totp.ts (core@5fb4243-dirty). DO NOT EDIT. Run: bun run sync:core
 /**
  * TOTP（RFC 6238）公开类。默认 provider 经 requireHmac() 取用。
  * 所有时间入口（含显式传入 timestamp）统一叠加 clockOffsetMs。
@@ -83,8 +83,8 @@ export class TOTP {
    *
    * 校验的是「入参」与「叠加结果」两段，而不是只看和：
    * - 显式 timestamp 必须是非负安全整数（与 INVALID_TIMESTAMP 口径一致，不被偏移掩盖）；
-   * - 叠加偏移后越界属偏移配置问题，抛 INVALID_CLOCK_OFFSET，
-   *   避免把合法入参（如 MAX_SAFE_INTEGER）误报成时间戳非法。
+   * - 叠加偏移后越界（超出安全整数，或落到 epoch 0 之前）属偏移配置问题，抛
+   *   INVALID_CLOCK_OFFSET，避免把合法入参（如 MAX_SAFE_INTEGER / 0）误报成时间戳非法。
    */
   private effectiveTs(timestampMs?: number): number {
     if (
@@ -96,7 +96,8 @@ export class TOTP {
     const effective =
       (timestampMs === undefined ? Date.now() : timestampMs) +
       this._clockOffsetMs;
-    if (!Number.isSafeInteger(effective)) {
+    // 负值同属「偏移把时刻推到 epoch 0 之前」：入参已在上面校验过，应归因偏移。
+    if (!Number.isSafeInteger(effective) || effective < 0) {
       otpFail("INVALID_CLOCK_OFFSET");
     }
     return effective;

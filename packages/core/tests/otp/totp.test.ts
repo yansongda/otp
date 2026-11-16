@@ -367,6 +367,21 @@ describe("totp", () => {
     );
   });
 
+  it("clockOffsetNegative_pushesTimestampBelowEpoch_throwsClockOffset", () => {
+    // 对称场景：入参 timestamp=0 合法，负偏移把它推到 epoch 0 之前 → 仍归因偏移配置
+    const t = new TOTP({ secret: SEEDS.SHA1_BASE32, clockOffsetMs: -1 });
+    expectCode(() => t.generate(0), "INVALID_CLOCK_OFFSET");
+    expectCode(
+      () => t.verify("755224", { timestamp: 0 }),
+      "INVALID_CLOCK_OFFSET",
+    );
+    expectCode(() => t.remaining(0), "INVALID_CLOCK_OFFSET");
+    expectCode(() => t.progress(0), "INVALID_CLOCK_OFFSET");
+
+    // 入参本身非法时仍优先报 INVALID_TIMESTAMP（不被偏移掩盖）
+    expectCode(() => t.generate(-1), "INVALID_TIMESTAMP");
+  });
+
   it("mutatingProvider_cannotCorruptLaterCalls", () => {
     // provider 契约（crypto.ts）：key / message 只读。库每次公开调用给一份临时副本，
     // 不在实例里缓存可被 provider 改写的密钥。

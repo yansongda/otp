@@ -3,6 +3,7 @@
  */
 import { afterEach, describe, expect, it } from "bun:test";
 import { registerRandom, reset } from "../../src/crypto";
+import { OtpError, OtpErrorCode } from "../../src/errors";
 import { decode } from "../../src/internal/base32";
 import { installPureJsHmac } from "../../src/pure-js/pure-js-hmac";
 import { Secret } from "../../src/secret";
@@ -70,6 +71,26 @@ describe("secret", () => {
     expectCode(() => Secret.fromBytes(new Uint8Array(0)), "EMPTY_SECRET");
   });
 
+  it("fromBytes_nonByteContainer_failsClosed", () => {
+    // 微信端是 JS 调用：字符串 / array-like 的 length 可能「恰好合法」，
+    // new Uint8Array(str) 会静默得到 0 字节（空密钥），array-like 会得到全零密钥。
+    for (const bad of ["abc", { length: 5 }, null]) {
+      expectCode(
+        () => Secret.fromBytes(bad as unknown as Uint8Array),
+        "EMPTY_SECRET",
+      );
+    }
+  });
+
+  it("fromBytes_arrayBuffer_isAccepted", () => {
+    // ArrayBuffer 是合法字节容器（wx.getRandomValues 的 randomValues 可直接传）
+    const secret = Secret.fromBytes(
+      new ArrayBuffer(20) as unknown as Uint8Array,
+    );
+    expect(secret.byteLength).toBe(20);
+    expect(secret.toBase32()).toBe("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+  });
+
   it("generate_withoutRegisteredRandom_throws", () => {
     expectCode(() => Secret.generate(), "CRYPTO_NOT_INITIALIZED");
   });
@@ -109,6 +130,33 @@ describe("secret", () => {
 
     registerRandom({ random: () => null as unknown as Uint8Array });
     expectCode(() => Secret.generate(20), "CRYPTO_FAILED");
+  });
+
+  it("generate_sourceThrows_normalized", () => {
+    // 随机源契约：失败必须抛 name === "OtpError" 的错误；其余异常收敛为 CRYPTO_FAILED
+    registerRandom({
+      random: () => {
+        throw new TypeError("native rng exploded");
+      },
+    });
+    expectCode(() => Secret.generate(20), "CRYPTO_FAILED");
+
+    const providerError = new OtpError(
+      OtpErrorCode.CRYPTO_FAILED,
+      "CRYPTO_FAILED",
+    );
+    registerRandom({
+      random: () => {
+        throw providerError;
+      },
+    });
+    let thrown: unknown = null;
+    try {
+      Secret.generate(20);
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBe(providerError);
   });
 
   it("toJSON_redactsSecret", () => {

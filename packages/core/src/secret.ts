@@ -10,6 +10,14 @@ import { otpFail } from "./errors";
 import { decode, decodeStrict, encode } from "./internal/base32";
 import type { ParseOptions } from "./options";
 
+/**
+ * 真实字节容器：Uint8Array（含 Buffer 等子类）或其底层 ArrayBuffer。
+ * 字符串 / array-like / null 在 JS 侧可能「length 恰好合法」而被静默接受，必须显式拒绝。
+ */
+function isByteContainer(value: object): boolean {
+  return value instanceof Uint8Array || value instanceof ArrayBuffer;
+}
+
 export class Secret {
   private readonly _bytes: Uint8Array;
 
@@ -27,12 +35,21 @@ export class Secret {
     return new Secret(strict ? decodeStrict(input) : decode(input));
   }
 
-  /** 从字节数组构造（拷贝入参，杜绝外部引用共享）；空数组抛 EMPTY_SECRET。 */
+  /**
+   * 从字节容器构造（拷贝入参，杜绝外部引用共享）；空数据抛 EMPTY_SECRET。
+   * 运行时只接受 Uint8Array / ArrayBuffer：微信端是 JS 调用，字符串与 array-like 的 length
+   * 可能恰好合法，`new Uint8Array(字符串)` 会得到 0 字节（空密钥）、array-like 会得到全零密钥，
+   * 因此在转换之前先判类型，避免静默 fail-open。
+   */
   static fromBytes(bytes: Uint8Array): Secret {
-    if (bytes.length === 0) {
+    if (!isByteContainer(bytes)) {
       otpFail("EMPTY_SECRET");
     }
-    return new Secret(new Uint8Array(bytes));
+    const copy = new Uint8Array(bytes);
+    if (copy.length === 0) {
+      otpFail("EMPTY_SECRET");
+    }
+    return new Secret(copy);
   }
 
   /**
@@ -47,7 +64,17 @@ export class Secret {
     if (!Number.isSafeInteger(bytes) || bytes < 1 || bytes > 4096) {
       otpFail("INVALID_SECRET_LENGTH");
     }
-    const generated = requireRandom().random(bytes);
+    let generated: Uint8Array;
+    try {
+      generated = requireRandom().random(bytes);
+    } catch (error) {
+      // 随机源契约：失败必须抛 name === "OtpError" 的错误（core otpFail / 平台 OtpError）；
+      // 其余异常（原生 TypeError 等）视为实现缺陷，与 HmacProvider 同一收敛策略。
+      if (error instanceof Error && error.name === "OtpError") {
+        throw error;
+      }
+      otpFail("CRYPTO_FAILED");
+    }
     // 先判类型再取 length：字符串 / array-like 的 length 可能「恰好合法」，
     // 而 new Uint8Array(字符串) 会得到 0 字节（空密钥，HMAC 退化为全零密钥）；
     // null / undefined 则连 .length 都取不到，会漏出 TypeError 而不是 OtpError。
