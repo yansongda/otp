@@ -9,38 +9,61 @@
  *
  * 错误码优先级（同一个调用可能同时命中多个校验时，按各入口的固定顺序返回第一个）：
  *
- *   构造 HOTP：secret 解析 → INVALID_DIGITS → INVALID_ALGORITHM → INVALID_COUNTER →
- *             SECRET_TOO_WEAK
- *   构造 TOTP：secret 解析 → INVALID_DIGITS → INVALID_ALGORITHM → INVALID_PERIOD →
- *             INVALID_T0 → INVALID_TIMESTAMP（clockOffsetMs 非有限）→ SECRET_TOO_WEAK
- *   URI parse：INVALID_OTPAUTH_URI（前缀非法）→ UNSUPPORTED_OTPAUTH_TYPE →
+ *   构造 HOTP：secret 解析 → INVALID_ALGORITHM → INVALID_DIGITS →
+ *             INVALID_MIN_SECRET_BITS → SECRET_TOO_WEAK → INVALID_COUNTER
+ *   构造 TOTP：secret 解析 → INVALID_ALGORITHM → INVALID_DIGITS →
+ *             INVALID_MIN_SECRET_BITS → SECRET_TOO_WEAK → INVALID_PERIOD →
+ *             INVALID_T0 → INVALID_CLOCK_OFFSET
+ *   URI parse：INVALID_OTPAUTH_URI（入参非字符串 / 前缀非法）→ UNSUPPORTED_OTPAUTH_TYPE →
  *             secret 解析 → INVALID_ALGORITHM → INVALID_DIGITS →
  *             INVALID_PERIOD | INVALID_COUNTER
- *   URI build：secret 解析 → INVALID_PERIOD | INVALID_COUNTER
- *   verify：INVALID_TOKEN → INVALID_COUNTER → INVALID_WINDOW
+ *   URI build：UNSUPPORTED_OTPAUTH_TYPE → INVALID_SECRET_CONTAINER（secret 非字符串）→
+ *             secret 解析 → INVALID_ALGORITHM → INVALID_DIGITS →
+ *             INVALID_OTPAUTH_URI（issuer/account 非字符串或无法百分号编码）→
+ *             INVALID_PERIOD | INVALID_COUNTER
+ *   verify：INVALID_TIMESTAMP（仅 TOTP 显式 timestamp）→ INVALID_CLOCK_OFFSET（TOTP
+ *           叠加 clockOffsetMs 后越界）→ INVALID_COUNTER → INVALID_WINDOW → INVALID_TOKEN
+ *           （含 token 非字符串）
  *
- * 约定：每个已知失败原因使用独立错误码，仅「同一语义条件出现在多个入口」时复用
- * （如 counter 越界 → INVALID_COUNTER）；禁止把不同原因合并成一个码。
+ * 两个原则：
+ * 1) 配置/构造期错误先于用户输入错误，避免「调用方写错参数」被「用户输错 token」掩盖；
+ * 2) 每个已知失败原因使用独立错误码，仅「同一语义条件出现在多个入口」时复用
+ *    （如 counter 越界 → INVALID_COUNTER）；禁止把不同原因合并成一个码。
  */
 
 export const OtpErrorCode = {
-  // secret 缺失 / 解码后为空
+  // secret 缺失 / 解码后为空 / 字节容器长度为 0
   EMPTY_SECRET: "EMPTY_SECRET",
+  // secret 容器类型不对（`fromBase32` 非字符串 / `fromBytes` 非 Uint8Array·ArrayBuffer /
+  // `OTPAuthURI.build` 的 secret 非字符串）：与「空密钥」区分，避免调用方误判
+  INVALID_SECRET_CONTAINER: "INVALID_SECRET_CONTAINER",
   INVALID_BASE32_CHAR: "INVALID_BASE32_CHAR",
-  // 严格 base32 专用：归一化后尾长 ∉ {0,2,4,5,7}，或末尾填充位非 0（宽松模式静默补 0）
+  // 严格 base32 专用：归一化后尾长 ∉ {0,2,4,5,7}，或末尾填充位非 0（宽松模式静默补 0）；
+  // 单字符（解码后 0 字节）两种模式都报 SECRET_TOO_SHORT，不随 strict 开关改变语义
   INVALID_BASE32_PADDING: "INVALID_BASE32_PADDING",
   SECRET_TOO_SHORT: "SECRET_TOO_SHORT",
+  // 仅用于 { minSecretBits } 强度校验
   SECRET_TOO_WEAK: "SECRET_TOO_WEAK",
+  // Secret.generate 长度越界；平台随机源：bytes 不是 [1, 4096] 整数
+  INVALID_SECRET_LENGTH: "INVALID_SECRET_LENGTH",
+  // minSecretBits 不是非负安全整数（参数错误；密钥本身强度不足才是 SECRET_TOO_WEAK）
+  INVALID_MIN_SECRET_BITS: "INVALID_MIN_SECRET_BITS",
   INVALID_ALGORITHM: "INVALID_ALGORITHM",
   INVALID_DIGITS: "INVALID_DIGITS",
   INVALID_PERIOD: "INVALID_PERIOD",
   INVALID_T0: "INVALID_T0",
   INVALID_COUNTER: "INVALID_COUNTER",
+  // 仅用于时间戳（epoch ms）
   INVALID_TIMESTAMP: "INVALID_TIMESTAMP",
+  // clockOffsetMs 非安全整数；syncClockOffset 的 delta 非安全整数 / 累加结果超出安全整数；
+  // 或 TOTP 的 timestamp + clockOffsetMs 叠加后超出安全整数
+  INVALID_CLOCK_OFFSET: "INVALID_CLOCK_OFFSET",
   INVALID_WINDOW: "INVALID_WINDOW",
+  // token 非纯数字 / 长度不等于 digits / 非字符串（JS 调用方）
   INVALID_TOKEN: "INVALID_TOKEN",
   CRYPTO_FAILED: "CRYPTO_FAILED",
   CRYPTO_NOT_INITIALIZED: "CRYPTO_NOT_INITIALIZED",
+  // URI 非字符串 / 不以 otpauth:// 开头 / build 的 issuer·account 非字符串或含无法百分号编码的字符
   INVALID_OTPAUTH_URI: "INVALID_OTPAUTH_URI",
   UNSUPPORTED_OTPAUTH_TYPE: "UNSUPPORTED_OTPAUTH_TYPE",
   NOT_IMPLEMENTED: "NOT_IMPLEMENTED",

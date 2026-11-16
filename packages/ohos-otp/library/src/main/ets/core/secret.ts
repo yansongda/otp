@@ -9,7 +9,7 @@
 import { requireRandom } from "./crypto";
 import { otpFail } from "./errors";
 import { decode, decodeStrict, encode } from "./internal/base32";
-import type { ParseOptions } from "./options";
+import { isStrictOption, type ParseOptions } from "./options";
 
 export class Secret {
   private readonly _bytes: Uint8Array;
@@ -20,36 +20,53 @@ export class Secret {
 
   /**
    * 从 base32 字符串构造，默认宽松解析（容忍大小写 / 空白 / 填充）；空结果抛 EMPTY_SECRET。
-   * options.strict === true 时追加规范形式校验，不合规抛 INVALID_BASE32_PADDING
-   * —— 用于「拒绝被截断 / 被改写的 secret」的导入边界。
+   * 严格模式（`options.strict` 非 false / 非未提供，见 isStrictOption）追加规范形式校验，
+   * 不合规抛 INVALID_BASE32_PADDING —— 用于拒绝被截断 / 被改写的 secret 的导入边界。
+   * 入参不是字符串（JS 调用方）→ INVALID_SECRET_CONTAINER：与 fromBytes 的非字节容器同码，
+   * 避免 `normalize()` 漏出「input.replace is not a function」这类原生 TypeError。
+   * `options` 传 `null` 与未传等价（不露原生 TypeError）。
    */
-  static fromBase32(input: string, options?: ParseOptions): Secret {
-    const strict = options !== undefined && options.strict === true;
-    const bytes = strict ? decodeStrict(input) : decode(input);
-    if (bytes.length === 0) {
-      otpFail("EMPTY_SECRET");
+  static fromBase32(input: string, options?: ParseOptions | null): Secret {
+    if (typeof input !== "string") {
+      otpFail("INVALID_SECRET_CONTAINER");
     }
-    return new Secret(bytes);
+    const strict = isStrictOption(options);
+    return new Secret(strict ? decodeStrict(input) : decode(input));
   }
 
-  /** 从字节数组构造（拷贝入参，杜绝外部引用共享）；空数组抛 EMPTY_SECRET。 */
-  static fromBytes(bytes: Uint8Array): Secret {
-    if (bytes.length === 0) {
+  /**
+   * 从字节容器构造：一律拷贝，杜绝外部引用共享；空数据抛 EMPTY_SECRET。
+   * 运行时只接受 Uint8Array / ArrayBuffer（其余抛 INVALID_SECRET_CONTAINER）：微信端是
+   * JS 调用，字符串与 array-like 的 length 可能恰好合法，`new Uint8Array(字符串)` 会得到
+   * 0 字节（空密钥）、array-like 会得到全零密钥，因此在转换之前先判类型，避免静默 fail-open。
+   * （`fromBase32` 的非字符串入参复用同一个错误码：两者都是「secret 容器类型不对」。）
+   *
+   * 注意：`new Uint8Array(arrayBuffer)` 只是视图而非拷贝——ArrayBuffer 入参必须先包一层
+   * 视图再拷贝，否则调用方后续改写/清零该 buffer 会直接改动实例内密钥。
+   */
+  static fromBytes(bytes: Uint8Array | ArrayBuffer): Secret {
+    if (!(bytes instanceof Uint8Array) && !(bytes instanceof ArrayBuffer)) {
+      otpFail("INVALID_SECRET_CONTAINER");
+    }
+    const view = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+    const copy = new Uint8Array(view);
+    if (copy.length === 0) {
       otpFail("EMPTY_SECRET");
     }
-    return new Secret(new Uint8Array(bytes));
+    return new Secret(copy);
   }
 
   /**
    * 随机生成 bytes 字节 secret（默认 20 字节 = RFC 4226 推荐 160 bit）。
-   * bytes 须为 [1, 4096] 整数，否则抛 SECRET_TOO_WEAK。
+   * bytes 须为 [1, 4096] 整数，否则抛 INVALID_SECRET_LENGTH
+   * （这不是「密钥强度不足」，强度问题由 minSecretBits 的 SECRET_TOO_WEAK 承担）。
    *
    * 注意：微信小程序默认不注册随机源（wx.getRandomValues 异步），
    * 未注入 RandomSource 时本方法抛 CRYPTO_NOT_INITIALIZED。
    */
   static generate(bytes = 20): Secret {
-    if (!Number.isInteger(bytes) || bytes < 1 || bytes > 4096) {
-      otpFail("SECRET_TOO_WEAK");
+    if (!Number.isSafeInteger(bytes) || bytes < 1 || bytes > 4096) {
+      otpFail("INVALID_SECRET_LENGTH");
     }
     return new Secret(new Uint8Array(requireRandom().random(bytes)));
   }

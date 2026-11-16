@@ -12,7 +12,8 @@ import {
   verify as engineVerify,
 } from "./internal/engine";
 import { resolveHmacOptions } from "./internal/resolve";
-import type { AlgorithmName, HotpOptions, VerifyOptions } from "./options";
+import type { AlgorithmName, HotpOptions, HotpVerifyOptions } from "./options";
+import { DEFAULT_COUNTER } from "./options";
 import { OTPAuthURI } from "./otpauth-uri";
 import type { Secret } from "./secret";
 
@@ -30,15 +31,10 @@ export class HOTP {
    */
   constructor(options: HotpOptions, provider?: HmacProvider) {
     const resolved = resolveHmacOptions(options);
-    const counter = options.counter === undefined ? 0 : options.counter;
-    const minSecretBits =
-      options.minSecretBits === undefined ? 0 : options.minSecretBits;
-
+    const counter =
+      options.counter === undefined ? DEFAULT_COUNTER : options.counter;
     if (!isSafeCounter(counter)) {
       otpFail("INVALID_COUNTER");
-    }
-    if (minSecretBits > 0 && resolved.secret.bitLength < minSecretBits) {
-      otpFail("SECRET_TOO_WEAK");
     }
 
     this._provider = provider === undefined ? requireHmac() : provider;
@@ -54,8 +50,8 @@ export class HOTP {
     return {
       algorithm: this._algorithm,
       digits: this._digits,
-      // 每次公开调用都经 Secret 取一份拷贝：密钥唯一事实源是 Secret._bytes，
-      // 不在实例里再存一份长期副本（也不把可写数组跨调用交给 provider）。
+      // 每次公开调用取一份临时副本：唯一事实源是 Secret._bytes，
+      // 不在实例里再存一份长期密钥，也不让 provider 摸到跨调用共享的可写数组。
       key: this._secret.bytes,
     };
   }
@@ -67,18 +63,17 @@ export class HOTP {
   }
 
   /**
-   * 恒定时间比对；counter 缺省用构造值、window 缺省 0。
+   * 恒定时间比对；counter 缺省用构造值、window 缺省 0、上限 MAX_VERIFY_WINDOW（10）。
    * 返回命中 counter 相对基准的偏移（步=1），未命中 null。
+   * `options` 传 null 与未传等价（JS 调用方）——不露原生 TypeError。
    */
-  verify(token: string, options?: VerifyOptions): number | null {
+  verify(token: string, options?: HotpVerifyOptions | null): number | null {
     const c =
-      options === undefined || options.counter === undefined
+      options == null || options.counter === undefined
         ? this._counter
         : options.counter;
     const window =
-      options === undefined || options.window === undefined
-        ? 0
-        : options.window;
+      options == null || options.window === undefined ? 0 : options.window;
     return engineVerify(this._provider, this.params(), token, c, window);
   }
 
@@ -105,7 +100,7 @@ export class HOTP {
       secret: params.secret,
       algorithm: params.algorithm,
       digits: params.digits,
-      counter: params.counter === undefined ? 0 : params.counter,
+      counter: params.counter === undefined ? DEFAULT_COUNTER : params.counter,
       issuer: params.issuer,
       account: params.account,
     });
