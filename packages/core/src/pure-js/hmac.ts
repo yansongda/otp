@@ -13,20 +13,21 @@ export function hmac(
 ): Uint8Array {
   // 密钥长于块大小时先哈希到摘要长度（RFC 2104 §2）
   const effectiveKey = key.length > blockSize ? hash(key) : key;
-  const keyBlock = new Uint8Array(blockSize);
-  keyBlock.set(effectiveKey);
 
+  // 直接按位写入 ipad / opad：省掉 keyBlock 的 set() 拷贝与一趟二次遍历
+  // （热路径：verify 窗口扫描里每个候选一次 HMAC）。
   const inner = new Uint8Array(blockSize + message.length);
+  const outerPad = new Uint8Array(blockSize);
   for (let i = 0; i < blockSize; i++) {
-    inner[i] = keyBlock[i] ^ 0x36;
+    const k = i < effectiveKey.length ? effectiveKey[i] : 0;
+    inner[i] = k ^ 0x36;
+    outerPad[i] = k ^ 0x5c;
   }
   inner.set(message, blockSize);
   const innerDigest = hash(inner);
 
   const outer = new Uint8Array(blockSize + innerDigest.length);
-  for (let i = 0; i < blockSize; i++) {
-    outer[i] = keyBlock[i] ^ 0x5c;
-  }
+  outer.set(outerPad);
   outer.set(innerDigest, blockSize);
   return hash(outer);
 }
