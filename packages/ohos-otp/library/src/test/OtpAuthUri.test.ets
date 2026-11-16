@@ -352,5 +352,42 @@ export default function otpAuthUriTest() {
       const back: OtpAuthParams = OTPAuthURI.parse(OTPAuthURI.build(p));
       assertParamsEqual(back, p);
     });
+
+    it('build_loneSurrogateLabel_throws', 0, () => {
+      // 孤立代理字符（如被截断的 emoji）会让 encodeURIComponent 抛原生 URIError；
+      // 公开契约是一切失败均抛 OtpError，必须收敛为 INVALID_OTPAUTH_URI
+      const loneSurrogate: string = String.fromCharCode(0xd800);
+      const p: OtpAuthParams = {
+        type: OtpType.TOTP,
+        secret: 'JBSWY3DPEHPK3PXP',
+        algorithm: OtpAlgorithm.SHA1,
+        digits: 6,
+        account: loneSurrogate
+      };
+      expectThrowsCode(() => OTPAuthURI.build(p), OtpErrorCode.INVALID_OTPAUTH_URI);
+    });
+
+    it('parse_legacySeparatorAfterExpandingCaseChar', 0, () => {
+      // 'İ' 小写后会多出组合字符（长度变化）；历史分隔符识别不得用 toLowerCase 取下标，
+      // 否则下标错位会退回「整段当 account」（丢 issuer）
+      const dotI: string = String.fromCharCode(0x130);
+      const uri: string = 'otpauth://totp/' + encodeURIComponent(dotI) +
+        '%3Aacct%3Abob?secret=JBSWY3DPEHPK3PXP&issuer=' + encodeURIComponent(dotI);
+      const p: OtpAuthParams = OTPAuthURI.parse(uri);
+      expect(p.issuer).assertEqual(dotI);
+      expect(p.account).assertEqual('acct:bob');
+    });
+
+    it('parse_inapplicableParamsIgnored', 0, () => {
+      // type 不适用的 query 参数被忽略（TOTP 的 counter / HOTP 的 period）
+      const totp: OtpAuthParams = OTPAuthURI.parse(
+        'otpauth://totp/a?secret=JBSWY3DPEHPK3PXP&counter=42');
+      expect(totp.counter).assertUndefined();
+      expect(totp.period).assertEqual(30);
+      const hotp: OtpAuthParams = OTPAuthURI.parse(
+        'otpauth://hotp/a?secret=JBSWY3DPEHPK3PXP&period=60');
+      expect(hotp.period).assertUndefined();
+      expect(hotp.counter).assertEqual(0);
+    });
   });
 }

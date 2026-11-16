@@ -19,7 +19,7 @@ const SECRET = "../core/src/secret.ts";
 
 const BASELINE = {
   // 算法测试已迁至 packages/core（295 条）；本包只保留平台层契约测试
-  testDeclarations: 16,
+  testDeclarations: 17,
   testFiles: 1,
   errorCodeMembers: 22,
 };

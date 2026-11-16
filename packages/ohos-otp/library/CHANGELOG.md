@@ -12,6 +12,7 @@
 - `OTPAuthURI` label：无原始冒号的 label 一律视为 account；仅当 query `issuer` 与 label 前缀一致时才把首个 `%3A` 当历史分隔符。仅有 label 前缀、不带 query `issuer` 的旧式 `issuer%3Aaccount` URI 将只保留完整 account（issuer 丢失）
 - `HOTP.verify` 不再接受 `timestamp`、`TOTP.verify` 不再接受 `counter`（对象字面量会编译失败）
 - `OtpError.name` 由 `'Error'` 改为 `'OtpError'`（provider 错误契约，三端一致）
+- 非字符串入参不再漏原生 `TypeError`：`secret` → `INVALID_SECRET_CONTAINER`、`token` → `INVALID_TOKEN`、`uri` / `build` 的 `issuer`·`account` → `INVALID_OTPAUTH_URI`（含无法百分号编码的孤立代理字符）
 
 #### Added
 
@@ -33,6 +34,8 @@
 - 随机源返回非 `Uint8Array` / 长度不符 / 抛出非 `OtpError` 一律收敛为 `CRYPTO_FAILED`
 - strict 单字符 secret 与宽松模式同码（`SECRET_TOO_SHORT`）
 - epoch 0（1970-01-01）为合法时间戳
+- `OTPAuthURI.build` / `toURI()` 不再漏原生 `URIError`：孤立代理字符收敛为 `INVALID_OTPAUTH_URI`
+- 历史 `%3A` 分隔符识别改为大小写不敏感扫描：小写后会变长的字符（`İ`）不再导致下标错位、丢 issuer
 
 ## 1.1.1 - 2026-11-12
 

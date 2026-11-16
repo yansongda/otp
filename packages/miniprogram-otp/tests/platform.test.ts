@@ -226,4 +226,31 @@ describe("platform barrel", () => {
       thrownCode(() => totp.verify("287082", { timestamp: 59000, window: 11 })),
     ).toBe("INVALID_WINDOW");
   });
+
+  it("non-string inputs fail closed instead of throwing TypeError", () => {
+    // 小程序是 JS 调用方：secret / token / issuer 类型不对时必须是 OtpError + 可分类码，
+    // 不得漏「input.replace is not a function」这类原生 TypeError
+    expect(thrownCode(() => Secret.fromBase32(123 as unknown as string))).toBe(
+      "INVALID_SECRET_CONTAINER",
+    );
+    expect(
+      thrownCode(() =>
+        new TOTP({ secret: "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ" }).verify(
+          undefined as unknown as string,
+        ),
+      ),
+    ).toBe("INVALID_TOKEN");
+    // 孤立代理字符（如被 slice 截断的 emoji）→ INVALID_OTPAUTH_URI（不是 URIError）
+    expect(
+      thrownCode(() =>
+        OTPAuthURI.build({
+          type: OtpType.TOTP,
+          secret: "JBSWY3DPEHPK3PXP",
+          algorithm: OtpAlgorithm.SHA1,
+          digits: 6,
+          account: "👨‍👩‍👧".slice(0, 1),
+        }),
+      ),
+    ).toBe("INVALID_OTPAUTH_URI");
+  });
 });

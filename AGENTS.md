@@ -33,7 +33,7 @@ Pi 只自动加载本文件（cwd 及其祖先的 context file）；子包 AGENT
 2. **错误跨层靠工厂**：core 只 `otpFail(code)`；平台 barrel 注册 `setErrorFactory`，公开 `OtpError` 由平台拥有。provider 失败必须抛 `name === "OtpError"` 的错误——core 的 engine 只兜未知错误，其余错误码原样上抛。provider 对 `key` / `message` 只能读，不得修改或跨调用保留引用（库每次公开调用传入一份密钥副本）。
 3. **ohos 副本禁止手改**：CI 必须跑 `bun run sync:core:check`；改动只能来自 core。
 4. **pure-js 不进 ohos 编译图**：ohos 只 import `core/src/index`，不得 import `core/src/pure-js*`。
-5. **参数口径**：`timestamp` / `period` / `t0` / `clockOffsetMs` / `minSecretBits` 必须是安全整数；`window` 上限 `MAX_VERIFY_WINDOW = 10`；每个已知失败原因使用独立错误码（仅同一语义条件在不同入口复用）。TOTP 显式 `timestamp` 合法但叠加偏移后为负或超出安全整数 → `INVALID_CLOCK_OFFSET`（归因偏移配置，不归咎入参）；`Secret.fromBytes` 只接受 `Uint8Array` / `ArrayBuffer`（其余抛 `INVALID_SECRET_CONTAINER`）；`OTPAuthURI` 的 `digits` / `period` / `counter` 只认十进制整数（拒绝 0x / 科学计数 / 小数）。
+5. **参数口径**：`timestamp` / `period` / `t0` / `clockOffsetMs` / `minSecretBits` 必须是安全整数；`window` 上限 `MAX_VERIFY_WINDOW = 10`；每个已知失败原因使用独立错误码（仅同一语义条件在不同入口复用）。TOTP 显式 `timestamp` 合法但叠加偏移后为负或超出安全整数 → `INVALID_CLOCK_OFFSET`（归因偏移配置，不归咎入参）；`Secret` 字符串/字节容器类型不对 → `INVALID_SECRET_CONTAINER`（`fromBase32` 非字符串、`fromBytes` 非 `Uint8Array` / `ArrayBuffer`）；`token` 非字符串 → `INVALID_TOKEN`；`uri` 非字符串或 `build` 的 `issuer`·`account` 非字符串 / 无法百分号编码 → `INVALID_OTPAUTH_URI`（不再漏原生 `TypeError` / `URIError`）；`OTPAuthURI` 的 `digits` / `period` / `counter` 只认十进制整数（拒绝 0x / 科学计数 / 小数）。
 6. **错误码新增流程**：core 码表 → ohos enum + `asOtpErrorCode` → 两个守卫基线 + smoke → 四份 README → release PR 的 CHANGELOG，缺一不可。**破坏性行为变更**（错误码映射变化、参数口径收紧、`window` 上限等）必须在 CHANGELOG 单列 `Breaking changes`，不能只写在 PR 描述里。
 7. 其余算法不变量（取模位置、恒定时间 verify、secret 不泄漏）见两个包内 AGENTS.md，保持有效。
 

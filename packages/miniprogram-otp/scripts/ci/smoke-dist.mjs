@@ -69,6 +69,31 @@ assert.equal(m.OtpErrorCode.INVALID_MIN_SECRET_BITS, "INVALID_MIN_SECRET_BITS");
 assert.equal(Object.keys(m.OtpErrorCode).length, 22);
 assert.equal(m.MAX_VERIFY_WINDOW, 10);
 
+// 非字符串入参 fail-closed：小程序是 JS 调用方，不得漏原生 TypeError
+assert.throws(
+  () => m.Secret.fromBase32(123),
+  (e) =>
+    e instanceof m.OtpError &&
+    e.code === m.OtpErrorCode.INVALID_SECRET_CONTAINER,
+);
+assert.throws(
+  () => new m.TOTP({ secret: "JBSWY3DPEHPK3PXP" }).verify(undefined),
+  (e) => e instanceof m.OtpError && e.code === m.OtpErrorCode.INVALID_TOKEN,
+);
+// 孤立代理字符（如被 slice 截断的 emoji）不得漏 URIError
+assert.throws(
+  () =>
+    m.OTPAuthURI.build({
+      type: "totp",
+      secret: "JBSWY3DPEHPK3PXP",
+      algorithm: "SHA1",
+      digits: 6,
+      account: "👨‍👩‍👧".slice(0, 1),
+    }),
+  (e) =>
+    e instanceof m.OtpError && e.code === m.OtpErrorCode.INVALID_OTPAUTH_URI,
+);
+
 // fromBytes(ArrayBuffer) 必须是拷贝：调用方清零原 buffer 不影响实例
 const rawSecret = new ArrayBuffer(20);
 new Uint8Array(rawSecret).fill(0x01);
