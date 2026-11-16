@@ -46,9 +46,11 @@ function parseDecimal(raw: string): number | null {
 export class OTPAuthURI {
   /**
    * 解析 otpauth:// URI 为 OtpAuthParams：scheme 大小写不敏感 → type 限 totp/hotp →
-   * label 按**原始串**首个冒号切分后逐段百分号解码（失败回退原串）→ query 手写拆分 →
+   * query 手写拆分 → label 按**原始串**首个冒号切分后逐段百分号解码（失败回退原串）→
    * digits / period / counter 只接受纯十进制整数（拒绝 0x / 科学计数 / 小数）→
    * secret 规范化为大写无填充 base32；未知参数忽略，query 的 issuer 优先于 label 前缀。
+   * 无原始冒号的 label 一律视为 account；仅当 query issuer 存在且与 label 前缀一致时，
+   * 才把历史形式 `issuer%3Aaccount` 的首个 %3A 当作分隔符（否则不猜，保留完整 account）。
    * options.strict === true 时 secret 必须是规范 base32，否则 INVALID_BASE32_PADDING。
    */
   static parse(uri: string, options?: ParseOptions): OtpAuthParams {
@@ -71,37 +73,7 @@ export class OTPAuthURI {
       otpFail("UNSUPPORTED_OTPAUTH_TYPE");
     }
 
-    // ③ label：'/' 之后、'?' 之前的部分
-    const labelRaw =
-      slashIndex === -1 ? "" : beforeQuery.substring(slashIndex + 1);
-    // label 字段（parse 回填用）保留整体解码结果；失败回退原串
-    let label = labelRaw;
-    try {
-      label = decodeURIComponent(labelRaw);
-    } catch {
-      label = labelRaw;
-    }
-    // 切分与解码顺序：必须**先按原始串**切分，再逐段解码。
-    // build 会把 issuer 内部的冒号编码为 %3A（label 里只有分隔冒号是原字符），
-    // 若先整体解码再切分，issuer 里的 %3A 会被误当分隔符（build → parse 往返丢 issuer）。
-    let issuerFromLabel = "";
-    let account = "";
-    const colonIndex = labelRaw.indexOf(":");
-    if (colonIndex !== -1) {
-      issuerFromLabel = decodePart(labelRaw.substring(0, colonIndex));
-      account = decodePart(labelRaw.substring(colonIndex + 1));
-    } else {
-      // 兼容把分隔符整体编码为 %3A 的 URI（issuer%3Aaccount），大小写不敏感
-      const pctIndex = labelRaw.toLowerCase().indexOf("%3a");
-      if (pctIndex !== -1) {
-        issuerFromLabel = decodePart(labelRaw.substring(0, pctIndex));
-        account = decodePart(labelRaw.substring(pctIndex + 3));
-      } else {
-        account = decodePart(labelRaw);
-      }
-    }
-
-    // ④ query 手写拆分：'&' 分段、'=' 分键值，键值均百分号解码（失败回退原串）
+    // ③ query 手写拆分：'&' 分段、'=' 分键值，键值均百分号解码（失败回退原串）
     const params = new Map<string, string>();
     if (queryPart !== "") {
       const pairs = queryPart.split("&");
@@ -121,6 +93,45 @@ export class OTPAuthURI {
           value = pair.substring(eqIndex + 1);
         }
         params.set(decodePart(key).toLowerCase(), decodePart(value));
+      }
+    }
+
+    // ④ label：'/' 之后、'?' 之前的部分
+    const labelRaw =
+      slashIndex === -1 ? "" : beforeQuery.substring(slashIndex + 1);
+    // label 字段（parse 回填用）保留整体解码结果；失败回退原串
+    let label = labelRaw;
+    try {
+      label = decodeURIComponent(labelRaw);
+    } catch {
+      label = labelRaw;
+    }
+    // 切分与解码顺序：必须**先按原始串**切分，再逐段解码。
+    // build 会把 issuer 内部的冒号编码为 %3A（label 里只有分隔冒号是原字符），
+    // 若先整体解码再切分，issuer 里的 %3A 会被误当分隔符（build → parse 往返丢 issuer）。
+    let issuerFromLabel = "";
+    let account = "";
+    const colonIndex = labelRaw.indexOf(":");
+    if (colonIndex !== -1) {
+      issuerFromLabel = decodePart(labelRaw.substring(0, colonIndex));
+      account = decodePart(labelRaw.substring(colonIndex + 1));
+    } else {
+      // 无原始分隔冒号：规范语义是「整段 label 就是 account」。
+      // 唯一例外是历史 URI 把分隔符整体编码为 %3A（issuer%3Aaccount）：只有 query issuer
+      // 同时存在、且与 label 前缀一致时，才能安全地把它当分隔符。否则宁可保留完整 account，
+      // 也不猜——build 产物把 account 内的冒号编码为 %3A，猜错会把 account 截断。
+      const issuerQueryForLabel = params.get("issuer");
+      const pctIndex = labelRaw.toLowerCase().indexOf("%3a");
+      if (
+        pctIndex !== -1 &&
+        issuerQueryForLabel !== undefined &&
+        issuerQueryForLabel !== "" &&
+        decodePart(labelRaw.substring(0, pctIndex)) === issuerQueryForLabel
+      ) {
+        issuerFromLabel = issuerQueryForLabel;
+        account = decodePart(labelRaw.substring(pctIndex + 3));
+      } else {
+        account = decodePart(labelRaw);
       }
     }
 
@@ -210,7 +221,8 @@ export class OTPAuthURI {
 
   /**
    * 由 OtpAuthParams 生成规范 URI。参数顺序固定：secret, issuer, algorithm, digits, period|counter。
-   * label 形如 issuer:account（两者百分号编码、冒号保留，为空则省略）；algorithm 始终输出，
+   * label 仅由 account 派生：`issuer:account`（两者百分号编码、分隔冒号保留）；
+   * account 为空时整个 label 省略（不把 issuer 写进 label）。algorithm 始终输出，
    * digits 仅 !== 6、period 仅 TOTP 且 !== 30 时输出（与 GA 二维码惯例一致），HOTP 始终输出 counter。
    * secret 先经 Base32 规范化（与 parse 对称）；非法 base32 抛对应错误码。
    *
@@ -233,14 +245,13 @@ export class OTPAuthURI {
     const issuer = params.issuer === undefined ? "" : params.issuer;
     const account = params.account === undefined ? "" : params.account;
 
-    // label：issuer:account 均百分号编码、冒号保留；缺省方省略
+    // label：仅当 account 非空时输出（issuer:account 百分号编码、分隔冒号保留）。
+    // account 为空时不把 issuer 写进 label：规范里无原始冒号的 label 就是 account，
+    // 否则 build → parse 会凭空多出一个与 issuer 同名的 account。
     let label = "";
-    if (issuer !== "") {
-      label += encodeURIComponent(issuer);
-    }
     if (account !== "") {
-      if (label !== "") {
-        label += ":";
+      if (issuer !== "") {
+        label += `${encodeURIComponent(issuer)}:`;
       }
       label += encodeURIComponent(account);
     }

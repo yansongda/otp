@@ -14,7 +14,7 @@ The protocol implementation comes from this monorepo's shared, platform-agnostic
 - `otpauth://` URI parsing and generation (`OTPAuthURI`, `TOTP.fromURI`, `HOTP.fromURI`)
 - `Secret` normalization, validation, byte/bit introspection and `toJSON()` redaction
 - Optional strict Base32 parsing (`{ strict: true }`)
-- Unified `OtpError` model with 21 frozen string error codes (`OtpErrorCode` is re-exported from the shared core)
+- Unified `OtpError` model with 22 frozen string error codes (`OtpErrorCode` is re-exported from the shared core)
 - Zero runtime dependencies
 - TypeScript declarations included
 
@@ -128,7 +128,7 @@ try {
 | `hotp.verify(token: string, options?: HotpVerifyOptions): number \| null`                   | Return counter delta or `null`                                                                                |
 | `hotp.toURI(): string` / `HOTP.fromURI(uri: string): HOTP`                                  | Serialize / restore HOTP                                                                                      |
 | `Secret.fromBase32(s: string, options?: ParseOptions): Secret`                              | Parse Base32; lenient by default                                                                              |
-| `Secret.fromBytes(bytes: Uint8Array): Secret`                                               | Copy bytes (Uint8Array / ArrayBuffer only); empty or non-byte input throws `EMPTY_SECRET`                     |
+| `Secret.fromBytes(bytes: Uint8Array \| ArrayBuffer): Secret`                                | Copy bytes; empty throws `EMPTY_SECRET`, other container types throw `INVALID_SECRET_CONTAINER`               |
 | `Secret.generate(bytes = 20): Secret`                                                       | Generate via the internal `RandomSource` registry; on WeChat no default source is registered, see limitations |
 | `secret.toBase32(): string`                                                                 | Canonical uppercase, unpadded Base32                                                                          |
 | `secret.bytes` / `secret.byteLength` / `secret.bitLength`                                   | Byte view (copy) / byte length / bit length                                                                   |
@@ -158,12 +158,13 @@ All failures throw `OtpError` with a fixed `code`. Messages never contain secret
 
 | Code                       | Meaning                                                                                                                                                                                                       |
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `EMPTY_SECRET`             | Missing or empty secret                                                                                                                                                                                       |
+| `EMPTY_SECRET`             | Missing or empty secret (including zero-length bytes)                                                                                                                                                         |
+| `INVALID_SECRET_CONTAINER` | Byte input is not a `Uint8Array` / `ArrayBuffer` (for example a string, array-like or `null`)                                                                                                                 |
 | `INVALID_BASE32_CHAR`      | Character outside the Base32 alphabet                                                                                                                                                                         |
 | `INVALID_BASE32_PADDING`   | Strict mode: non-canonical tail length or non-zero tail bits                                                                                                                                                  |
 | `SECRET_TOO_SHORT`         | Decoded secret is shorter than one byte                                                                                                                                                                       |
 | `SECRET_TOO_WEAK`          | `minSecretBits` check failed (strength only)                                                                                                                                                                  |
-| `INVALID_SECRET_LENGTH`    | `Secret.generate(bytes)` bytes is not an integer in `[1, 4096]`                                                                                                                                               |
+| `INVALID_SECRET_LENGTH`    | `Secret.generate(bytes)` bytes is not an integer in `[1, 4096]` (same code for a platform random-source size)                                                                                                 |
 | `INVALID_MIN_SECRET_BITS`  | `minSecretBits` is not a non-negative safe integer (fail-closed)                                                                                                                                              |
 | `INVALID_ALGORITHM`        | Not SHA1 / SHA256 / SHA512                                                                                                                                                                                    |
 | `INVALID_DIGITS`           | Not 6 / 7 / 8                                                                                                                                                                                                 |
@@ -211,13 +212,14 @@ The Mini Program has no WebCrypto / SubtleCrypto. HMAC-SHA1/256/512 are implemen
 - Counter is limited to `2^53-1` because JavaScript numbers cannot represent larger integers exactly.
 - `otpauth://` is a Google Authenticator de-facto standard (IANA Provisional #13829), not an RFC.
 - Unknown URI query parameters are ignored for interoperability.
+- `otpauth://` label: a label without a raw `:` is treated as the account name. `%3A` only acts as a legacy `issuer%3Aaccount` separator when the query `issuer` exists and matches the label prefix; otherwise the whole label stays the account (so an account containing `:` round-trips intact).
 - `verify()` defaults to `window: 0`; pass `window: 1` to tolerate the one-step network delay described by RFC 6238 §5.2. The window is capped at `MAX_VERIFY_WINDOW = 10` steps (`INVALID_WINDOW` beyond it) — ±3 steps is already very lenient for a dynamic code, so 10 (±5 minutes at the default period) is the ceiling rather than a tuning knob.
 - No Steam Guard, SHA224/SHA384/SM3, BigInt counters, throttling (RFC 4226 §7.3 is a server responsibility), QR rendering or scanning.
 - Pure-JS HMAC is slower than native crypto; this library targets client-side code generation, not bulk server verification.
 
 ## Shared core and platform differences
 
-- Public API, DTO field names, 21 error codes and RFC behavior are aligned with the HarmonyOS package (`@yansongda/otp`): both consume the same `packages/core`, so the error model cannot drift.
+- Public API, DTO field names, 22 error codes and RFC behavior are aligned with the HarmonyOS package (`@yansongda/otp`): both consume the same `packages/core`, so the error model cannot drift.
 - Both packages consume `packages/core`; only the type layer and crypto provider differ.
 - `OtpAlgorithm` is a `const` object plus string union instead of an ArkTS `enum`, so both `"SHA1"` and `OtpAlgorithm.SHA1` work.
 - `OtpError` sets `name` and repairs the prototype chain **only when the prototype has degraded to `Error.prototype`** (WeChat ES5 downleveling); an unconditional `Object.setPrototypeOf` would rewrite subclass instances and break `instanceof` for subclasses. ES5 + custom subclasses must still fix their own prototype chain.

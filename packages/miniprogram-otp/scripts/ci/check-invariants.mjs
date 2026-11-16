@@ -18,10 +18,10 @@ const CORE_ERRORS = "../core/src/errors.ts";
 const SECRET = "../core/src/secret.ts";
 
 const BASELINE = {
-  // 算法测试已迁至 packages/core（287 条）；本包只保留平台层契约测试
-  testDeclarations: 15,
+  // 算法测试已迁至 packages/core（295 条）；本包只保留平台层契约测试
+  testDeclarations: 16,
   testFiles: 1,
-  errorCodeMembers: 21,
+  errorCodeMembers: 22,
 };
 
 const SKIP_DIRS = new Set(["node_modules", "dist", "coverage", ".git"]);
@@ -101,13 +101,16 @@ check("源码禁止 console.*（库内零日志）", () => {
   return "无输出语句";
 });
 
-check("源码禁止 wx.*（平台能力不得进入核心）", () => {
+check("源码禁止平台能力（wx.* / @kit.*）", () => {
   const hits = [];
   for (const rel of sourceFiles()) {
-    if (/\bwx\s*\./.test(stripComments(readText(rel)))) hits.push(rel);
+    const text = stripComments(readText(rel));
+    if (/\bwx\s*\./.test(text)) hits.push(`${rel}(wx)`);
+    // core 必须零平台：@kit 只允许出现在 ohos 的 CryptoSource.ets
+    if (/from\s+["']@kit\./.test(text)) hits.push(`${rel}(@kit)`);
   }
-  if (hits.length > 0) throw new Error(`发现 wx 调用：${hits.join(", ")}`);
-  return "核心平台无关";
+  if (hits.length > 0) throw new Error(`发现平台 API：${hits.join(", ")}`);
+  return "core / 平台层均无 wx / @kit 调用";
 });
 
 check("源码禁止 node: 内置模块与 padStart", () => {
@@ -264,6 +267,17 @@ check("原型修复只在原型退化时执行（core / mp 条件一致）", () 
     );
   }
   return "core / mp 两处条件一致";
+});
+
+check("OTPAuthURI 类型桥不使用 as unknown as", () => {
+  // 整体断言会吞掉 core build/parse 的签名漂移；只允许对 parse 返回值做一次投影
+  const text = stripComments(readText(BARREL));
+  if (/CoreOTPAuthURI\s+as\s+unknown\s+as/.test(text)) {
+    throw new Error(
+      "src/index.ts 用 as unknown as 整体断言 OTPAuthURI；请改为显式 wrapper",
+    );
+  }
+  return "显式 wrapper（parse 仅返回值投影）";
 });
 
 check("零运行时依赖", () => {

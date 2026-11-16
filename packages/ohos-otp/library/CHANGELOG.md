@@ -1,5 +1,39 @@
 # Changelog
 
+## [Unreleased]
+
+#### Breaking changes
+
+- `verify({ window })` 上限 1000 → 10（`MAX_VERIFY_WINDOW`，超出抛 `INVALID_WINDOW`）
+- 时间参数统一要求安全整数：`timestamp`（非负）、`period`（正）、`t0`（非负）、`clockOffsetMs`；小数 / `NaN` / 超大值不再静默接受
+- 错误码归因调整：`Secret.generate` 长度越界 → `INVALID_SECRET_LENGTH`；`clockOffsetMs` 非法、同步偏移越界 → `INVALID_CLOCK_OFFSET`；`minSecretBits` 非法 → `INVALID_MIN_SECRET_BITS`（fail-closed）
+- `Secret.fromBytes` 非字节容器 → `INVALID_SECRET_CONTAINER`；`ArrayBuffer` 入参改为真正的拷贝语义（原先是内存别名）
+- `OTPAuthURI.parse` 的 `digits` / `period` / `counter` 只认纯十进制整数；`OTPAuthURI.build` 对非法参数改为抛错
+- `OTPAuthURI` label：无原始冒号的 label 一律视为 account；仅当 query `issuer` 与 label 前缀一致时才把首个 `%3A` 当历史分隔符。仅有 label 前缀、不带 query `issuer` 的旧式 `issuer%3Aaccount` URI 将只保留完整 account（issuer 丢失）
+- `HOTP.verify` 不再接受 `timestamp`、`TOTP.verify` 不再接受 `counter`（对象字面量会编译失败）
+- `OtpError.name` 由 `'Error'` 改为 `'OtpError'`（provider 错误契约，三端一致）
+
+#### Added
+
+- 新错误码 `INVALID_SECRET_CONTAINER`（字节容器类型不对，与「空密钥」区分）
+- `OtpError.codeString`：保留原始错误码字符串（未知码兜底时仍可拿到真实值）
+- 导出 `MAX_VERIFY_WINDOW`、`HotpVerifyOptions`、`TotpVerifyOptions`
+
+#### Changed
+
+- `OtpErrorCode`、参数校验顺序、错误工厂路径收敛到 core 单源；平台层不再手抄码表
+- provider 错误契约：仅未知错误收敛为 `CRYPTO_FAILED`，已知错误码原样上抛；未知算法统一 `INVALID_ALGORITHM`
+- `syncClockOffset` 的 delta 非安全整数 / 累加溢出 → `INVALID_CLOCK_OFFSET`
+
+#### Fixed
+
+- `Secret.fromBytes(ArrayBuffer)` 改为拷贝，调用方清零/改写原 buffer 不再影响实例密钥
+- TOTP 显式 timestamp 合法但叠加偏移后为负或越界 → `INVALID_CLOCK_OFFSET`
+- provider 摘要长度与算法不匹配统一收敛为 `CRYPTO_FAILED`
+- 随机源返回非 `Uint8Array` / 长度不符 / 抛出非 `OtpError` 一律收敛为 `CRYPTO_FAILED`
+- strict 单字符 secret 与宽松模式同码（`SECRET_TOO_SHORT`）
+- epoch 0（1970-01-01）为合法时间戳
+
 ## 1.1.1 - 2026-11-12
 
 > 仅内部架构与包元数据变更，**无 API / 行为变化**；消费方无需改动任何代码。

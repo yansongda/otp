@@ -78,6 +78,22 @@ export default function secretTest() {
       expect(secret.bytes[0]).assertEqual(1);
     });
 
+    it('fromBytes_arrayBufferCopiesInput', 0, () => {
+      // new Uint8Array(arrayBuffer) 是视图而非拷贝：必须拷一份，
+      // 否则调用方清零/改写原 buffer 会直接改动实例内密钥。
+      const buffer: ArrayBuffer = new ArrayBuffer(20);
+      const view: Uint8Array = new Uint8Array(buffer);
+      view.fill(1);
+      const secret: Secret = Secret.fromBytes(buffer);
+      expect(secret.byteLength).assertEqual(20);
+      view.fill(0);
+      expect(secret.bytes[0]).assertEqual(1);
+    });
+
+    it('fromBytes_emptyArrayBufferThrows', 0, () => {
+      expectThrowsCode(() => Secret.fromBytes(new ArrayBuffer(0)), OtpErrorCode.EMPTY_SECRET);
+    });
+
     it('bytesGetter_returnsCopy', 0, () => {
       const secret: Secret = Secret.fromBase32('JBSWY3DPEHPK3PXP');
       const view: Uint8Array = secret.bytes;

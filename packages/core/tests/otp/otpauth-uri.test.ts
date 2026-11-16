@@ -21,8 +21,9 @@ describe("otpauth-uri", () => {
   });
 
   it("parse_labelPercent3ASeparator", () => {
+    // 历史形态：分隔符整体编码为 %3A，且 query issuer 与 label 前缀一致 → 才当分隔符
     const p = OTPAuthURI.parse(
-      "otpauth://totp/ACME%3Aco@example.com?secret=JBSWY3DPEHPK3PXP",
+      "otpauth://totp/ACME%3Aco@example.com?secret=JBSWY3DPEHPK3PXP&issuer=ACME",
     );
     expect(p.issuer).toBe("ACME");
     expect(p.account).toBe("co@example.com");
@@ -160,7 +161,7 @@ describe("otpauth-uri", () => {
 
   it("parse_percentEncodedColonAndSlash", () => {
     const p = OTPAuthURI.parse(
-      "otpauth://totp/My%20Issuer%3Auser%2Fname?secret=JBSWY3DPEHPK3PXP",
+      "otpauth://totp/My%20Issuer%3Auser%2Fname?secret=JBSWY3DPEHPK3PXP&issuer=My%20Issuer",
     );
     expect(p.issuer).toBe("My Issuer");
     expect(p.account).toBe("user/name");
@@ -438,6 +439,34 @@ describe("otpauth-uri", () => {
     ).toBe(42);
   });
 
+  it("parse_multiInvalid_followsPriorityTable", () => {
+    // errors.ts parse 顺序：URI → type → secret → algorithm → digits → period|counter
+    expectCode(
+      () =>
+        OTPAuthURI.parse("otpauth://foo/x?secret=AB1&algorithm=MD5&digits=5"),
+      "UNSUPPORTED_OTPAUTH_TYPE",
+    );
+    expectCode(
+      () =>
+        OTPAuthURI.parse("otpauth://totp/x?secret=AB1&algorithm=MD5&digits=5"),
+      "INVALID_BASE32_CHAR",
+    );
+    expectCode(
+      () =>
+        OTPAuthURI.parse(
+          "otpauth://totp/x?secret=JBSWY3DPEHPK3PXP&algorithm=MD5&digits=5",
+        ),
+      "INVALID_ALGORITHM",
+    );
+    expectCode(
+      () =>
+        OTPAuthURI.parse(
+          "otpauth://totp/x?secret=JBSWY3DPEHPK3PXP&digits=5&period=0",
+        ),
+      "INVALID_DIGITS",
+    );
+  });
+
   it("build_secretErrorPrecedesParamErrors", () => {
     // errors.ts 优先级：解析类先于参数类（与 parse 对称）
     expectCode(
@@ -502,17 +531,71 @@ describe("otpauth-uri", () => {
   });
 
   it("parse_legacyEncodedSeparatorIsCaseInsensitive", () => {
-    // 兼容把分隔符整体编码为 %3A / %3a 的 URI（issuer%3Aaccount）
+    // 兼容把分隔符整体编码为 %3A / %3a 的 URI（issuer%3Aaccount）：
+    // 仅当 query issuer 存在且与 label 前缀一致时才拆分（且大小写不敏感）
     const upper = OTPAuthURI.parse(
-      "otpauth://totp/ACME%3Aco@example.com?secret=JBSWY3DPEHPK3PXP",
+      "otpauth://totp/ACME%3Aco@example.com?secret=JBSWY3DPEHPK3PXP&issuer=ACME",
     );
     expect(upper.issuer).toBe("ACME");
     expect(upper.account).toBe("co@example.com");
 
     const lower = OTPAuthURI.parse(
-      "otpauth://totp/ACME%3aco@example.com?secret=JBSWY3DPEHPK3PXP",
+      "otpauth://totp/ACME%3aco@example.com?secret=JBSWY3DPEHPK3PXP&issuer=ACME",
     );
     expect(lower.issuer).toBe("ACME");
     expect(lower.account).toBe("co@example.com");
+
+    // 无 query issuer 时不能猜：规范语义下整段 label 就是 account（数据不丢）
+    const noIssuer = OTPAuthURI.parse(
+      "otpauth://totp/ACME%3Aco@example.com?secret=JBSWY3DPEHPK3PXP",
+    );
+    expect(noIssuer.issuer).toBeUndefined();
+    expect(noIssuer.account).toBe("ACME:co@example.com");
+  });
+
+  it("build_issuerOnly_doesNotEmitLabel", () => {
+    // 规范里无原始冒号的 label 就是 account；issuer 为空 account 时不能把 issuer 写进 label
+    const uri = OTPAuthURI.build({
+      type: OtpType.TOTP,
+      secret: "JBSWY3DPEHPK3PXP",
+      algorithm: OtpAlgorithm.SHA1,
+      digits: 6,
+      issuer: "ACME",
+    });
+    expect(uri).toBe(
+      "otpauth://totp/?secret=JBSWY3DPEHPK3PXP&issuer=ACME&algorithm=SHA1",
+    );
+    const p = OTPAuthURI.parse(uri);
+    expect(p.issuer).toBe("ACME");
+    expect(p.account).toBeUndefined();
+  });
+
+  it("build_accountWithColon_roundTrips", () => {
+    // account 内的冒号编码为 %3A；parse 无原始冒号时不得再把它当分隔符
+    for (const account of ["a:b", "a:b:c", "ACME:a"]) {
+      const uri = OTPAuthURI.build({
+        type: OtpType.TOTP,
+        secret: "JBSWY3DPEHPK3PXP",
+        algorithm: OtpAlgorithm.SHA1,
+        digits: 6,
+        account,
+      });
+      const p = OTPAuthURI.parse(uri);
+      expect(p.account).toBe(account);
+      expect(p.issuer).toBeUndefined();
+    }
+  });
+
+  it("build_issuerWithColon_noAccount_roundTrips", () => {
+    const uri = OTPAuthURI.build({
+      type: OtpType.TOTP,
+      secret: "JBSWY3DPEHPK3PXP",
+      algorithm: OtpAlgorithm.SHA1,
+      digits: 6,
+      issuer: "AC:ME",
+    });
+    const p = OTPAuthURI.parse(uri);
+    expect(p.issuer).toBe("AC:ME");
+    expect(p.account).toBeUndefined();
   });
 });

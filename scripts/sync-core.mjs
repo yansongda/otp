@@ -64,21 +64,28 @@ function isExcluded(rel) {
   return EXCLUDED.some((dir) => rel === dir || rel.startsWith(`${dir}/`));
 }
 
-async function listTsFiles(dir) {
+/** 递归列出目录下全部文件；目录不存在时返回空（--check 用）。 */
+async function listAllFiles(dir) {
   const out = [];
-  const entries = await readdir(dir, { withFileTypes: true });
+  let entries;
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return out;
+  }
   for (const entry of entries) {
     const full = join(dir, entry.name);
     if (entry.isDirectory()) {
-      out.push(...(await listTsFiles(full)));
-    } else if (entry.isFile() && entry.name.endsWith(".ts")) {
-      const rel = relative(CORE_SRC, full);
-      if (!isExcluded(rel)) {
-        out.push(full);
-      }
+      out.push(...(await listAllFiles(full)));
+    } else if (entry.isFile()) {
+      out.push(full);
     }
   }
   return out;
+}
+
+async function listTsFiles(dir) {
+  return (await listAllFiles(dir)).filter((file) => file.endsWith(".ts"));
 }
 
 function withHeader(source, rel) {
@@ -86,7 +93,9 @@ function withHeader(source, rel) {
 }
 
 async function main() {
-  const files = await listTsFiles(CORE_SRC);
+  const files = (await listTsFiles(CORE_SRC)).filter(
+    (file) => !isExcluded(relative(CORE_SRC, file)),
+  );
   let drift = 0;
 
   if (!checkOnly) {
@@ -117,6 +126,18 @@ async function main() {
   }
 
   if (checkOnly) {
+    // 反向校验：生成目录里不得残留已从 core 删除（或手加）的文件，
+    // 否则它们会被 hvigor 编进 HAR，而 --check 逐文件比对永远发现不了。
+    const expectedRel = new Set(files.map((file) => relative(CORE_SRC, file)));
+    const actualRel = (await listAllFiles(TARGET)).map((file) =>
+      relative(TARGET, file),
+    );
+    const extra = actualRel.filter((rel) => !expectedRel.has(rel));
+    for (const rel of extra) {
+      console.error("[sync-core] stale:", relative(ROOT, join(TARGET, rel)));
+      drift++;
+    }
+
     if (drift > 0) {
       console.error(
         `[sync-core] ${drift} file(s) out of sync. Run: bun run sync:core`,

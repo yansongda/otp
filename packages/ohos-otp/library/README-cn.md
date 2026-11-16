@@ -108,7 +108,7 @@ try {
 | `hotp.verify(token: string, options?: HotpVerifyOptions): number \| null`                   | 恒定时间比对；返回 counter 偏移或 `null`                                                                              |
 | `hotp.toURI(): string` / `HOTP.fromURI(uri: string): HOTP`                                  | 序列化为 / 从 `otpauth://hotp/...` URI 恢复                                                                           |
 | `Secret.fromBase32(s: string, options?: ParseOptions): Secret`                              | 从 base32 字符串构造（默认宽松：大小写/空白/填充；`{ strict: true }` 额外要求规范尾部）                               |
-| `Secret.fromBytes(bytes: Uint8Array): Secret`                                               | 从字节容器构造（拷贝语义；仅接受 `Uint8Array` / `ArrayBuffer`，空数据或其他类型抛 `EMPTY_SECRET`）                    |
+| `Secret.fromBytes(bytes: Uint8Array \| ArrayBuffer): Secret`                                | 从字节容器构造（拷贝语义；空数据抛 `EMPTY_SECRET`，其他类型抛 `INVALID_SECRET_CONTAINER`）                            |
 | `Secret.generate(bytes: number = 20): Secret`                                               | 经注册的随机源生成随机 secret                                                                                         |
 | `secret.toBase32(): string`                                                                 | 规范化大写、无填充 base32                                                                                             |
 | `secret.bytes` / `secret.byteLength` / `secret.bitLength`                                   | 强度自省（bytes 为拷贝）                                                                                              |
@@ -147,16 +147,17 @@ try {
 
 ## 错误处理与故障排查
 
-一切失败均抛 `OtpError`，携带固定 `code`（字符串）；错误消息绝不包含 secret、token 或密钥材料。下表覆盖全部 21 个错误码（`OtpErrorCode` 经 barrel 导出；取值镜像自共享 core，并由仓库守卫逐项对拍）。`NOT_IMPLEMENTED` 只是「枚举映射不到」时的兜底——库内不抛出，`OtpError.codeString` 始终保留原始错误码字符串（`name` 固定为 `OtpError`，用于 provider 错误契约）。
+一切失败均抛 `OtpError`，携带固定 `code`（字符串）；错误消息绝不包含 secret、token 或密钥材料。下表覆盖全部 22 个错误码（`OtpErrorCode` 经 barrel 导出；取值镜像自共享 core，并由仓库守卫逐项对拍）。`NOT_IMPLEMENTED` 只是「枚举映射不到」时的兜底——库内不抛出，`OtpError.codeString` 始终保留原始错误码字符串（`name` 固定为 `OtpError`，用于 provider 错误契约）。
 
 | `OtpErrorCode`             | 现象                                          | 根因                                                                                                                                                      | 处置                                                                    |
 | -------------------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `EMPTY_SECRET`             | 构造 / URI 解析抛错，secret 为空              | secret 缺失或空串                                                                                                                                         | 提供非空 base32 secret                                                  |
+| `EMPTY_SECRET`             | 构造 / URI 解析抛错，secret 为空              | secret 缺失或空串（含 0 字节容器）                                                                                                                        | 提供非空 base32 secret                                                  |
+| `INVALID_SECRET_CONTAINER` | `Secret.fromBytes` 拒绝入参                   | 字节输入不是 `Uint8Array` / `ArrayBuffer`（如字符串、array-like、`null`）                                                                                 | 把平台随机字节包成 `new Uint8Array(buffer)` 再传入                      |
 | `INVALID_BASE32_CHAR`      | secret 含非法字符                             | 字符不在 base32 字母表                                                                                                                                    | 仅使用 `A–Z` 与 `2–7`                                                   |
 | `SECRET_TOO_SHORT`         | secret 解码后不足 1 字节                      | base32 串过短                                                                                                                                             | 至少提供 8 个字符（1 字节）                                             |
 | `INVALID_BASE32_PADDING`   | 仅 `{ strict: true }`：secret 不是规范 base32 | 尾长 ∉ `{0,2,4,5,7}`，或末字符填充位非 0                                                                                                                  | 用 `secret.toBase32()` 重新编码；或去掉 `strict` 保持原有宽松行为       |
 | `SECRET_TOO_WEAK`          | `minSecretBits` 校验失败（仅强度问题）        | `secret.bitLength < minSecretBits`                                                                                                                        | 换更强的密钥或调低 `minSecretBits`                                      |
-| `INVALID_SECRET_LENGTH`    | `Secret.generate(bytes)` 拒绝该长度           | `bytes` 不是 `[1, 4096]` 内的整数                                                                                                                         | 传 `[1, 4096]` 内的整数                                                 |
+| `INVALID_SECRET_LENGTH`    | `Secret.generate(bytes)` 拒绝该长度           | `bytes` 不是 `[1, 4096]` 内的整数（平台随机源同码）                                                                                                       | 传 `[1, 4096]` 内的整数                                                 |
 | `INVALID_MIN_SECRET_BITS`  | `minSecretBits` 被拒绝                        | 不是非负安全整数（fail-closed；`NaN` 绝不静默关闭强度校验）                                                                                               | 传非负安全整数，或省略该选项                                            |
 | `INVALID_ALGORITHM`        | 算法不被接受                                  | 非 SHA1 / SHA256 / SHA512                                                                                                                                 | 使用三种受支持算法之一                                                  |
 | `INVALID_DIGITS`           | 位数不被接受                                  | 非 6 / 7 / 8                                                                                                                                              | 使用 6、7 或 8                                                          |
@@ -184,6 +185,7 @@ try {
 - **counter ≤ 2^53-1**：ArkTS `number` 精确整数上限为 53 位。`2^53-1` 步 × 30 秒 ≈ 8.5×10⁹ 年，实践中不可触及，故不提供 BigInt 支持；超限抛 `INVALID_COUNTER`。
 - **`otpauth://` 并非 RFC**：遵循 Google Authenticator Key URI Format 这一事实标准（IANA Provisional #13829 注册）。
 - **未知 query 参数被忽略**（最大化互操作）。
+- **`otpauth://` label 语义**：无原始 `:` 的 label 一律视为 account；`%3A` 仅在 query `issuer` 存在且与 label 前缀一致时作为历史 `issuer%3Aaccount` 分隔符，否则整段保留为 account（因此 account 内含 `:` 也能无损往返）。
 - **脱敏是安全网而非日志许可**：`Secret.toJSON()` 返回 `'[REDACTED]'` 保证 `JSON.stringify` 不泄漏密钥，但你仍不得主动把 secret 交给日志或上报。
 - **不提供**：Steam Guard、SHA224 / SHA384 / SM3、BigInt / 完整 64 位 counter、throttling（RFC 4226 §7.3，服务端职责）、二维码渲染与扫码。
 - **默认严格校验**：`verify` 使用 `window: 0`；相邻时间步的 token 返回 `null`，除非显式传 window。

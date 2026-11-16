@@ -1,4 +1,4 @@
-// AUTO-GENERATED from packages/core/src/errors.ts (core@9f7b962). DO NOT EDIT. Run: bun run sync:core
+// AUTO-GENERATED from packages/core/src/errors.ts (core@9f7b962-dirty). DO NOT EDIT. Run: bun run sync:core
 /**
  * 统一错误码 + core 默认错误类（仅无平台注册时兜底）。
  *
@@ -28,7 +28,10 @@
  */
 
 export const OtpErrorCode = {
+  // secret 缺失 / 解码后为空 / 字节容器长度为 0
   EMPTY_SECRET: "EMPTY_SECRET",
+  // 字节容器类型不对（字符串 / array-like / null 等）：与「空密钥」区分，避免调用方误判
+  INVALID_SECRET_CONTAINER: "INVALID_SECRET_CONTAINER",
   INVALID_BASE32_CHAR: "INVALID_BASE32_CHAR",
   // 严格 base32 专用：归一化后尾长 ∉ {0,2,4,5,7}，或末尾填充位非 0（宽松模式静默补 0）；
   // 单字符（解码后 0 字节）两种模式都报 SECRET_TOO_SHORT，不随 strict 开关改变语义

@@ -1,6 +1,6 @@
 /**
- * 错误模型：21 个错误码取值冻结；OtpError 的 code / message / instanceof / 原型链行为；
- * otpFail 的工厂契约与兜底。
+ * 错误模型：22 个错误码取值冻结（发布契约，不依赖 Object.freeze）；
+ * OtpError 的 code / message / instanceof / 原型链行为；otpFail 的工厂契约与兜底。
  */
 import { afterEach, describe, expect, it } from "bun:test";
 import {
@@ -14,6 +14,7 @@ import {
 
 const CODES = [
   "EMPTY_SECRET",
+  "INVALID_SECRET_CONTAINER",
   "INVALID_BASE32_CHAR",
   "INVALID_BASE32_PADDING",
   "SECRET_TOO_SHORT",
@@ -41,8 +42,8 @@ afterEach(() => {
 });
 
 describe("errors", () => {
-  it("hasExactly21FrozenCodes", () => {
-    expect(Object.keys(OtpErrorCode).length).toBe(21);
+  it("hasExactly22Codes", () => {
+    expect(Object.keys(OtpErrorCode).length).toBe(22);
     expect(Object.values(OtpErrorCode).sort()).toEqual([...CODES].sort());
   });
 

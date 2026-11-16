@@ -26,9 +26,9 @@
 4. **secret 绝不外泄**：错误消息固定文案；`Secret` 刻意不实现 `toString()`；`toJSON()` 返回 `[REDACTED]`。
 5. **`verify` 恒定时间**：窗口内扫完所有候选后才返回首个命中 delta，禁止早退优化。
 6. **取模只在 `internal/digits.ts` 发生一次**；`truncate` 只做 `& 0x7f`（31 位非负）。
-7. **错误码唯一来源是 core**：`src/errors.ts` 只保留平台 `OtpError`，`OtpErrorCode` 必须从 `@yansongda/otp-core` 复用（守卫脚本禁止再声明码表）；码集合现为 21 个，v1 起仅允许新增，不得改已有字符串值。新增码必须同步 core 码表 / 守卫基线 / 四份 README / CHANGELOG。
+7. **错误码唯一来源是 core**：`src/errors.ts` 只保留平台 `OtpError`，`OtpErrorCode` 必须从 `@yansongda/otp-core` 复用（守卫脚本禁止再声明码表）；码集合现为 22 个，v1 起仅允许新增，不得改已有字符串值。新增码必须同步 core 码表 / 守卫基线 / 四份 README / CHANGELOG。
 8. **DTO 冻结**：`HmacOptions` / `TotpOptions` / `HotpOptions` / `VerifyOptions` / `OtpAuthParams` 字段名与可选性仅允许新增可选字段；`HOTP.verify` / `TOTP.verify` 由 core 分别收窄为 `HotpVerifyOptions` / `TotpVerifyOptions`（平台 type-only 转发，守卫脚本禁止重复声明）。
-9. **参数口径**：`timestamp` / `period` / `t0` / `clockOffsetMs` / `minSecretBits` 必须是安全整数（`minSecretBits` 非法时 fail-closed 抛 `INVALID_MIN_SECRET_BITS`）；`window` 上限 `MAX_VERIFY_WINDOW = 10`（barrel 导出）；TOTP 显式 `timestamp` 合法但叠加偏移后为负或超出安全整数 → `INVALID_CLOCK_OFFSET`；`Secret.fromBytes` 只接受 `Uint8Array` / `ArrayBuffer`（其余抛 `EMPTY_SECRET`）；`OTPAuthURI` 的 `digits` / `period` / `counter` 只认十进制整数。
+9. **参数口径**：`timestamp` / `period` / `t0` / `clockOffsetMs` / `minSecretBits` 必须是安全整数（`minSecretBits` 非法时 fail-closed 抛 `INVALID_MIN_SECRET_BITS`）；`window` 上限 `MAX_VERIFY_WINDOW = 10`（barrel 导出）；TOTP 显式 `timestamp` 合法但叠加偏移后为负或超出安全整数 → `INVALID_CLOCK_OFFSET`；`Secret.fromBytes` 只接受 `Uint8Array` / `ArrayBuffer`（其余抛 `INVALID_SECRET_CONTAINER`）；`OTPAuthURI` 的 `digits` / `period` / `counter` 只认十进制整数。
 10. **provider 错误契约**：provider 失败必须抛 `name === "OtpError"` 的错误（core `otpFail` / 平台 `OtpError`）；core 的 engine 只兜未知错误，平台错误类的 `name` 不得删改。provider 对 `key` / `message` 只能读，不得修改或跨调用保留引用（库每次公开调用传入一份密钥副本，不把可写密钥跨调用复用）。
 
 其他有意差异（相对 OHOS）：

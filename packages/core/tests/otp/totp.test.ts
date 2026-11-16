@@ -321,6 +321,87 @@ describe("totp", () => {
     );
   });
 
+  it("ctor_multiInvalid_followsPriorityTable", () => {
+    // errors.ts 构造 TOTP 顺序：secret → algorithm → digits → minSecretBits →
+    // SECRET_TOO_WEAK → period → t0 → clockOffsetMs。
+    expectCode(
+      () =>
+        new TOTP({
+          secret: "AB1",
+          algorithm: "MD5",
+          digits: 5,
+          minSecretBits: Number.NaN,
+          period: 0,
+          t0: -1,
+          clockOffsetMs: 0.5,
+        }),
+      "INVALID_BASE32_CHAR",
+    );
+    expectCode(
+      () =>
+        new TOTP({
+          secret: SEEDS.SHA1_BASE32,
+          algorithm: "MD5",
+          digits: 5,
+          period: 0,
+        }),
+      "INVALID_ALGORITHM",
+    );
+    expectCode(
+      () => new TOTP({ secret: SEEDS.SHA1_BASE32, digits: 5, period: 0 }),
+      "INVALID_DIGITS",
+    );
+    expectCode(
+      () =>
+        new TOTP({
+          secret: SEEDS.SHA1_BASE32,
+          minSecretBits: Number.NaN,
+          period: 0,
+        }),
+      "INVALID_MIN_SECRET_BITS",
+    );
+    expectCode(
+      () =>
+        new TOTP({
+          secret: SEEDS.SHA1_BASE32,
+          minSecretBits: 4096,
+          period: 0,
+        }),
+      "SECRET_TOO_WEAK",
+    );
+    expectCode(
+      () =>
+        new TOTP({
+          secret: SEEDS.SHA1_BASE32,
+          period: 0,
+          t0: -1,
+          clockOffsetMs: 0.5,
+        }),
+      "INVALID_PERIOD",
+    );
+    expectCode(
+      () => new TOTP({ secret: SEEDS.SHA1_BASE32, t0: -1, clockOffsetMs: 0.5 }),
+      "INVALID_T0",
+    );
+    expectCode(
+      () => new TOTP({ secret: SEEDS.SHA1_BASE32, clockOffsetMs: 0.5 }),
+      "INVALID_CLOCK_OFFSET",
+    );
+  });
+
+  it("verify_configErrorsPrecedeTokenErrors", () => {
+    // verify 顺序：timestamp → clockOffset → counter → window → token
+    const t = new TOTP({ secret: SEEDS.SHA1_BASE32 });
+    expectCode(
+      () => t.verify("zzz", { timestamp: -1, window: 11 }),
+      "INVALID_TIMESTAMP",
+    );
+    expectCode(
+      () => t.verify("zzz", { timestamp: 59000, window: 11 }),
+      "INVALID_WINDOW",
+    );
+  });
+
   it("timeInputs_invalid_throw", () => {
     // epoch 0 合法（1970-01-01），非负安全整数之外一律拒绝（小数毫秒无意义）
     const t = new TOTP({ secret: SEEDS.SHA1_BASE32 });

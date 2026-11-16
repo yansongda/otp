@@ -1,5 +1,5 @@
 /**
- * 统一错误模型：错误码枚举（21 个，字符串值）+ OtpError。
+ * 统一错误模型：错误码枚举（22 个，字符串值）+ OtpError。
  * 消息文案固定，绝不包含 secret/token/派生密钥等用户输入。
  *
  * 取值唯一来源是 core（packages/core/src/errors.ts）：
@@ -10,7 +10,10 @@
  * 「provider 实现缺陷（收敛为 CRYPTO_FAILED）」，不得删除。
  */
 export enum OtpErrorCode {
+  // secret 缺失 / 解码后为空 / 字节容器长度为 0
   EMPTY_SECRET = 'EMPTY_SECRET',
+  // 字节容器类型不对（字符串 / array-like / null 等）：与「空密钥」区分
+  INVALID_SECRET_CONTAINER = 'INVALID_SECRET_CONTAINER',
   INVALID_BASE32_CHAR = 'INVALID_BASE32_CHAR',
   // 严格 base32 专用：归一化后尾长 ∉ {0,2,4,5,7}，或末尾填充位非 0（宽松模式静默补 0）
   INVALID_BASE32_PADDING = 'INVALID_BASE32_PADDING',
@@ -57,6 +60,7 @@ export class OtpError extends Error {
 export function asOtpErrorCode(code: string): OtpErrorCode {
   switch (code) {
     case 'EMPTY_SECRET': return OtpErrorCode.EMPTY_SECRET;
+    case 'INVALID_SECRET_CONTAINER': return OtpErrorCode.INVALID_SECRET_CONTAINER;
     case 'INVALID_BASE32_CHAR': return OtpErrorCode.INVALID_BASE32_CHAR;
     case 'INVALID_BASE32_PADDING': return OtpErrorCode.INVALID_BASE32_PADDING;
     case 'SECRET_TOO_SHORT': return OtpErrorCode.SECRET_TOO_SHORT;

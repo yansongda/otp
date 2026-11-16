@@ -179,6 +179,65 @@ describe("hotp", () => {
     }
   });
 
+  it("ctor_multiInvalid_followsPriorityTable", () => {
+    // errors.ts 构造 HOTP 顺序：secret → algorithm → digits → minSecretBits →
+    // SECRET_TOO_WEAK → counter。多错并存时首个命中必须与表一致。
+    expectCode(
+      () =>
+        new HOTP({
+          secret: "AB1",
+          algorithm: "MD5",
+          digits: 5,
+          minSecretBits: Number.NaN,
+          counter: 1.5,
+        }),
+      "INVALID_BASE32_CHAR",
+    );
+    expectCode(
+      () =>
+        new HOTP({
+          secret: SEEDS.SHA1_BASE32,
+          algorithm: "MD5",
+          digits: 5,
+          minSecretBits: Number.NaN,
+          counter: 1.5,
+        }),
+      "INVALID_ALGORITHM",
+    );
+    expectCode(
+      () =>
+        new HOTP({
+          secret: SEEDS.SHA1_BASE32,
+          digits: 5,
+          minSecretBits: Number.NaN,
+          counter: 1.5,
+        }),
+      "INVALID_DIGITS",
+    );
+    expectCode(
+      () =>
+        new HOTP({
+          secret: SEEDS.SHA1_BASE32,
+          minSecretBits: Number.NaN,
+          counter: 1.5,
+        }),
+      "INVALID_MIN_SECRET_BITS",
+    );
+    expectCode(
+      () =>
+        new HOTP({
+          secret: SEEDS.SHA1_BASE32,
+          minSecretBits: 4096,
+          counter: 1.5,
+        }),
+      "SECRET_TOO_WEAK",
+    );
+    expectCode(
+      () => new HOTP({ secret: SEEDS.SHA1_BASE32, counter: 1.5 }),
+      "INVALID_COUNTER",
+    );
+  });
+
   it("verify_windowExceedsCap_throws", () => {
     // HOTP 与 TOTP 共用同一上限：window = 10 合法，11 拒绝
     const h = new HOTP({ secret: SEEDS.SHA1_BASE32, counter: 1 });

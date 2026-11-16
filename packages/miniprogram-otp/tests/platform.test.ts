@@ -102,9 +102,38 @@ describe("platform barrel", () => {
     expect(params.period).toBe(60);
     expect(params.issuer).toBe("ACME");
   });
+  it("OTPAuthURI label round-trips without phantom account", () => {
+    // 规范里无原始冒号的 label 就是 account：issuer-only 不得凭空多出 account；
+    // account 内的冒号编码为 %3A 后必须按整体还原。
+    const issuerOnly = OTPAuthURI.build({
+      type: OtpType.TOTP,
+      secret: "JBSWY3DPEHPK3PXP",
+      algorithm: OtpAlgorithm.SHA1,
+      digits: 6,
+      issuer: "ACME",
+    });
+    const parsedIssuerOnly = OTPAuthURI.parse(issuerOnly);
+    expect(parsedIssuerOnly.issuer).toBe("ACME");
+    expect(parsedIssuerOnly.account).toBeUndefined();
+
+    const accountColon = OTPAuthURI.build({
+      type: OtpType.TOTP,
+      secret: "JBSWY3DPEHPK3PXP",
+      algorithm: OtpAlgorithm.SHA1,
+      digits: 6,
+      account: "a:b",
+    });
+    const parsedAccountColon = OTPAuthURI.parse(accountColon);
+    expect(parsedAccountColon.account).toBe("a:b");
+    expect(parsedAccountColon.issuer).toBeUndefined();
+  });
+
   it("errorCodes come from core and stay in sync", () => {
     // 平台不再手抄码表：取值集合由 @yansongda/otp-core 唯一提供
-    expect(Object.keys(OtpErrorCode).length).toBe(21);
+    expect(Object.keys(OtpErrorCode).length).toBe(22);
+    expect(OtpErrorCode.INVALID_SECRET_CONTAINER).toBe(
+      "INVALID_SECRET_CONTAINER",
+    );
     expect(OtpErrorCode.INVALID_SECRET_LENGTH).toBe("INVALID_SECRET_LENGTH");
     expect(OtpErrorCode.INVALID_CLOCK_OFFSET).toBe("INVALID_CLOCK_OFFSET");
     expect(OtpErrorCode.INVALID_MIN_SECRET_BITS).toBe(
@@ -132,16 +161,20 @@ describe("platform barrel", () => {
     // 微信端是 JS 调用：字符串 / array-like 不得静默变成 0 字节或全零密钥
     expect(
       thrownCode(() => Secret.fromBytes("abc" as unknown as Uint8Array)),
-    ).toBe("EMPTY_SECRET");
+    ).toBe("INVALID_SECRET_CONTAINER");
     expect(
       thrownCode(() =>
         Secret.fromBytes({ length: 5 } as unknown as Uint8Array),
       ),
-    ).toBe("EMPTY_SECRET");
-    // ArrayBuffer 仍是合法字节容器（wx.getRandomValues 的 randomValues 可直接传）
-    expect(
-      Secret.fromBytes(new ArrayBuffer(20) as unknown as Uint8Array).byteLength,
-    ).toBe(20);
+    ).toBe("INVALID_SECRET_CONTAINER");
+    // ArrayBuffer 仍是合法字节容器（wx.getRandomValues 的 randomValues 可直接传），
+    // 但必须是拷贝语义：调用方清零原 buffer 不得改动实例内密钥
+    const buffer = new ArrayBuffer(20);
+    new Uint8Array(buffer).fill(0x01);
+    const secret = Secret.fromBytes(buffer);
+    expect(secret.byteLength).toBe(20);
+    new Uint8Array(buffer).fill(0);
+    expect(secret.bytes[0]).toBe(0x01);
   });
 
   it("OtpError keeps codeString and supports subclassing", () => {

@@ -1,5 +1,5 @@
 /**
- * OtpError 错误模型测试：instanceof 双真 + 21 个枚举成员 + asOtpErrorCode 映射逐一断言（防枚举/映射漂移），
+ * OtpError 错误模型测试：instanceof 双真 + 22 个枚举成员 + asOtpErrorCode 映射逐一断言（防枚举/映射漂移），
  * 以及 codeString 在「未知码兜底」场景下仍保留原始字符串。
  * 若 instanceof OtpError 断言失败，属设计性偏差，须停下上报，不静默改设计。
  */
@@ -17,9 +17,9 @@ export default function otpErrorTest() {
       expect(err.message).assertEqual('x');
     });
 
-    it('otpErrorCode_all21MembersExactValues', 0, () => {
+    it('otpErrorCode_all22MembersExactValues', 0, () => {
       const expected: string[] = [
-        'EMPTY_SECRET', 'INVALID_BASE32_CHAR', 'INVALID_BASE32_PADDING',
+        'EMPTY_SECRET', 'INVALID_SECRET_CONTAINER', 'INVALID_BASE32_CHAR', 'INVALID_BASE32_PADDING',
         'SECRET_TOO_SHORT', 'SECRET_TOO_WEAK', 'INVALID_SECRET_LENGTH',
         'INVALID_MIN_SECRET_BITS', 'INVALID_ALGORITHM', 'INVALID_DIGITS',
         'INVALID_PERIOD', 'INVALID_T0', 'INVALID_COUNTER', 'INVALID_TIMESTAMP',
@@ -28,19 +28,19 @@ export default function otpErrorTest() {
         'UNSUPPORTED_OTPAUTH_TYPE', 'NOT_IMPLEMENTED'
       ];
       const codes: OtpErrorCode[] = [
-        OtpErrorCode.EMPTY_SECRET, OtpErrorCode.INVALID_BASE32_CHAR,
-        OtpErrorCode.INVALID_BASE32_PADDING, OtpErrorCode.SECRET_TOO_SHORT,
-        OtpErrorCode.SECRET_TOO_WEAK, OtpErrorCode.INVALID_SECRET_LENGTH,
-        OtpErrorCode.INVALID_MIN_SECRET_BITS, OtpErrorCode.INVALID_ALGORITHM,
-        OtpErrorCode.INVALID_DIGITS, OtpErrorCode.INVALID_PERIOD,
-        OtpErrorCode.INVALID_T0, OtpErrorCode.INVALID_COUNTER,
-        OtpErrorCode.INVALID_TIMESTAMP, OtpErrorCode.INVALID_CLOCK_OFFSET,
-        OtpErrorCode.INVALID_WINDOW, OtpErrorCode.INVALID_TOKEN,
-        OtpErrorCode.CRYPTO_FAILED, OtpErrorCode.CRYPTO_NOT_INITIALIZED,
-        OtpErrorCode.INVALID_OTPAUTH_URI, OtpErrorCode.UNSUPPORTED_OTPAUTH_TYPE,
-        OtpErrorCode.NOT_IMPLEMENTED
+        OtpErrorCode.EMPTY_SECRET, OtpErrorCode.INVALID_SECRET_CONTAINER,
+        OtpErrorCode.INVALID_BASE32_CHAR, OtpErrorCode.INVALID_BASE32_PADDING,
+        OtpErrorCode.SECRET_TOO_SHORT, OtpErrorCode.SECRET_TOO_WEAK,
+        OtpErrorCode.INVALID_SECRET_LENGTH, OtpErrorCode.INVALID_MIN_SECRET_BITS,
+        OtpErrorCode.INVALID_ALGORITHM, OtpErrorCode.INVALID_DIGITS,
+        OtpErrorCode.INVALID_PERIOD, OtpErrorCode.INVALID_T0,
+        OtpErrorCode.INVALID_COUNTER, OtpErrorCode.INVALID_TIMESTAMP,
+        OtpErrorCode.INVALID_CLOCK_OFFSET, OtpErrorCode.INVALID_WINDOW,
+        OtpErrorCode.INVALID_TOKEN, OtpErrorCode.CRYPTO_FAILED,
+        OtpErrorCode.CRYPTO_NOT_INITIALIZED, OtpErrorCode.INVALID_OTPAUTH_URI,
+        OtpErrorCode.UNSUPPORTED_OTPAUTH_TYPE, OtpErrorCode.NOT_IMPLEMENTED
       ];
-      expect(codes.length).assertEqual(21);
+      expect(codes.length).assertEqual(22);
       for (let i = 0; i < codes.length; i++) {
         expect(codes[i]).assertEqual(expected[i]);
       }
@@ -48,6 +48,7 @@ export default function otpErrorTest() {
 
     it('asOtpErrorCode_mapsAllCodesAndFallback', 0, () => {
       expect(asOtpErrorCode(OtpErrorCode.EMPTY_SECRET)).assertEqual(OtpErrorCode.EMPTY_SECRET);
+      expect(asOtpErrorCode(OtpErrorCode.INVALID_SECRET_CONTAINER)).assertEqual(OtpErrorCode.INVALID_SECRET_CONTAINER);
       expect(asOtpErrorCode(OtpErrorCode.INVALID_BASE32_CHAR)).assertEqual(OtpErrorCode.INVALID_BASE32_CHAR);
       expect(asOtpErrorCode(OtpErrorCode.INVALID_BASE32_PADDING)).assertEqual(OtpErrorCode.INVALID_BASE32_PADDING);
       expect(asOtpErrorCode(OtpErrorCode.SECRET_TOO_SHORT)).assertEqual(OtpErrorCode.SECRET_TOO_SHORT);

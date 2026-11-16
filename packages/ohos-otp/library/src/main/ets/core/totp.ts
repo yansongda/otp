@@ -1,4 +1,4 @@
-// AUTO-GENERATED from packages/core/src/totp.ts (core@9f7b962). DO NOT EDIT. Run: bun run sync:core
+// AUTO-GENERATED from packages/core/src/totp.ts (core@9f7b962-dirty). DO NOT EDIT. Run: bun run sync:core
 /**
  * TOTP（RFC 6238）公开类。默认 provider 经 requireHmac() 取用。
  * 所有时间入口（含显式传入 timestamp）统一叠加 clockOffsetMs。

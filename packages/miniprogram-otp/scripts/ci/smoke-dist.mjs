@@ -59,11 +59,28 @@ assert.throws(
 );
 
 assert.equal(m.OtpErrorCode.INVALID_BASE32_PADDING, "INVALID_BASE32_PADDING");
+assert.equal(
+  m.OtpErrorCode.INVALID_SECRET_CONTAINER,
+  "INVALID_SECRET_CONTAINER",
+);
 assert.equal(m.OtpErrorCode.INVALID_SECRET_LENGTH, "INVALID_SECRET_LENGTH");
 assert.equal(m.OtpErrorCode.INVALID_CLOCK_OFFSET, "INVALID_CLOCK_OFFSET");
 assert.equal(m.OtpErrorCode.INVALID_MIN_SECRET_BITS, "INVALID_MIN_SECRET_BITS");
-assert.equal(Object.keys(m.OtpErrorCode).length, 21);
+assert.equal(Object.keys(m.OtpErrorCode).length, 22);
 assert.equal(m.MAX_VERIFY_WINDOW, 10);
+
+// fromBytes(ArrayBuffer) 必须是拷贝：调用方清零原 buffer 不影响实例
+const rawSecret = new ArrayBuffer(20);
+new Uint8Array(rawSecret).fill(0x01);
+const copied = m.Secret.fromBytes(rawSecret);
+new Uint8Array(rawSecret).fill(0);
+assert.equal(copied.bytes[0], 0x01);
+assert.throws(
+  () => m.Secret.fromBytes("abc"),
+  (e) =>
+    e instanceof m.OtpError &&
+    e.code === m.OtpErrorCode.INVALID_SECRET_CONTAINER,
+);
 
 // 错误码唯一来源是 core：新增码必须自动出现在产物里，平台无需再抄一份
 assert.throws(

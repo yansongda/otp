@@ -1,4 +1,4 @@
-// AUTO-GENERATED from packages/core/src/secret.ts (core@9f7b962). DO NOT EDIT. Run: bun run sync:core
+// AUTO-GENERATED from packages/core/src/secret.ts (core@9f7b962-dirty). DO NOT EDIT. Run: bun run sync:core
 /**
  * Secret：secret 规范化 / 校验 / 随机生成 / toJSON 脱敏（零平台依赖，随机源经 requireRandom()）。
  *
@@ -10,14 +10,6 @@ import { requireRandom } from "./crypto";
 import { otpFail } from "./errors";
 import { decode, decodeStrict, encode } from "./internal/base32";
 import type { ParseOptions } from "./options";
-
-/**
- * 真实字节容器：Uint8Array（含 Buffer 等子类）或其底层 ArrayBuffer。
- * 字符串 / array-like / null 在 JS 侧可能「length 恰好合法」而被静默接受，必须显式拒绝。
- */
-function isByteContainer(value: object): boolean {
-  return value instanceof Uint8Array || value instanceof ArrayBuffer;
-}
 
 export class Secret {
   private readonly _bytes: Uint8Array;
@@ -37,16 +29,20 @@ export class Secret {
   }
 
   /**
-   * 从字节容器构造（拷贝入参，杜绝外部引用共享）；空数据抛 EMPTY_SECRET。
-   * 运行时只接受 Uint8Array / ArrayBuffer：微信端是 JS 调用，字符串与 array-like 的 length
-   * 可能恰好合法，`new Uint8Array(字符串)` 会得到 0 字节（空密钥）、array-like 会得到全零密钥，
-   * 因此在转换之前先判类型，避免静默 fail-open。
+   * 从字节容器构造：一律拷贝，杜绝外部引用共享；空数据抛 EMPTY_SECRET。
+   * 运行时只接受 Uint8Array / ArrayBuffer（其余抛 INVALID_SECRET_CONTAINER）：微信端是
+   * JS 调用，字符串与 array-like 的 length 可能恰好合法，`new Uint8Array(字符串)` 会得到
+   * 0 字节（空密钥）、array-like 会得到全零密钥，因此在转换之前先判类型，避免静默 fail-open。
+   *
+   * 注意：`new Uint8Array(arrayBuffer)` 只是视图而非拷贝——ArrayBuffer 入参必须先包一层
+   * 视图再拷贝，否则调用方后续改写/清零该 buffer 会直接改动实例内密钥。
    */
-  static fromBytes(bytes: Uint8Array): Secret {
-    if (!isByteContainer(bytes)) {
-      otpFail("EMPTY_SECRET");
+  static fromBytes(bytes: Uint8Array | ArrayBuffer): Secret {
+    if (!(bytes instanceof Uint8Array) && !(bytes instanceof ArrayBuffer)) {
+      otpFail("INVALID_SECRET_CONTAINER");
     }
-    const copy = new Uint8Array(bytes);
+    const view = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+    const copy = new Uint8Array(view);
     if (copy.length === 0) {
       otpFail("EMPTY_SECRET");
     }

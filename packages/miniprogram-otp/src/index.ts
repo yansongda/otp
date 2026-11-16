@@ -67,7 +67,12 @@ export const Secret: typeof CoreSecret = CoreSecret;
 export const OTPAuthURI: {
   parse(uri: string, options?: ParseOptions): OtpAuthParams;
   build(params: OtpAuthParams): string;
-} = CoreOTPAuthURI as unknown as {
-  parse(uri: string, options?: ParseOptions): OtpAuthParams;
-  build(params: OtpAuthParams): string;
+} = {
+  parse(uri: string, options?: ParseOptions): OtpAuthParams {
+    // core 返回 type/algorithm 为 string；仅此处做一次返回值投影到平台 DTO
+    return CoreOTPAuthURI.parse(uri, options) as OtpAuthParams;
+  },
+  build(params: OtpAuthParams): string {
+    return CoreOTPAuthURI.build(params);
+  },
 };

@@ -105,5 +105,5 @@ against the RFC vectors in `library/src/test/vectors/RfcVectors.ets`.
 - 典型流程：`new TOTP({ secret })` → `verify(token, { window: 1 })` → 命中时 `syncClockOffset(delta)`；
   `window` 越大越宽松（上限 10 步，超出抛 `INVALID_WINDOW`），校准后应尽快收紧。
 - HOTP 必须由调用方持久化下一个计数器（`base + delta + 1`），库不会自动推进。
-- 所有失败都抛 `OtpError`，请按 `e.code`（21 个稳定字符串码）分支，不要匹配 message 文案；未知码用 `e.codeString` 保留原始值。
+- 所有失败都抛 `OtpError`，请按 `e.code`（22 个稳定字符串码）分支，不要匹配 message 文案；未知码用 `e.codeString` 保留原始值。
 - 密钥请用 `Secret.generate()` 生成（默认 20 字节 / 160 bit）；`Secret` 已做序列化脱敏。

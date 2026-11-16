@@ -77,18 +77,26 @@ describe("secret", () => {
     for (const bad of ["abc", { length: 5 }, null]) {
       expectCode(
         () => Secret.fromBytes(bad as unknown as Uint8Array),
-        "EMPTY_SECRET",
+        "INVALID_SECRET_CONTAINER",
       );
     }
   });
 
-  it("fromBytes_arrayBuffer_isAccepted", () => {
-    // ArrayBuffer 是合法字节容器（wx.getRandomValues 的 randomValues 可直接传）
-    const secret = Secret.fromBytes(
-      new ArrayBuffer(20) as unknown as Uint8Array,
-    );
+  it("fromBytes_arrayBuffer_copiesInput", () => {
+    // ArrayBuffer 是合法字节容器（wx.getRandomValues 的 randomValues 可直接传）。
+    // new Uint8Array(arrayBuffer) 是视图而非拷贝：必须拷一份，否则调用方清零/改写
+    // 原 buffer 会直接改动实例内密钥。
+    const buffer = new ArrayBuffer(20);
+    new Uint8Array(buffer).fill(0x01);
+    const secret = Secret.fromBytes(buffer);
     expect(secret.byteLength).toBe(20);
-    expect(secret.toBase32()).toBe("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+    new Uint8Array(buffer).fill(0x00);
+    expect(secret.bytes[0]).toBe(0x01);
+    expect(secret.toBase32()).not.toBe("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+  });
+
+  it("fromBytes_emptyArrayBuffer_throws", () => {
+    expectCode(() => Secret.fromBytes(new ArrayBuffer(0)), "EMPTY_SECRET");
   });
 
   it("generate_withoutRegisteredRandom_throws", () => {

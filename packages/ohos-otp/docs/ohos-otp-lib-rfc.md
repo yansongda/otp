@@ -5,7 +5,7 @@
 > **状态**：已实现并验证（验证结果见附录 B；版本沿革见 `library/CHANGELOG.md`）
 > **代码事实来源**：`library/`（源码即契约，本文件与其冲突时以源码为准）
 > **历史文档**：本文描述 ohos-otp v1.1.0 及以前的 ArkTS 单体实现。monorepo 重构后，协议实现位于 `packages/core`，ohos 包只是薄壳 + 平台类型层 + crypto provider；当前架构见根 `AGENTS.md`。
-> **错误码现状**：当前实现为 21 个错误码（本文 §3.5 的 18 个属 v1.1.0 及以前）；取值以 `packages/core/src/errors.ts` 为唯一来源。
+> **错误码现状**：当前实现为 22 个错误码（本文 §3.5 的 18 个属 v1.1.0 及以前）；取值以 `packages/core/src/errors.ts` 为唯一来源。
 
 ---
 

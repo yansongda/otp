@@ -19,9 +19,9 @@ import { fileURLToPath } from 'node:url';
 const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 
 const BASELINE = {
-  localTestCases: 286, // library/src/test 的 it( 数量（PC Local Test）
+  localTestCases: 290, // library/src/test 的 it( 数量（PC Local Test）
   deviceTestCases: 37, // library/src/ohosTest 的 it( 数量（真实 crypto，需设备）
-  errorCodeMembers: 21, // OtpErrorCode 成员数：取值冻结，仅允许显式新增（现含 INVALID_MIN_SECRET_BITS / INVALID_CLOCK_OFFSET / INVALID_SECRET_LENGTH）
+  errorCodeMembers: 22, // OtpErrorCode 成员数：取值冻结，仅允许显式新增（现含 INVALID_SECRET_CONTAINER / INVALID_MIN_SECRET_BITS / INVALID_CLOCK_OFFSET / INVALID_SECRET_LENGTH）
 };
 
 const LIB_SRC = 'library/src/main/ets';
@@ -263,7 +263,8 @@ check('core 副本 OtpError 设置 name = \'OtpError\'', () => {
 check('版本号与 CHANGELOG 一致', () => {
   const version = /"version"\s*:\s*"([^"]+)"/.exec(readText('library/oh-package.json5'))?.[1];
   if (!version) throw new Error('library/oh-package.json5 缺少 version');
-  const heading = /^##\s+(\S+)/m.exec(readText('library/CHANGELOG.md'))?.[1];
+  // 只匹配版本号标题：`## [Unreleased]` 等非版本段必须跳过（发布前写入的破坏性变更清单）
+  const heading = /^##\s+\[?([0-9]+\.[0-9]+\.[0-9]+)\]?/m.exec(readText('library/CHANGELOG.md'))?.[1];
   if (!heading) throw new Error('library/CHANGELOG.md 缺少版本标题');
   if (heading !== version) throw new Error(`oh-package.json5 为 ${version}，CHANGELOG 最新标题为 ${heading}`);
   return `v${version}`;
