@@ -1,5 +1,5 @@
 /**
- * OtpError 错误模型测试：instanceof 双真 + 20 个枚举成员 + asOtpErrorCode 映射逐一断言（防枚举/映射漂移），
+ * OtpError 错误模型测试：instanceof 双真 + 21 个枚举成员 + asOtpErrorCode 映射逐一断言（防枚举/映射漂移），
  * 以及 codeString 在「未知码兜底」场景下仍保留原始字符串。
  * 若 instanceof OtpError 断言失败，属设计性偏差，须停下上报，不静默改设计。
  */

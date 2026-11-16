@@ -18,8 +18,8 @@ const CORE_ERRORS = "../core/src/errors.ts";
 const SECRET = "../core/src/secret.ts";
 
 const BASELINE = {
-  // 算法测试已迁至 packages/core（242 条）；本包只保留平台层契约测试
-  testDeclarations: 9,
+  // 算法测试已迁至 packages/core（287 条）；本包只保留平台层契约测试
+  testDeclarations: 15,
   testFiles: 1,
   errorCodeMembers: 21,
 };
@@ -155,26 +155,41 @@ check("Secret 不得实现 toString()", () => {
 check(`错误码唯一来源：core 恰为 ${BASELINE.errorCodeMembers} 个成员`, () => {
   // 平台不再抄码表：mp 的 OtpErrorCode 必须从 core 复用，值集合只能有一份真源
   const core = stripComments(readText(CORE_ERRORS));
-  const count = (core.match(/^\s{2}[A-Z0-9_]+\s*:\s*"[A-Z0-9_]+",$/gm) || [])
-    .length;
-  if (count !== BASELINE.errorCodeMembers) {
+  const coreCodes = [...core.matchAll(/^\s{2}([A-Z0-9_]+):\s*"\1",$/gm)].map(
+    (m) => m[1],
+  );
+  if (coreCodes.length !== BASELINE.errorCodeMembers) {
     throw new Error(
-      `core 实际 ${count} 个；错误码集合仅允许新增，且必须显式调整基线`,
+      `core 实际 ${coreCodes.length} 个；错误码集合仅允许新增，且必须显式调整基线`,
     );
   }
-  const platform = stripComments(readText(ERRORS));
-  const redeclared = (
-    platform.match(/^\s{2}[A-Z0-9_]+\s*:\s*"[A-Z0-9_]+",$/gm) || []
-  ).length;
-  if (redeclared !== 0) {
+
+  // 扫平台全部 src（不止 errors.ts）：任何文件再"NAME: "NAME","的形式抄一份码表都要拦住。
+  // 只按 core 码名匹配，避免误伤 OtpAlgorithm 这类同形但不同义的常量表。
+  const codeSet = new Set(coreCodes);
+  const redeclared = [];
+  for (const file of listFiles(join(REPO_ROOT, SRC_DIR))) {
+    if (!file.endsWith(".ts")) continue;
+    const rel = toPosix(relative(REPO_ROOT, file));
+    const text = stripComments(readFileSync(file, "utf8"));
+    const hits = [
+      ...text.matchAll(/^\s{2}([A-Z0-9_]+):\s*"([A-Z0-9_]+)",$/gm),
+    ].filter((m) => codeSet.has(m[1]));
+    if (hits.length > 0) redeclared.push(`${rel}(${hits.length})`);
+  }
+  if (redeclared.length > 0) {
     throw new Error(
-      `src/errors.ts 又声明了 ${redeclared} 个错误码；必须从 @yansongda/otp-core 复用`,
+      `平台源码又声明了错误码：${redeclared.join(", ")}；必须从 @yansongda/otp-core 复用`,
     );
   }
-  if (!/OtpErrorCode.*from\s+"@yansongda\/otp-core"/.test(platform)) {
+  if (
+    !/OtpErrorCode.*from\s+"@yansongda\/otp-core"/.test(
+      stripComments(readText(ERRORS)),
+    )
+  ) {
     throw new Error("src/errors.ts 未从 @yansongda/otp-core 导入 OtpErrorCode");
   }
-  return `${count} 个（core 单源，平台零重复）`;
+  return `${coreCodes.length} 个（core 单源，平台零重复）`;
 });
 
 check("verify DTO 唯一来源：core", () => {
@@ -200,11 +215,17 @@ check("verify DTO 唯一来源：core", () => {
   return "3 个 verify DTO 转发自 core";
 });
 
-check("MAX_VERIFY_WINDOW 随 barrel 导出", () => {
-  if (!/MAX_VERIFY_WINDOW/.test(readText(BARREL))) {
-    throw new Error("src/index.ts 未导出 MAX_VERIFY_WINDOW");
+check("MAX_VERIFY_WINDOW 以值形式随 barrel 导出", () => {
+  // 只匹配 `export { MAX_VERIFY_WINDOW } from "@yansongda/otp-core"`：
+  // 写成 export type 时调用方拿不到值，运行时 MAX_VERIFY_WINDOW 为 undefined。
+  if (
+    !/export\s*\{\s*MAX_VERIFY_WINDOW\s*\}\s*from\s+"@yansongda\/otp-core"/.test(
+      stripComments(readText(BARREL)),
+    )
+  ) {
+    throw new Error("src/index.ts 未以值形式导出 MAX_VERIFY_WINDOW");
   }
-  return "barrel 导出窗口上限常量";
+  return "barrel 导出窗口上限常量（值语义）";
 });
 
 check('OtpError 设置 name = "OtpError"', () => {
@@ -213,6 +234,36 @@ check('OtpError 设置 name = "OtpError"', () => {
     throw new Error('OtpError 未设置 this.name = "OtpError"');
   }
   return "provider 错误契约的 name 已固定";
+});
+
+check('core OtpError 设置 name = "OtpError"', () => {
+  // core 默认类同样靠 name 参与 engine 的错误判别；删掉会让未注册工厂场景漏出原始错误
+  if (
+    !/this\.name\s*=\s*"OtpError"/.test(stripComments(readText(CORE_ERRORS)))
+  ) {
+    throw new Error('core OtpError 未设置 this.name = "OtpError"');
+  }
+  return "core / 平台两侧 name 契约一致";
+});
+
+check("原型修复只在原型退化时执行（core / mp 条件一致）", () => {
+  // 无条件 setPrototypeOf 会把原生子类实例的原型改回基类；两处实现必须保持同一条件
+  const core = stripComments(readText(CORE_ERRORS));
+  const platform = stripComments(readText(ERRORS));
+  const coreGuard =
+    /function repairPrototypeIfDegraded\(\s*target: object\s*\): void \{\s*if \(Object\.getPrototypeOf\(target\) === Error\.prototype\)/.test(
+      core,
+    );
+  const platformGuard =
+    /if \(Object\.getPrototypeOf\(this\) === Error\.prototype\) \{\s*Object\.setPrototypeOf\(this, OtpError\.prototype\)/.test(
+      platform,
+    );
+  if (!coreGuard || !platformGuard) {
+    throw new Error(
+      "原型修复不再只是「退化为 Error.prototype 时」执行（会破坏子类原型链）",
+    );
+  }
+  return "core / mp 两处条件一致";
 });
 
 check("零运行时依赖", () => {

@@ -128,6 +128,22 @@ describe("platform barrel", () => {
     ).toBe("INVALID_MIN_SECRET_BITS");
   });
 
+  it("Secret.fromBytes rejects non-byte containers", () => {
+    // 微信端是 JS 调用：字符串 / array-like 不得静默变成 0 字节或全零密钥
+    expect(
+      thrownCode(() => Secret.fromBytes("abc" as unknown as Uint8Array)),
+    ).toBe("EMPTY_SECRET");
+    expect(
+      thrownCode(() =>
+        Secret.fromBytes({ length: 5 } as unknown as Uint8Array),
+      ),
+    ).toBe("EMPTY_SECRET");
+    // ArrayBuffer 仍是合法字节容器（wx.getRandomValues 的 randomValues 可直接传）
+    expect(
+      Secret.fromBytes(new ArrayBuffer(20) as unknown as Uint8Array).byteLength,
+    ).toBe(20);
+  });
+
   it("OtpError keeps codeString and supports subclassing", () => {
     const err = new OtpError(OtpErrorCode.INVALID_DIGITS, "INVALID_DIGITS");
     expect(err.codeString).toBe("INVALID_DIGITS");

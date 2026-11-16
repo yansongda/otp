@@ -182,6 +182,16 @@ export default function totpTest() {
         t.generate(Number.MAX_SAFE_INTEGER);
       }, OtpErrorCode.INVALID_CLOCK_OFFSET);
     });
+    it('clockOffsetNegative_pushesTimestampBelowEpoch_throwsClockOffset', 0, () => {
+      // 对称场景：timestamp=0 合法，负偏移把它推到 epoch 0 之前 → 仍归因偏移配置。
+      const t: TOTP = new TOTP({ secret: S1, digits: 6, clockOffsetMs: -1 }, fixture);
+      expectThrowsCode(() => {
+        t.generate(0);
+      }, OtpErrorCode.INVALID_CLOCK_OFFSET);
+      expectThrowsCode(() => {
+        t.verify('755224', { timestamp: 0 });
+      }, OtpErrorCode.INVALID_CLOCK_OFFSET);
+    });
 
     // ── syncClockOffset 双场景（先推导再断言）──
     it('syncClockOffset_closure_slowLocal', 0, () => {

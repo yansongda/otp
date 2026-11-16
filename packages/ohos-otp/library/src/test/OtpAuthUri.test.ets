@@ -156,6 +156,19 @@ export default function otpAuthUriTest() {
         OtpErrorCode.INVALID_PERIOD);
     });
 
+    it('parse_nonDecimalNumerics_throws', 0, () => {
+      // 导入边界只认纯十进制：0x / 科学计数 / 小数一律拒绝（Number() 会把它们静默放宽）。
+      expectThrowsCode(() => OTPAuthURI.parse(
+        'otpauth://totp/alice?secret=JBSWY3DPEHPK3PXP&digits=0x7'),
+        OtpErrorCode.INVALID_DIGITS);
+      expectThrowsCode(() => OTPAuthURI.parse(
+        'otpauth://totp/alice?secret=JBSWY3DPEHPK3PXP&period=1e3'),
+        OtpErrorCode.INVALID_PERIOD);
+      expectThrowsCode(() => OTPAuthURI.parse(
+        'otpauth://hotp/alice?secret=JBSWY3DPEHPK3PXP&counter=0x2A'),
+        OtpErrorCode.INVALID_COUNTER);
+    });
+
     it('parse_strictAcceptsCanonicalSecret', 0, () => {
       // 大小写/空白等归一化仍容忍，其余字段行为不变
       const p: OtpAuthParams = OTPAuthURI.parse(

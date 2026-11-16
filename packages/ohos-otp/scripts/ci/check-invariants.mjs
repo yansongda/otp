@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 
 const BASELINE = {
-  localTestCases: 240, // library/src/test 的 it( 数量（PC Local Test）
+  localTestCases: 286, // library/src/test 的 it( 数量（PC Local Test）
   deviceTestCases: 37, // library/src/ohosTest 的 it( 数量（真实 crypto，需设备）
   errorCodeMembers: 21, // OtpErrorCode 成员数：取值冻结，仅允许显式新增（现含 INVALID_MIN_SECRET_BITS / INVALID_CLOCK_OFFSET / INVALID_SECRET_LENGTH）
 };
@@ -250,6 +250,14 @@ check('OtpError 设置 name = \'OtpError\'', () => {
     throw new Error("OtpError.ets 未设置 this.name = 'OtpError'");
   }
   return 'provider 错误契约的 name 已固定';
+});
+
+check('core 副本 OtpError 设置 name = \'OtpError\'', () => {
+  // 生成副本同样靠 name 参与 engine 的错误判别；与本文件口径必须一致（生成副本禁止手改）
+  if (!/this\.name\s*=\s*["']OtpError["']/.test(readText(CORE_ERRORS))) {
+    throw new Error("core/errors.ts 未设置 this.name = 'OtpError'");
+  }
+  return 'core 副本 name 契约一致';
 });
 
 check('版本号与 CHANGELOG 一致', () => {
