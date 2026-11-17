@@ -91,4 +91,20 @@ describe("platform barrel", () => {
     expect(params.period).toBe(60);
     expect(params.issuer).toBe("ACME");
   });
+  it("OtpError keeps codeString and supports subclassing", () => {
+    const err = new OtpError(OtpErrorCode.INVALID_DIGITS, "INVALID_DIGITS");
+    expect(err.codeString).toBe("INVALID_DIGITS");
+    expect(err.name).toBe("OtpError");
+
+    // 子类场景：构造函数只在原型退化时才 setPrototypeOf，不得把子类原型改回基类
+    class SubOtpError extends OtpError {
+      detail(): string {
+        return "detail";
+      }
+    }
+    const sub = new SubOtpError(OtpErrorCode.EMPTY_SECRET, "EMPTY_SECRET");
+    expect(Object.getPrototypeOf(sub)).toBe(SubOtpError.prototype);
+    expect(sub instanceof SubOtpError).toBe(true);
+    expect(sub.detail()).toBe("detail");
+  });
 });

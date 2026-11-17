@@ -1,5 +1,24 @@
 # Changelog
 
+## [Unreleased]
+
+#### Breaking changes
+
+- `OtpError.name` 由 `'Error'` 改为 `'OtpError'`（provider 错误契约，三端一致）
+
+#### Added
+
+- `OtpError.codeString`：保留 core 传入的原始错误码字符串（枚举尚未同步时仍能拿到真实值）
+
+#### Changed
+
+- `OtpErrorCode` 取值与 core 单一来源对齐：枚举必须与 `packages/core/src/errors.ts`
+  逐项一致（守卫脚本对拍名称 + 取值），`asOtpErrorCode` 必须覆盖全部码
+- 平台 `CryptoSource` 的错误一律经 core 的 `otpFail` 走平台工厂，不再绕开工厂直接
+  `new OtpError(...)`
+- 原型链修复只在原型退化为 `Error.prototype` 时执行（无条件 `setPrototypeOf` 会破坏
+  `OtpError` 子类的 `instanceof` 与原型方法）
+
 ## 1.1.1 - 2026-11-12
 
 > 仅内部架构与包元数据变更，**无 API / 行为变化**；消费方无需改动任何代码。

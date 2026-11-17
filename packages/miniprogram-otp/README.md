@@ -112,31 +112,31 @@ try {
 
 ### Classes and methods
 
-| API                                                                    | Description                                                                                                   |
-| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `new TOTP(options: TotpOptions)`                                       | Validate options synchronously; throws `OtpError` on invalid input                                            |
-| `totp.generate(timestampMs?: number): string`                          | Generate code; defaults to now                                                                                |
-| `totp.verify(token: string, options?: VerifyOptions): number \| null`  | Constant-time comparison; returns hit delta or `null`                                                         |
-| `totp.remaining(timestampMs?: number): number`                         | Seconds left in the current step, `[1, period]`                                                               |
-| `totp.progress(timestampMs?: number): number`                          | Step progress, `[0, 1)`                                                                                       |
-| `totp.syncClockOffset(delta: number): void`                            | `clockOffsetMs += delta * period * 1000`                                                                      |
-| `totp.clockOffsetMs: number`                                           | Current clock offset in ms                                                                                    |
-| `totp.toURI(): string` / `TOTP.fromURI(uri: string): TOTP`             | Serialize / restore TOTP                                                                                      |
-| `new HOTP(options: HotpOptions)`                                       | Validate options synchronously                                                                                |
-| `hotp.generate(counter?: number): string`                              | Generate code; defaults to the constructor counter                                                            |
-| `hotp.verify(token: string, options?: VerifyOptions): number \| null`  | Return counter delta or `null`                                                                                |
-| `hotp.toURI(): string` / `HOTP.fromURI(uri: string): HOTP`             | Serialize / restore HOTP                                                                                      |
-| `Secret.fromBase32(s: string, options?: ParseOptions): Secret`         | Parse Base32; lenient by default                                                                              |
-| `Secret.fromBytes(bytes: Uint8Array): Secret`                          | Copy bytes; empty input throws `EMPTY_SECRET`                                                                 |
-| `Secret.generate(bytes = 20): Secret`                                  | Generate via the internal `RandomSource` registry; on WeChat no default source is registered, see limitations |
-| `secret.toBase32(): string`                                            | Canonical uppercase, unpadded Base32                                                                          |
-| `secret.bytes` / `secret.byteLength` / `secret.bitLength`              | Byte view (copy) / byte length / bit length                                                                   |
-| `secret.toJSON(): string`                                              | Always `[REDACTED]`; `JSON.stringify` is safe                                                                 |
-| `OTPAuthURI.parse(uri: string, options?: ParseOptions): OtpAuthParams` | Parse `otpauth://`; unknown query parameters ignored                                                          |
-| `OTPAuthURI.build(params: OtpAuthParams): string`                      | Build canonical `otpauth://`                                                                                  |
-| `interface ParseOptions { strict?: boolean }`                          | Shared by `Secret.fromBase32` and `OTPAuthURI.parse`                                                          |
-| `OtpAlgorithm` / `OtpType`                                             | String-valued constants; literals such as `"SHA1"` also work                                                  |
-| `class OtpError extends Error { readonly code: OtpErrorCode }`         | Stable code for branching                                                                                     |
+| API                                                                                         | Description                                                                                                   |
+| ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `new TOTP(options: TotpOptions)`                                                            | Validate options synchronously; throws `OtpError` on invalid input                                            |
+| `totp.generate(timestampMs?: number): string`                                               | Generate code; defaults to now                                                                                |
+| `totp.verify(token: string, options?: VerifyOptions): number \| null`                       | Constant-time comparison; returns hit delta or `null`                                                         |
+| `totp.remaining(timestampMs?: number): number`                                              | Seconds left in the current step, `[1, period]`                                                               |
+| `totp.progress(timestampMs?: number): number`                                               | Step progress, `[0, 1)`                                                                                       |
+| `totp.syncClockOffset(delta: number): void`                                                 | `clockOffsetMs += delta * period * 1000`                                                                      |
+| `totp.clockOffsetMs: number`                                                                | Current clock offset in ms                                                                                    |
+| `totp.toURI(): string` / `TOTP.fromURI(uri: string): TOTP`                                  | Serialize / restore TOTP                                                                                      |
+| `new HOTP(options: HotpOptions)`                                                            | Validate options synchronously                                                                                |
+| `hotp.generate(counter?: number): string`                                                   | Generate code; defaults to the constructor counter                                                            |
+| `hotp.verify(token: string, options?: VerifyOptions): number \| null`                       | Return counter delta or `null`                                                                                |
+| `hotp.toURI(): string` / `HOTP.fromURI(uri: string): HOTP`                                  | Serialize / restore HOTP                                                                                      |
+| `Secret.fromBase32(s: string, options?: ParseOptions): Secret`                              | Parse Base32; lenient by default                                                                              |
+| `Secret.fromBytes(bytes: Uint8Array): Secret`                                               | Copy bytes; empty input throws `EMPTY_SECRET`                                                                 |
+| `Secret.generate(bytes = 20): Secret`                                                       | Generate via the internal `RandomSource` registry; on WeChat no default source is registered, see limitations |
+| `secret.toBase32(): string`                                                                 | Canonical uppercase, unpadded Base32                                                                          |
+| `secret.bytes` / `secret.byteLength` / `secret.bitLength`                                   | Byte view (copy) / byte length / bit length                                                                   |
+| `secret.toJSON(): string`                                                                   | Always `[REDACTED]`; `JSON.stringify` is safe                                                                 |
+| `OTPAuthURI.parse(uri: string, options?: ParseOptions): OtpAuthParams`                      | Parse `otpauth://`; unknown query parameters ignored                                                          |
+| `OTPAuthURI.build(params: OtpAuthParams): string`                                           | Build canonical `otpauth://`                                                                                  |
+| `interface ParseOptions { strict?: boolean }`                                               | Shared by `Secret.fromBase32` and `OTPAuthURI.parse`                                                          |
+| `OtpAlgorithm` / `OtpType`                                                                  | String-valued constants; literals such as `"SHA1"` also work                                                  |
+| `class OtpError extends Error { readonly code: OtpErrorCode; readonly codeString: string }` | Stable code for branching; `codeString` keeps the raw code when the enum cannot map it                        |
 
 ## Strict Base32
 
@@ -154,26 +154,26 @@ try {
 
 All failures throw `OtpError` with a fixed `code`. Messages never contain secrets, tokens or derived keys.
 
-| Code                       | Meaning                                                                  |
-| -------------------------- | ------------------------------------------------------------------------ |
-| `EMPTY_SECRET`             | Missing or empty secret                                                  |
-| `INVALID_BASE32_CHAR`      | Character outside the Base32 alphabet                                    |
-| `INVALID_BASE32_PADDING`   | Strict mode: non-canonical tail length or non-zero tail bits             |
-| `SECRET_TOO_SHORT`         | Decoded secret is shorter than one byte                                  |
-| `SECRET_TOO_WEAK`          | `minSecretBits` check failed                                             |
-| `INVALID_ALGORITHM`        | Not SHA1 / SHA256 / SHA512                                               |
-| `INVALID_DIGITS`           | Not 6 / 7 / 8                                                            |
-| `INVALID_PERIOD`           | Period is not a positive integer                                         |
-| `INVALID_T0`               | `t0` is not a non-negative integer                                       |
-| `INVALID_COUNTER`          | Counter is not an integer in `[0, 2^53-1]`                               |
-| `INVALID_TIMESTAMP`        | Timestamp is not a positive finite number, or clock offset is not finite |
-| `INVALID_WINDOW`           | Window or delta is not a non-negative integer                            |
-| `INVALID_TOKEN`            | Token is not numeric or its length differs from `digits`                 |
-| `CRYPTO_FAILED`            | Internal HMAC failure; no key material is leaked                         |
-| `CRYPTO_NOT_INITIALIZED`   | No provider registered; import the package barrel                        |
-| `INVALID_OTPAUTH_URI`      | URI does not start with `otpauth://` (case-insensitive)                  |
-| `UNSUPPORTED_OTPAUTH_TYPE` | Type is not `totp` / `hotp`                                              |
-| `NOT_IMPLEMENTED`          | Internal placeholder; never thrown by normal use                         |
+| Code                       | Meaning                                                                                       |
+| -------------------------- | --------------------------------------------------------------------------------------------- |
+| `EMPTY_SECRET`             | Missing or empty secret                                                                       |
+| `INVALID_BASE32_CHAR`      | Character outside the Base32 alphabet                                                         |
+| `INVALID_BASE32_PADDING`   | Strict mode: non-canonical tail length or non-zero tail bits                                  |
+| `SECRET_TOO_SHORT`         | Decoded secret is shorter than one byte                                                       |
+| `SECRET_TOO_WEAK`          | `minSecretBits` check failed                                                                  |
+| `INVALID_ALGORITHM`        | Not SHA1 / SHA256 / SHA512                                                                    |
+| `INVALID_DIGITS`           | Not 6 / 7 / 8                                                                                 |
+| `INVALID_PERIOD`           | Period is not a positive integer                                                              |
+| `INVALID_T0`               | `t0` is not a non-negative integer                                                            |
+| `INVALID_COUNTER`          | Counter is not an integer in `[0, 2^53-1]`                                                    |
+| `INVALID_TIMESTAMP`        | Timestamp is not a positive finite number, or clock offset is not finite                      |
+| `INVALID_WINDOW`           | Window or delta is not a non-negative integer                                                 |
+| `INVALID_TOKEN`            | Token is not numeric or its length differs from `digits`                                      |
+| `CRYPTO_FAILED`            | Internal HMAC failure; no key material is leaked                                              |
+| `CRYPTO_NOT_INITIALIZED`   | No provider registered; import the package barrel                                             |
+| `INVALID_OTPAUTH_URI`      | URI does not start with `otpauth://` (case-insensitive)                                       |
+| `UNSUPPORTED_OTPAUTH_TYPE` | Type is not `totp` / `hotp`                                                                   |
+| `NOT_IMPLEMENTED`          | Fallback when the platform cannot map a code (never thrown; `codeString` keeps the raw value) |
 
 ## WeChat-specific limitations
 

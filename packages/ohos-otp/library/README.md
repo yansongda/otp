@@ -92,32 +92,32 @@ try {
 
 ### Classes and methods
 
-| API                                                                    | Description                                                                                                                   |
-| ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `new TOTP(options: TotpOptions)`                                       | Construct a TOTP; options are validated synchronously, invalid input throws `OtpError`                                        |
-| `totp.generate(timestampMs?: number): string`                          | Generate the code for now (or the given time); zero-padded `digits` characters                                                |
-| `totp.verify(token: string, options?: VerifyOptions): number \| null`  | Constant-time comparison; returns the drift delta (`0` = current step, `-1` = previous step) or `null`                        |
-| `totp.remaining(timestampMs?: number): number`                         | Whole seconds left in the current window, `[1, period]`                                                                       |
-| `totp.progress(timestampMs?: number): number`                          | Progress of the current window, `[0, 1)`                                                                                      |
-| `totp.syncClockOffset(delta: number): void`                            | Calibrate the clock toward the token source: `clockOffsetMs += delta * period * 1000` (delta = token counter − local counter) |
-| `totp.clockOffsetMs: number`                                           | Current clock offset in milliseconds                                                                                          |
-| `totp.toURI(): string` / `TOTP.fromURI(uri: string): TOTP`             | Serialize to / restore from an `otpauth://totp/...` URI                                                                       |
-| `new HOTP(options: HotpOptions)`                                       | Construct a HOTP                                                                                                              |
-| `hotp.generate(counter?: number): string`                              | Generate the code (default: constructor counter)                                                                              |
-| `hotp.verify(token: string, options?: VerifyOptions): number \| null`  | Constant-time comparison; returns the counter offset or `null`                                                                |
-| `hotp.toURI(): string` / `HOTP.fromURI(uri: string): HOTP`             | Serialize to / restore from an `otpauth://hotp/...` URI                                                                       |
-| `Secret.fromBase32(s: string, options?: ParseOptions): Secret`         | Build from a base32 string (default lenient: case / whitespace / padding; `{ strict: true }` also requires a canonical tail)  |
-| `Secret.fromBytes(bytes: Uint8Array): Secret`                          | Build from raw bytes (copied)                                                                                                 |
-| `Secret.generate(bytes: number = 20): Secret`                          | Generate a random secret via the registered random source                                                                     |
-| `secret.toBase32(): string`                                            | Normalized uppercase base32 without padding                                                                                   |
-| `secret.bytes` / `secret.byteLength` / `secret.bitLength`              | Strength introspection (bytes are a copy)                                                                                     |
-| `secret.toJSON(): string`                                              | Redaction hook — returns `'[REDACTED]'` under `JSON.stringify`                                                                |
-| `OTPAuthURI.parse(uri: string, options?: ParseOptions): OtpAuthParams` | Parse an `otpauth://` URI (unknown query params are ignored; `{ strict: true }` validates the secret tail)                    |
-| `OTPAuthURI.build(params: OtpAuthParams): string`                      | Build a canonical `otpauth://` URI                                                                                            |
-| `interface ParseOptions { strict?: boolean }`                          | Shared parsing options for `Secret.fromBase32` / `OTPAuthURI.parse`; defaults to lenient                                      |
-| `enum OtpAlgorithm { SHA1, SHA256, SHA512 }`                           | Algorithm enum (string values)                                                                                                |
-| `enum OtpType { TOTP = 'totp', HOTP = 'hotp' }`                        | URI type enum (string values)                                                                                                 |
-| `class OtpError extends Error { readonly code: OtpErrorCode }`         | Unified error model; branch on `code`                                                                                         |
+| API                                                                                         | Description                                                                                                                   |
+| ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `new TOTP(options: TotpOptions)`                                                            | Construct a TOTP; options are validated synchronously, invalid input throws `OtpError`                                        |
+| `totp.generate(timestampMs?: number): string`                                               | Generate the code for now (or the given time); zero-padded `digits` characters                                                |
+| `totp.verify(token: string, options?: VerifyOptions): number \| null`                       | Constant-time comparison; returns the drift delta (`0` = current step, `-1` = previous step) or `null`                        |
+| `totp.remaining(timestampMs?: number): number`                                              | Whole seconds left in the current window, `[1, period]`                                                                       |
+| `totp.progress(timestampMs?: number): number`                                               | Progress of the current window, `[0, 1)`                                                                                      |
+| `totp.syncClockOffset(delta: number): void`                                                 | Calibrate the clock toward the token source: `clockOffsetMs += delta * period * 1000` (delta = token counter − local counter) |
+| `totp.clockOffsetMs: number`                                                                | Current clock offset in milliseconds                                                                                          |
+| `totp.toURI(): string` / `TOTP.fromURI(uri: string): TOTP`                                  | Serialize to / restore from an `otpauth://totp/...` URI                                                                       |
+| `new HOTP(options: HotpOptions)`                                                            | Construct a HOTP                                                                                                              |
+| `hotp.generate(counter?: number): string`                                                   | Generate the code (default: constructor counter)                                                                              |
+| `hotp.verify(token: string, options?: VerifyOptions): number \| null`                       | Constant-time comparison; returns the counter offset or `null`                                                                |
+| `hotp.toURI(): string` / `HOTP.fromURI(uri: string): HOTP`                                  | Serialize to / restore from an `otpauth://hotp/...` URI                                                                       |
+| `Secret.fromBase32(s: string, options?: ParseOptions): Secret`                              | Build from a base32 string (default lenient: case / whitespace / padding; `{ strict: true }` also requires a canonical tail)  |
+| `Secret.fromBytes(bytes: Uint8Array): Secret`                                               | Build from raw bytes (copied)                                                                                                 |
+| `Secret.generate(bytes: number = 20): Secret`                                               | Generate a random secret via the registered random source                                                                     |
+| `secret.toBase32(): string`                                                                 | Normalized uppercase base32 without padding                                                                                   |
+| `secret.bytes` / `secret.byteLength` / `secret.bitLength`                                   | Strength introspection (bytes are a copy)                                                                                     |
+| `secret.toJSON(): string`                                                                   | Redaction hook — returns `'[REDACTED]'` under `JSON.stringify`                                                                |
+| `OTPAuthURI.parse(uri: string, options?: ParseOptions): OtpAuthParams`                      | Parse an `otpauth://` URI (unknown query params are ignored; `{ strict: true }` validates the secret tail)                    |
+| `OTPAuthURI.build(params: OtpAuthParams): string`                                           | Build a canonical `otpauth://` URI                                                                                            |
+| `interface ParseOptions { strict?: boolean }`                                               | Shared parsing options for `Secret.fromBase32` / `OTPAuthURI.parse`; defaults to lenient                                      |
+| `enum OtpAlgorithm { SHA1, SHA256, SHA512 }`                                                | Algorithm enum (string values)                                                                                                |
+| `enum OtpType { TOTP = 'totp', HOTP = 'hotp' }`                                             | URI type enum (string values)                                                                                                 |
+| `class OtpError extends Error { readonly code: OtpErrorCode; readonly codeString: string }` | Unified error model; branch on `code`; `codeString` keeps a raw code the enum cannot map                                      |
 
 ### Strict base32 parsing
 
@@ -145,7 +145,7 @@ Use it at provisioning boundaries to reject truncated or hand-edited secrets ins
 
 ## Error handling and troubleshooting
 
-All failures throw `OtpError` with a fixed `code` (string). Messages never contain the secret, token or key material. The table below covers all 18 codes of `OtpErrorCode` (exported via the barrel). `NOT_IMPLEMENTED` is a reserved internal placeholder with no throw site in the library — normal usage never encounters it.
+All failures throw `OtpError` with a fixed `code` (string). Messages never contain the secret, token or key material. The table below covers all 18 codes of `OtpErrorCode` (exported via the barrel). `NOT_IMPLEMENTED` is only the fallback when the enum cannot map a code (never thrown by the library), and `OtpError.codeString` always keeps the raw code.
 
 | `OtpErrorCode`             | Symptom                                                          | Root cause                                                                                                      | Action                                                                                               |
 | -------------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
