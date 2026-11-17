@@ -65,7 +65,8 @@ export class HOTP {
   /**
    * 恒定时间比对；counter 缺省用构造值、window 缺省 0、上限 MAX_VERIFY_WINDOW（10）。
    * 返回命中 counter 相对基准的偏移（步=1），未命中 null。
-   * `options` 传 null 与未传等价（JS 调用方）——不露原生 TypeError。
+   * `options` 只从对象读取：传 null 或其他非对象值（数字 / 字符串，JS 调用方）等价于未传，
+   * 不露原生 TypeError，也不把裸数字当作 window 解释（想开窗口请传 `{ window }`）。
    */
   verify(token: string, options?: HotpVerifyOptions | null): number | null {
     const c =

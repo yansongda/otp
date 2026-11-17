@@ -92,6 +92,18 @@ assert.throws(
     e instanceof m.OtpError &&
     e.code === m.OtpErrorCode.INVALID_SECRET_CONTAINER,
 );
+// 8 位无符号视图都放行：Uint8ClampedArray 读取语义与 Uint8Array 一致（ImageData.data）
+assert.deepEqual(
+  Array.from(m.Secret.fromBytes(new Uint8ClampedArray([1, 127, 255])).bytes),
+  [1, 127, 255],
+);
+// Int8Array / Uint16Array 等逐元素转换会丢数据（丢高位字节）→ 仍拒绝
+assert.throws(
+  () => m.Secret.fromBytes(new Uint16Array([0x1234])),
+  (e) =>
+    e instanceof m.OtpError &&
+    e.code === m.OtpErrorCode.INVALID_SECRET_CONTAINER,
+);
 
 // 错误码唯一来源是 core：新增码必须自动出现在产物里，平台无需再抄一份
 assert.throws(

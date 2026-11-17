@@ -55,16 +55,6 @@ export default function otpAuthUriTest() {
       expect(p.account).assertEqual('john@example.com');
     });
 
-    it('parse_labelPercent3ASeparator', 0, () => {
-      // 历史形态：分隔符整体编码为 %3A，且 query issuer 与 label 前缀一致 → 才当分隔符
-      const p: OtpAuthParams = OTPAuthURI.parse(
-        'otpauth://totp/ACME%3Aco@example.com?secret=JBSWY3DPEHPK3PXP&issuer=ACME'
-      );
-      expect(p.type).assertEqual(OtpType.TOTP);
-      expect(p.issuer).assertEqual('ACME');
-      expect(p.account).assertEqual('co@example.com');
-    });
-
     it('parse_missingOptionalDefaults', 0, () => {
       // 无 algorithm/digits/period → SHA1/6/30
       const p: OtpAuthParams = OTPAuthURI.parse(

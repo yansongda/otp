@@ -275,7 +275,8 @@ export class OTPAuthURI {
    */
   static build(params: OtpAuthParams): string {
     // 顺序与 parse / errors.ts 优先级一致：type → secret → algorithm → digits → period|counter
-    // 非对象（JS 调用方传 null / 数组）→ INVALID_OTPAUTH_URI，不漏原生 TypeError
+    // 非对象（JS 调用方传 null / 字符串 / 数字）→ INVALID_OTPAUTH_URI，不漏原生 TypeError；
+    // 数组与缺字段的对象仍走字段校验（首个失败点通常是 UNSUPPORTED_OTPAUTH_TYPE）。
     if (params === null || typeof params !== "object") {
       otpFail("INVALID_OTPAUTH_URI");
     }

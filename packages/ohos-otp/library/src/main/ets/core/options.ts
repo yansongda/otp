@@ -26,7 +26,11 @@ export interface HmacOptions {
 export interface TotpOptions extends HmacOptions {
   /** 默认 30（RFC 6238 §5.2 推荐值），正整数秒。 */
   period?: number;
-  /** 默认 0（RFC 6238 §4.1 的 T0，单位秒）。 */
+  /**
+   * 默认 0（RFC 6238 §4.1 的 T0，单位秒）；须为非负安全整数。
+   * 注意：t0 晚于当前时刻时时间步为负，generate / verify 抛 INVALID_COUNTER
+   * （按 counter 越界归因，属既有行为，不另设码）。
+   */
   t0?: number;
   /**
    * 默认 0；时钟偏移补偿，仅 TOTP 有效。
@@ -90,7 +94,7 @@ export interface ParseOptions {
  * strict 开关解析（fail-closed）：只有「未提供」或明确 `false` 才是宽松模式。
  *
  * 为什么不写 `options.strict === true`：小程序端是 JS 调用，配置可能来自服务端 JSON
- * （`{ strict: 1 }` / `{ strict: "true" }`）”真值会静默退化为宽松解析，让「导入边界」的
+ * （`{ strict: 1 }` / `{ strict: "true" }`）的真值会静默退化为宽松解析，让「导入边界」的
  * 严格校验形同虚设。非 boolean 一律按 strict 处理（宁可多拒，不可漏放）。
  * `null` / `undefined` options 与未传等价（JS 调用方 `JSON.parse` 可能得到 `null`）。
  */

@@ -175,6 +175,15 @@ describe("platform barrel", () => {
     expect(secret.byteLength).toBe(20);
     new Uint8Array(buffer).fill(0);
     expect(secret.bytes[0]).toBe(0x01);
+    // 8 位无符号视图都接受：Uint8ClampedArray（ImageData.data）读取语义与 Uint8Array 一致，
+    // 但 Int8Array / Uint16Array 会逐元素转换（丢高位字节）——继续拒绕
+    const clamped = new Uint8ClampedArray([0x01, 0x7f, 0xff]);
+    expect(Array.from(Secret.fromBytes(clamped).bytes)).toEqual([1, 127, 255]);
+    expect(
+      thrownCode(() =>
+        Secret.fromBytes(new Uint16Array([0x1234]) as unknown as Uint8Array),
+      ),
+    ).toBe("INVALID_SECRET_CONTAINER");
   });
 
   it("OtpError keeps codeString and supports subclassing", () => {

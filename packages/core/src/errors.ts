@@ -57,6 +57,8 @@ export const OtpErrorCode = {
   // clockOffsetMs 非安全整数；syncClockOffset 的 delta 非安全整数 / 累加结果超出安全整数；
   // 或 TOTP 的 timestamp + clockOffsetMs 叠加后超出安全整数
   INVALID_CLOCK_OFFSET: "INVALID_CLOCK_OFFSET",
+  // verify 漂移窗口（单位 = 时间步，双向）：必须是 [0, MAX_VERIFY_WINDOW] 内的整数，
+  // 上限见 options.ts（防止外部 window 放大成 HMAC 计算炸弹）
   INVALID_WINDOW: "INVALID_WINDOW",
   // token 非纯数字 / 长度不等于 digits / 非字符串（JS 调用方）
   INVALID_TOKEN: "INVALID_TOKEN",

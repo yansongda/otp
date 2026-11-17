@@ -39,7 +39,8 @@ describe("time-step", () => {
   });
 
   it("step_epochZeroIsValid", () => {
-    // epoch 0 = 1970-01-01T00:00:00Z 是合法时刻，只有负值 / 非有限数才非法
+    // epoch 0 = 1970-01-01T00:00:00Z 是合法时刻；合法域为非负安全整数
+    // （负数 / 小数 / 非有限数 / 超 2^53-1 均非法）
     expect(step(0, 0, 30)).toBe(0);
     expect(remainingSec(0, 0, 30)).toBe(30);
     expect(progress(0, 0, 30)).toBe(0);

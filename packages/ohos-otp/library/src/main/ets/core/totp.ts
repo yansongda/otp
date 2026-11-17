@@ -115,7 +115,8 @@ export class TOTP {
   /**
    * 恒定时间比对；window 缺省 0、上限 MAX_VERIFY_WINDOW（10）、timestamp 缺省当前时刻（叠加偏移）。
    * 返回命中窗口相对当前步的偏移 delta，未命中 null。
-   * `options` 传 null 与未传等价（JS 调用方）——不露原生 TypeError。
+   * `options` 只从对象读取：传 null 或其他非对象值（数字 / 字符串，JS 调用方）等价于未传，
+   * 不露原生 TypeError，也不把裸数字当作 window 解释（想开窗口请传 `{ window }`）。
    */
   verify(token: string, options?: TotpVerifyOptions | null): number | null {
     const counter = timeStepStep(

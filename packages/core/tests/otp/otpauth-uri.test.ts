@@ -21,15 +21,6 @@ describe("otpauth-uri", () => {
     expect(p.account).toBe("john@example.com");
   });
 
-  it("parse_labelPercent3ASeparator", () => {
-    // 历史形态：分隔符整体编码为 %3A，且 query issuer 与 label 前缀一致 → 才当分隔符
-    const p = OTPAuthURI.parse(
-      "otpauth://totp/ACME%3Aco@example.com?secret=JBSWY3DPEHPK3PXP&issuer=ACME",
-    );
-    expect(p.issuer).toBe("ACME");
-    expect(p.account).toBe("co@example.com");
-  });
-
   it("parse_missingOptionalDefaults", () => {
     const p = OTPAuthURI.parse("otpauth://totp/alice?secret=JBSWY3DPEHPK3PXP");
     expect(p.algorithm).toBe(OtpAlgorithm.SHA1);
@@ -727,7 +718,8 @@ describe("otpauth-uri", () => {
   });
 
   it("parse_legacySeparator_survivesCaseExpandingChars", () => {
-    // 'İ' 小写后会多出一个组合字符（长度变化），旧实现用 toLowerCase 取下标会错位、\n    // 把历史分隔符识别失败；这里改用大小写不敏感的手工扫描，必须仍能切开
+    // 'İ' 小写后会多出一个组合字符（长度变化），旧实现用 toLowerCase 取下标会错位，
+    // 把历史分隔符识别失败；这里改用大小写不敏感的手工扫描，必须仍能切开
     const p = OTPAuthURI.parse(
       "otpauth://totp/%C4%B0%3Aacct%3Abob?secret=JBSWY3DPEHPK3PXP&issuer=%C4%B0",
     );

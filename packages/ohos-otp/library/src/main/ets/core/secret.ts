@@ -36,19 +36,32 @@ export class Secret {
 
   /**
    * 从字节容器构造：一律拷贝，杜绝外部引用共享；空数据抛 EMPTY_SECRET。
-   * 运行时只接受 Uint8Array / ArrayBuffer（其余抛 INVALID_SECRET_CONTAINER）：微信端是
-   * JS 调用，字符串与 array-like 的 length 可能恰好合法，`new Uint8Array(字符串)` 会得到
-   * 0 字节（空密钥）、array-like 会得到全零密钥，因此在转换之前先判类型，避免静默 fail-open。
+   * 运行时只接受「8 位无符号视图」（Uint8Array / Uint8ClampedArray）与 ArrayBuffer，其余一律
+   * 抛 INVALID_SECRET_CONTAINER。微信端是 JS 调用，字符串与 array-like 的 length 可能恰好
+   * 合法，`new Uint8Array(字符串)` 会得到 0 字节（空密钥）、array-like 会得到全零密钥，因此
+   * 在转换之前先判类型，避免静默 fail-open。
    * （`fromBase32` 的非字符串入参复用同一个错误码：两者都是「secret 容器类型不对」。）
+   *
+   * 为什么放行 Uint8ClampedArray：它的读取语义与 Uint8Array 完全一致（都是 8 位无符号 0-255，
+   * 差别只在写入时 clamp vs wrap），而 `ImageData.data` 等 Web 侧 API 直接给出该类型。
+   * 反过来 Int8Array / Uint16Array / DataView 必须拒绝：`new Uint8Array(x)` 对 TypedArray 是
+   * 逐元素而非逐字节转换，`Uint16Array` 会静默丢掉高位字节。
    *
    * 注意：`new Uint8Array(arrayBuffer)` 只是视图而非拷贝——ArrayBuffer 入参必须先包一层
    * 视图再拷贝，否则调用方后续改写/清零该 buffer 会直接改动实例内密钥。
    */
-  static fromBytes(bytes: Uint8Array | ArrayBuffer): Secret {
-    if (!(bytes instanceof Uint8Array) && !(bytes instanceof ArrayBuffer)) {
+  static fromBytes(
+    bytes: Uint8Array | Uint8ClampedArray | ArrayBuffer,
+  ): Secret {
+    // 8 位无符号视图可直接作为拷贝源；ArrayBuffer 需先包一层视图；其余容器一律拒绝
+    let view: Uint8Array | Uint8ClampedArray;
+    if (bytes instanceof Uint8Array || bytes instanceof Uint8ClampedArray) {
+      view = bytes;
+    } else if (bytes instanceof ArrayBuffer) {
+      view = new Uint8Array(bytes);
+    } else {
       otpFail("INVALID_SECRET_CONTAINER");
     }
-    const view = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
     const copy = new Uint8Array(view);
     if (copy.length === 0) {
       otpFail("EMPTY_SECRET");

@@ -13,8 +13,9 @@
 - 错误码归因调整：`Secret.generate` 长度越界 → `INVALID_SECRET_LENGTH`；`clockOffsetMs`
   非法、同步偏移越界 → `INVALID_CLOCK_OFFSET`；`minSecretBits` 非法 →
   `INVALID_MIN_SECRET_BITS`（fail-closed，不再静默关闭强度校验）
-- `Secret.fromBytes` 非字节容器 → `INVALID_SECRET_CONTAINER`；`ArrayBuffer` 入参改为真正的
-  拷贝语义（原先是内存别名）
+- `Secret.fromBytes` 只接受 8 位无符号视图（`Uint8Array` / `Uint8ClampedArray`）与
+  `ArrayBuffer`，其余（`Int8Array` / `Uint16Array` / `DataView` / 字符串 / array-like）一律
+  `INVALID_SECRET_CONTAINER`；`ArrayBuffer` 入参改为真正的拷贝语义（原先是内存别名）
 - `OTPAuthURI.parse` 的 `digits` / `period` / `counter` 只认纯十进制整数；
   `OTPAuthURI.build` 对非法参数改为抛错
 - `OTPAuthURI` label 语义：无原始冒号的 label 一律视为 account；仅当 query `issuer` 与
@@ -22,9 +23,10 @@
   旧式 `issuer%3Aaccount` URI 将只保留完整 account（issuer 丢失）
 - `build` / `toURI()` 在 `account` 为空时不再把 issuer 写进 label（`otpauth://totp/?...`）
 - `HOTP.verify` 不再接受 `timestamp`、`TOTP.verify` 不再接受 `counter`（对象字面量会编译失败）
-- 移除类型别名 `OtpFailureCode`；`OtpErrorCode` 取值由 core 唯一提供
 - `verify` 校验顺序改为「配置类先于输入类」：坏 token 与坏 `counter` / `window` 同时出现时
   返回 `INVALID_COUNTER` / `INVALID_WINDOW`（此前 `INVALID_TOKEN`）
+- 构造期校验顺序调整为 algorithm 先于 digits：`{ algorithm: "MD5", digits: 5 }` 两项同时
+  非法时现在返回 `INVALID_ALGORITHM`（此前 `INVALID_DIGITS`）
 - `OTPAuthURI.parse` 的 `issuer=` 空 query 值按「未提供」处理，不再抹掉 label 里的合法 issuer
 - `strict` 模式解单字符 secret（如 `"A"`）：`INVALID_BASE32_PADDING` → `SECRET_TOO_SHORT`
   （与宽松模式同码）
@@ -41,8 +43,8 @@
 
 ### Changed
 
-- `OtpError` 的 `name` 固定为 `OtpError`（provider 错误契约：core 的 engine 靠它区分
-  「已知错误原样上抛」与「provider 实现缺陷」）
+- 三端 `OtpError.name` 契约统一为 `OtpError`（provider 错误契约：core 的 engine 靠它区分
+  「已知错误原样上抛」与「provider 实现缺陷」）；**本包此前已是该值，行为不变**，本次新增的是守卫
 - 错误抛出统一走 core 的 `otpFail` → 平台工厂：core 与平台不再有两条错误构造路径
 - 原型链修复改为**只在原型退化为 `Error.prototype` 时**执行（此前无条件
   `Object.setPrototypeOf` 会把 `OtpError` 子类实例的原型改回基类：`instanceof` 子类失效、
@@ -72,10 +74,12 @@
 - `minSecretBits` 非法值改为 fail-closed（此前 `NaN > 0` 为 false 会**静默关闭**强度校验）
 - `Secret.generate(bytes)` 长度越界改报 `INVALID_SECRET_LENGTH`（此前误用 `SECRET_TOO_WEAK`）
 - `syncClockOffset(1.5)` 改报 `INVALID_CLOCK_OFFSET`（此前误用 `INVALID_WINDOW`）
+- 错误模型改造本身对 npm 用户无破坏性变更（仅新增 `OtpError.codeString`）；本版本的其它破坏性变更见上方 Breaking changes
 
 ### Removed
 
-- 类型别名 `OtpFailureCode`（与 `OtpErrorCode` 完全等价，重复声明）
+- core 内部类型别名 `OtpFailureCode`（与 `OtpErrorCode` 等价，重复声明）。它**从未出现在本包
+  发布的类型声明里**（`dist/index.d.ts` 无此名），属于内部清理，npm 用户无感
 
 ## [1.0.1] - 2026-11-12
 

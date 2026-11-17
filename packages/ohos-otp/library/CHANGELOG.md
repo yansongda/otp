@@ -9,7 +9,9 @@
   小数 / `NaN` / 超大值不再静默接受
 - 错误码归因调整：`Secret.generate` 长度越界 → `INVALID_SECRET_LENGTH`；`clockOffsetMs` 非法、
   同步偏移越界 → `INVALID_CLOCK_OFFSET`；`minSecretBits` 非法 → `INVALID_MIN_SECRET_BITS`（fail-closed）
-- `Secret.fromBytes` 非字节容器 → `INVALID_SECRET_CONTAINER`；`ArrayBuffer` 入参改为真正的拷贝语义
+- `Secret.fromBytes` 只接受 8 位无符号视图（`Uint8Array` / `Uint8ClampedArray`）与 `ArrayBuffer`，
+  其余（`Int8Array` / `Uint16Array` / `DataView` / 字符串 / array-like）一律 `INVALID_SECRET_CONTAINER`；
+  `ArrayBuffer` 入参改为真正的拷贝语义
 - `OTPAuthURI.parse` 的 `digits` / `period` / `counter` 只认纯十进制整数；`OTPAuthURI.build`
   对非法参数改为抛错
 - `OTPAuthURI` label 语义：无原始冒号的 label 一律视为 account；仅当 query `issuer` 与 label
@@ -21,6 +23,8 @@
   `INVALID_TOKEN`、`uri` / `build` 的 `issuer`·`account` → `INVALID_OTPAUTH_URI`
 - `verify` 校验顺序改为「配置类先于输入类」：坏 token 与坏 `counter` / `window` 同时出现时
   返回 `INVALID_COUNTER` / `INVALID_WINDOW`（此前 `INVALID_TOKEN`）
+- 构造期校验顺序调整为 algorithm 先于 digits：`{ algorithm: "MD5", digits: 5 }` 两项同时
+  非法时现在返回 `INVALID_ALGORITHM`（此前 `INVALID_DIGITS`）
 - `OTPAuthURI.parse` 的 `counter > 2^53-1` 现在抛 `INVALID_COUNTER`（此前接受且丢精度）
 - `TOTP.generate/verify(timestamp: 0)`（epoch 0）现在合法
 - `strict` 模式解单字符 secret：`INVALID_BASE32_PADDING` → `SECRET_TOO_SHORT`
