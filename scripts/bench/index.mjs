@@ -8,7 +8,7 @@
  *   bun run bench -- --filter hmac               # 只跑名字含 hmac 的场景
  *   bun run bench -- --save /tmp/base.json       # 存快照（含环境指纹）
  *   bun run bench -- --compare /tmp/base.json    # 与本机快照比，标出 regress/improve
- *   bun run bench -- --ab main                   # 临时 worktree 检出 main，A/B 对比
+ *   bun run bench -- --ab main                   # 临时 worktree 检出 main，交错 A/B 对比
  *
  * 可引用性边界（务必读）：
  * - 只能「同机 + 同 bun 版本」比较；跨机器 / 跨版本的绝对数字没有意义，
@@ -21,11 +21,15 @@ import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { envFingerprint, envLabel, measure, sameEnv } from "./harness.mjs";
-import { CORE_DIR, loadScenarios } from "./scenarios.mjs";
+import {
+  envFingerprint,
+  envLabel,
+  measure,
+  measurePair,
+  sameEnv,
+} from "./harness.mjs";
+import { CORE_DIR, createScenarios } from "./scenarios.mjs";
 
-const SELF = fileURLToPath(import.meta.url);
 const HELP = `otp bench — core 热路径基准
 
 用法
@@ -37,7 +41,7 @@ const HELP = `otp bench — core 热路径基准
   --filter <substr>      只跑名字包含该子串的场景
   --save <file>          把本轮结果（含环境指纹）写入 JSON
   --compare <file>       与已有 JSON 快照比较
-  --ab [<ref>]           git worktree 检出 <ref> 跑一轮，再跑当前工作区，输出对比表
+  --ab [<ref>]           git worktree 检出 <ref>，与当前工作区交错 A/B（默认 main）
   --threshold <pct>      判定 regress/improve 的阈值，默认 15（%）
   --fail-on-regress      --compare / --ab 出现 regress 时退出码 1（CI 可选）
   -h, --help             本帮助
@@ -106,7 +110,7 @@ function padStart(text, width) {
 }
 
 async function runBench({ filter }) {
-  const { scenarios, skipped } = await loadScenarios();
+  const { scenarios, skipped } = await createScenarios(CORE_DIR);
   const selected =
     filter === undefined
       ? scenarios
@@ -174,13 +178,22 @@ function indexByName(payload) {
   return map;
 }
 
+/** 亚 0.1µs：循环与 keep() 开销已与真活儿同量级，同代码自比都能跑出 ±15%。 */
+const NOISE_FLOOR_US = 0.1;
+
 function comparePayloads(base, head, threshold) {
   const baseIndex = indexByName(base);
   const rows = [];
   for (const row of head.results) {
     const previous = baseIndex.get(row.name);
     if (previous === undefined) {
-      rows.push({ name: row.name, base: null, head: row, ratio: null });
+      rows.push({
+        name: row.name,
+        base: null,
+        head: row,
+        ratio: null,
+        tooFast: row.usPerOp < NOISE_FLOOR_US,
+      });
       continue;
     }
     rows.push({
@@ -188,14 +201,12 @@ function comparePayloads(base, head, threshold) {
       base: previous,
       head: row,
       ratio: row.usPerOp / previous.usPerOp,
+      tooFast: Math.max(row.usPerOp, previous.usPerOp) < NOISE_FLOOR_US,
     });
   }
-  const regressed = rows.filter(
-    (row) => row.ratio !== null && row.ratio > 1 + threshold / 100,
-  );
-  const improved = rows.filter(
-    (row) => row.ratio !== null && row.ratio < 1 - threshold / 100,
-  );
+  const usable = rows.filter((row) => row.ratio !== null && !row.tooFast);
+  const regressed = usable.filter((row) => row.ratio > 1 + threshold / 100);
+  const improved = usable.filter((row) => row.ratio < 1 - threshold / 100);
   return { rows, regressed, improved };
 }
 
@@ -213,10 +224,11 @@ function printComparison({ rows, regressed, improved }, threshold, baseLabel) {
       continue;
     }
     const ratio = row.ratio;
-    let verdict = "same";
-    if (ratio > 1 + threshold / 100) {
+    // 亚 0.1µs 的行不给 improve/regress 结论（噪声量级）
+    let verdict = row.tooFast ? "same（噪声量级）" : "same";
+    if (!row.tooFast && ratio > 1 + threshold / 100) {
       verdict = `REGRESS +${((ratio - 1) * 100).toFixed(1)}%`;
-    } else if (ratio < 1 - threshold / 100) {
+    } else if (!row.tooFast && ratio < 1 - threshold / 100) {
       verdict = `improve ${((ratio - 1) * 100).toFixed(1)}%`;
     }
     const noisy = row.head.noisy || row.base?.noisy === true ? " !noisy" : "";
@@ -225,7 +237,7 @@ function printComparison({ rows, regressed, improved }, threshold, baseLabel) {
     );
   }
 
-  const comparable = rows.filter((row) => row.ratio !== null);
+  const comparable = rows.filter((row) => row.ratio !== null && !row.tooFast);
   if (comparable.length > 0) {
     const geo = Math.exp(
       comparable.reduce((sum, row) => sum + Math.log(row.ratio), 0) /
@@ -251,39 +263,81 @@ function git(args, { allowFail = false } = {}) {
   return result;
 }
 
-/** 子进程跑一轮 bench，通过 OTP_BENCH_CORE 指向某个 core 源码目录。 */
-function runChild(coreDir, filter) {
-  const args = [SELF, "--json"];
-  if (filter !== undefined) {
-    args.push("--filter", filter);
-  }
-  const result = spawnSync(process.execPath, args, {
-    encoding: "utf8",
-    env: { ...process.env, OTP_BENCH_CORE: coreDir, NO_COLOR: "1" },
-  });
-  if (result.status !== 0) {
-    throw new Error(
-      `bench 子进程失败（core=${coreDir}）：${(result.stderr || result.stdout).trim()}`,
-    );
-  }
-  return JSON.parse(result.stdout);
-}
-
+/**
+ * A/B：临时 worktree 检出 <ref>，与当前工作区**在同一进程内交错测量**。
+ *
+ * 为什么不用「先跑完 base 再跑完 head」：两次测量落在大约 10s 的不同时间窗，
+ * 机器热降频 / 后台负载会整段污染其中一侧（实测出现过 base 侧 3.6µs → 6.3µs
+ * 的假 improve）。交错 + 轮间交换先后顺序 + 各自取 min，可把漂移消掉。
+ *
+ * 两个版本在同一进程内共存是安全的：core 按绝对路径各自实例化（两套模块图），
+ * 不共享可变状态（crypto 注册表、错误工厂都在各自模块内）。
+ */
 async function runAB({ ab, filter, threshold, failOnRegress }) {
   const ref = ab ?? "main";
   const worktree = join(tmpdir(), `otp-bench-${sanitize(ref)}-${process.pid}`);
   git(["worktree", "add", "--detach", "--force", worktree, ref]);
   try {
-    const baseCore = join(worktree, "packages/core/src");
-    const base = runChild(baseCore, filter);
-    const head = await runBench({ filter });
-    if (!sameEnv(base.env, head.env)) {
-      console.error(
-        "警告：base 与 head 环境指纹不一致（跨机器或跨 bun 版本），比值不可引用",
+    const base = await createScenarios(join(worktree, "packages/core/src"));
+    const head = await createScenarios(CORE_DIR);
+
+    const baseByName = new Map(
+      base.scenarios.map((scenario) => [scenario.name, scenario]),
+    );
+    const selected =
+      filter === undefined
+        ? head.scenarios
+        : head.scenarios.filter((scenario) => scenario.name.includes(filter));
+    if (selected.length === 0) {
+      throw new Error(
+        `没有匹配的场景${filter === undefined ? "" : `（filter=${filter}）`}`,
       );
     }
-    const comparison = comparePayloads(base, head, threshold);
-    printComparison(comparison, threshold, `${ref} @ ${envLabel(base.env)}`);
+
+    const baseResults = [];
+    const headResults = [];
+    for (const scenario of selected) {
+      const peer = baseByName.get(scenario.name);
+      if (peer === undefined) {
+        // 旧版本没有这个场景：只跑 head，对比表里标「base 无此项」
+        headResults.push({
+          group: scenario.group,
+          name: scenario.name,
+          ...measure(scenario.run, { targetMs: scenario.targetMs }),
+        });
+        continue;
+      }
+      const pair = measurePair(peer.run, scenario.run, {
+        targetMs: scenario.targetMs,
+      });
+      baseResults.push({
+        group: scenario.group,
+        name: scenario.name,
+        ...pair.base,
+      });
+      headResults.push({
+        group: scenario.group,
+        name: scenario.name,
+        ...pair.head,
+      });
+    }
+
+    const env = envFingerprint();
+    const comparison = comparePayloads(
+      { results: baseResults },
+      { results: headResults },
+      threshold,
+    );
+    printComparison(
+      comparison,
+      threshold,
+      `${ref} @ ${envLabel(env)}（交错测量：每轮 A/B 交替，各取 min-of-${headResults.length > 0 ? headResults[0].repeats : 7}）`,
+    );
+    if (base.skipped.length > 0) {
+      console.log(
+        `\nbase 侧跳过 ${base.skipped.length} 组：${base.skipped.join("；")}`,
+      );
+    }
     if (comparison.rows.some((row) => row.head.noisy)) {
       console.log("!noisy = p95/min > 3，该行本轮不可引用");
     }
