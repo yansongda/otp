@@ -7,8 +7,10 @@
  *   （实测 `format(123456789, 8)` 常量调用会掉到 2ns/op 的假数字）。
  * - 输入池全部在模块加载时预分配，测到的只有被测调用的成本；
  * - 迭代数不写死，由 harness 按 targetMs 校准（见 harness.mjs），慢场景自动少跑；
- * - 只 import `packages/core/src/**` 的公开或 internal 稳定入口，不碰平台包；
- * - 旧版本（`--ab <ref>`）缺少某个模块时整组跳过，不中断整轮。
+ * - 场景以 `createScenarios(coreDir)` 工厂形式导出：`--ab` 需要在**同一个进程**里
+ *   同时加载新旧两套 core（绝对路径不同 → 两个独立模块实例），交错测量才成立；
+ * - 只 import `<coreDir>/**` 的公开或 internal 稳定入口，不碰平台包；
+ * - 旧版本缺少某个模块时整组跳过，不中断整轮。
  *
  * 注意：本目录刻意不放在 `packages/core/src/`（会被 sync-core 复制进 ohos HAR）
  * 也不放在 `packages/core/tests/`（会被 `bun test tests` 当测试跑，干扰用例计数）。
@@ -19,7 +21,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const BENCH_DIR = fileURLToPath(new URL(".", import.meta.url));
 const REPO_ROOT = resolve(BENCH_DIR, "../..");
 
-/** core 源码根目录；`--ab` 通过该环境变量指向临时 worktree。 */
+/** 默认 core 源码根目录；`--ab` 会把另一个版本传进 `createScenarios`。 */
 export const CORE_DIR = resolve(
   process.env.OTP_BENCH_CORE ?? join(REPO_ROOT, "packages/core/src"),
 );
@@ -27,7 +29,7 @@ export const CORE_DIR = resolve(
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 const SECRET = "JBSWY3DPEHPK3PXP"; // 16 字符 = 10 字节
 const FIXED_TS = 1_700_000_000_000;
-/** 掩码池：i & MASK 取模，避免被测调用内部出现可变长循环。 */
+/** 掩码池：i & mask 取模，避免被测调用内部出现可变长循环。 */
 const MASK = 255;
 
 /** 32 个互不相同的 16 字符 base32（错开字母表下标，保证解码路径分散）。 */
@@ -56,10 +58,8 @@ const DIGIT_VALUES = Array.from(
   (_, n) => (n * 3_600_007) % 100_000_000,
 );
 
-const load = (rel) => import(pathToFileURL(join(CORE_DIR, rel)).href);
-
 /** 单组加载失败（旧版本缺文件）只跳过该组，并记录原因。 */
-async function group(name, modules, build, skipped) {
+async function group(load, name, modules, build, skipped) {
   try {
     const loaded = {};
     for (const [key, rel] of Object.entries(modules)) {
@@ -73,17 +73,21 @@ async function group(name, modules, build, skipped) {
 }
 
 /**
+ * 绑定到某个 core 源码目录的场景集合。
+ * @param {string} [coreDir] core 源码根目录（默认取 CORE_DIR）
  * @returns {Promise<{
  *   scenarios: Array<{ name: string, group: string, targetMs?: number, run: (i: number) => unknown }>,
  *   skipped: string[],
  * }>}
  */
-export async function loadScenarios() {
+export async function createScenarios(coreDir = CORE_DIR) {
+  const load = (rel) => import(pathToFileURL(join(coreDir, rel)).href);
   const skipped = [];
   const scenarios = [];
 
   scenarios.push(
     ...(await group(
+      load,
       "pure-js",
       {
         hmac: "pure-js/hmac.ts",
@@ -122,6 +126,7 @@ export async function loadScenarios() {
 
   scenarios.push(
     ...(await group(
+      load,
       "internal",
       {
         base32: "internal/base32.ts",
@@ -171,6 +176,7 @@ export async function loadScenarios() {
 
   scenarios.push(
     ...(await group(
+      load,
       "facade",
       {
         hotp: "hotp.ts",
