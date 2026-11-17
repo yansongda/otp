@@ -22,9 +22,10 @@ describe("otpauth-uri", () => {
   });
 
   it("parse_labelPercent3ASeparator", () => {
-    // 历史形态：分隔符整体编码为 %3A，且 query issuer 与 label 前缀一致 → 才当分隔符
+    // 历史形态：分隔符整体编码为 %3A。label 百分号解码后按首个冒号切分 issuer/account，
+    // 所以 %3A 与原始 ':' 等价；query 的 issuer 仍优先于 label 前缀。
     const p = OTPAuthURI.parse(
-      "otpauth://totp/ACME%3Aco@example.com?secret=JBSWY3DPEHPK3PXP&issuer=ACME",
+      "otpauth://totp/ACME%3Aco@example.com?secret=JBSWY3DPEHPK3PXP",
     );
     expect(p.issuer).toBe("ACME");
     expect(p.account).toBe("co@example.com");

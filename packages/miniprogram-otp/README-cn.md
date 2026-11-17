@@ -212,8 +212,8 @@ wx.getRandomValues({
 - counter 上限为 `2^53-1`（JavaScript number 精确整数上限）。
 - `otpauth://` 不是 RFC，而是 Google Authenticator 事实标准（IANA Provisional #13829）。
 - URI 未知 query 参数与 type 不适用的参数（TOTP 的 `counter`、HOTP 的 `period`）会被忽略，以最大化互操作。
-- `otpauth://` label：无原始 `:` 的 label 一律视为 account；`%3A` 仅在 query `issuer` 存在且与 label 前缀一致时作为历史 `issuer%3Aaccount` 分隔符，否则整段保留为 account（因此 account 内含 `:` 也能无损往返）。
 - `verify()` 默认 `window: 0`；需要容忍 RFC 6238 §5.2 的一步网络延迟时显式传 `window: 1`。window 上限 `MAX_VERIFY_WINDOW = 10` 步（超出抛 `INVALID_WINDOW`）：动态验证码 ±3 步已很宽松，10（默认周期下 ±5 分钟）是安全上限而非可调参数。需要更大跨度（例如服务端 HOTP resync）时**不要**放开上限：按 counter 迭代 `hotp.verify(token, { counter, window: 0 })`。
+- `verify(token, options)` **只读取对象形态**的 `options`：`null` 或其他非对象值（裸数字 / 字符串）等价于未传，裸数字**不会**被当作 `window`，开窗口必须显式传 `{ window: 1 }`。
 - 不提供 Steam Guard、SHA224/SHA384/SM3、BigInt counter、throttling（RFC 4226 §7.3 属服务端职责）、二维码渲染 / 扫码。
 - 纯 JS HMAC 比系统 crypto 慢；本库面向端内算码，不用于服务端批量校验。
 

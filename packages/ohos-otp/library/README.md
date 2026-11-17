@@ -185,11 +185,11 @@ All failures throw `OtpError` with a fixed `code` (string). Messages never conta
 - **Counter ≤ 2^53-1**: ArkTS `number` has a 53-bit exact-integer range. `2^53-1` steps × 30 s ≈ 8.5 × 10⁹ years, unreachable in practice, so no BigInt support is provided; counters beyond the limit throw `INVALID_COUNTER`.
 - **`otpauth://` is not an RFC**: it follows the Google Authenticator Key URI Format, an industry de-facto standard registered with IANA as Provisional #13829.
 - **Unknown query parameters are ignored** when parsing URIs (maximizes interoperability); parameters that do not apply to the type (TOTP `counter`, HOTP `period`) are ignored as well.
-- **`otpauth://` label semantics**: a label without a raw `:` is treated as the account name. `%3A` only acts as a legacy `issuer%3Aaccount` separator when the query `issuer` exists and matches the label prefix; otherwise the whole label stays the account (so an account containing `:` round-trips intact).
 - **Secret redaction is a safety net, not a license to log**: `Secret.toJSON()` returns `'[REDACTED]'` so `JSON.stringify` never leaks the key, but you must still never hand a secret to logs or analytics.
 - **Not provided**: Steam Guard, SHA224 / SHA384 / SM3, BigInt / full 64-bit counters, throttling (RFC 4226 §7.3, a server-side concern), QR rendering or scanning.
 - **Strict verification by default**: `verify` uses `window: 0`; a token from an adjacent step returns `null` unless you pass an explicit window.
 - **Window cap**: verify performs 2w+1 HMAC computations for window w (each re-creates SymKey/Mac), so `window` is capped at `MAX_VERIFY_WINDOW = 10` (`INVALID_WINDOW` beyond it). ±3 steps is already very lenient for a dynamic code; keep w small (typically ≤ 1-2). If you need a wider span (e.g. server-side HOTP resync), do **not** raise the cap: iterate `hotp.verify(token, { counter, window: 0 })` over candidate counters instead.
+- **`verify` options must be an object**: only object-valued `options` is read. `null` or any other non-object value (a bare number, a string) behaves like an omitted argument, and a bare number is never interpreted as `window` — pass `{ window: 1 }` explicitly.
 
 ## Security notes
 

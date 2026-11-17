@@ -185,11 +185,11 @@ try {
 - **counter ≤ 2^53-1**：ArkTS `number` 精确整数上限为 53 位。`2^53-1` 步 × 30 秒 ≈ 8.5×10⁹ 年，实践中不可触及，故不提供 BigInt 支持；超限抛 `INVALID_COUNTER`。
 - **`otpauth://` 并非 RFC**：遵循 Google Authenticator Key URI Format 这一事实标准（IANA Provisional #13829 注册）。
 - **未知 query 参数与 type 不适用的参数被忽略**（TOTP 的 `counter`、HOTP 的 `period`；最大化互操作）。
-- **`otpauth://` label 语义**：无原始 `:` 的 label 一律视为 account；`%3A` 仅在 query `issuer` 存在且与 label 前缀一致时作为历史 `issuer%3Aaccount` 分隔符，否则整段保留为 account（因此 account 内含 `:` 也能无损往返）。
 - **脱敏是安全网而非日志许可**：`Secret.toJSON()` 返回 `'[REDACTED]'` 保证 `JSON.stringify` 不泄漏密钥，但你仍不得主动把 secret 交给日志或上报。
 - **不提供**：Steam Guard、SHA224 / SHA384 / SM3、BigInt / 完整 64 位 counter、throttling（RFC 4226 §7.3，服务端职责）、二维码渲染与扫码。
 - **默认严格校验**：`verify` 使用 `window: 0`；相邻时间步的 token 返回 `null`，除非显式传 window。
 - **window 上限 10**：窗口 w 时 verify 执行 2w+1 次 HMAC（每次重建 SymKey/Mac），因此 `window` 上限为 `MAX_VERIFY_WINDOW = 10`（超出抛 `INVALID_WINDOW`）；动态验证码 ±3 步已很宽松，调用方仍应保持小窗口（通常 ≤1-2 步）。需要更大跨度（如服务端 HOTP resync）时**不要**放开上限：按 counter 迭代 `hotp.verify(token, { counter, window: 0 })`。
+- **`verify` 的 `options` 必须是对象**：只读取对象形态的 `options`；`null` 或其他非对象值（裸数字 / 字符串）等价于未传，裸数字不会被当作 `window`，开窗口必须显式传 `{ window: 1 }`。
 
 ## 安全说明
 

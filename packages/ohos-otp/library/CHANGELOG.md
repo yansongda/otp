@@ -18,6 +18,8 @@
   `INVALID_TOKEN`、`uri` / `build` 的 `issuer`·`account` → `INVALID_OTPAUTH_URI`
 - `verify` 校验顺序改为「配置类先于输入类」：坏 token 与坏 `counter` / `window` 同时出现时
   返回 `INVALID_COUNTER` / `INVALID_WINDOW`（此前 `INVALID_TOKEN`）
+- 构造期校验顺序调整为 algorithm 先于 digits：`{ algorithm: "MD5", digits: 5 }` 两项同时
+  非法时现在返回 `INVALID_ALGORITHM`（此前 `INVALID_DIGITS`）
 - `OTPAuthURI.parse` 的 `counter > 2^53-1` 现在抛 `INVALID_COUNTER`（此前接受且丢精度）
 - `TOTP.generate/verify(timestamp: 0)`（epoch 0）现在合法
 - `strict` 模式解单字符 secret：`INVALID_BASE32_PADDING` → `SECRET_TOO_SHORT`

@@ -212,8 +212,8 @@ The Mini Program has no WebCrypto / SubtleCrypto. HMAC-SHA1/256/512 are implemen
 - Counter is limited to `2^53-1` because JavaScript numbers cannot represent larger integers exactly.
 - `otpauth://` is a Google Authenticator de-facto standard (IANA Provisional #13829), not an RFC.
 - Unknown URI query parameters are ignored for interoperability.
-- `otpauth://` label: a label without a raw `:` is treated as the account name. `%3A` only acts as a legacy `issuer%3Aaccount` separator when the query `issuer` exists and matches the label prefix; otherwise the whole label stays the account (so an account containing `:` round-trips intact).
 - `verify()` defaults to `window: 0`; pass `window: 1` to tolerate the one-step network delay described by RFC 6238 §5.2. The window is capped at `MAX_VERIFY_WINDOW = 10` steps (`INVALID_WINDOW` beyond it) — ±3 steps is already very lenient for a dynamic code, so 10 (±5 minutes at the default period) is the ceiling rather than a tuning knob. If you need a wider span (for example server-side HOTP resync), do **not** raise the cap: iterate `hotp.verify(token, { counter, window: 0 })` over candidate counters instead.
+- `verify(token, options)` reads **only object-valued** `options`: `null` or any other non-object value (a bare number, a string) behaves like an omitted argument, and a bare number is never interpreted as `window` — pass `{ window: 1 }` explicitly.
 - No Steam Guard, SHA224/SHA384/SM3, BigInt counters, throttling (RFC 4226 §7.3 is a server responsibility), QR rendering or scanning.
 - Pure-JS HMAC is slower than native crypto; this library targets client-side code generation, not bulk server verification.
 

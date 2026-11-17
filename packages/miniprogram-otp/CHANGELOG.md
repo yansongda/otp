@@ -18,9 +18,10 @@
 - `OTPAuthURI.parse` 的 `digits` / `period` / `counter` 只认纯十进制整数；
   `OTPAuthURI.build` 对非法参数改为抛错
 - `HOTP.verify` 不再接受 `timestamp`、`TOTP.verify` 不再接受 `counter`（对象字面量会编译失败）
-- 移除类型别名 `OtpFailureCode`；`OtpErrorCode` 取值由 core 唯一提供
 - `verify` 校验顺序改为「配置类先于输入类」：坏 token 与坏 `counter` / `window` 同时出现时
   返回 `INVALID_COUNTER` / `INVALID_WINDOW`（此前 `INVALID_TOKEN`）
+- 构造期校验顺序调整为 algorithm 先于 digits：`{ algorithm: "MD5", digits: 5 }` 两项同时
+  非法时现在返回 `INVALID_ALGORITHM`（此前 `INVALID_DIGITS`）
 - `strict` 模式解单字符 secret（如 `"A"`）：`INVALID_BASE32_PADDING` → `SECRET_TOO_SHORT`
   （与宽松模式同码）
 
