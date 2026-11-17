@@ -25,6 +25,7 @@ export interface HmacOptions {
   secret: string;
   algorithm?: OtpAlgorithm;
   digits?: 6 | 7 | 8;
+  /** 非负安全整数；非法值 fail-closed 抛 INVALID_MIN_SECRET_BITS。 */
   minSecretBits?: number;
 }
 
@@ -44,12 +45,16 @@ export interface HotpOptions extends HmacOptions {
   account?: string;
 }
 
-/** verify 校验选项。 */
-export interface VerifyOptions {
-  timestamp?: number;
-  counter?: number;
-  window?: number;
-}
+/**
+ * verify 校验选项（历史合并形态，兼容保留）。
+ * 具体入口使用 core 按类收窄的 `HotpVerifyOptions` / `TotpVerifyOptions`：
+ * HOTP 不认 timestamp、TOTP 不认 counter，禁止在平台层再手写一份。
+ */
+export type {
+  HotpVerifyOptions,
+  TotpVerifyOptions,
+  VerifyOptions,
+} from "@yansongda/otp-core";
 
 /** 解析选项。 */
 export interface ParseOptions {

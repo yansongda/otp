@@ -93,4 +93,30 @@ describe("engine", () => {
       verify(provider, params6, "000000", Number.MAX_SAFE_INTEGER, 1),
     ).toBeNull();
   });
+  it("verify_configErrorsPrecedeTokenErrors", () => {
+    // 校验顺序：配置类（counter / window）先于输入类（token），
+    // 否则调用方写错 window 会被「用户 token 非法」掩盖
+    expectCode(() => verify(provider, params6, "zz", 1, -1), "INVALID_WINDOW");
+    expectCode(() => verify(provider, params6, "zz", -1, 0), "INVALID_COUNTER");
+  });
+
+  it("verify_windowExceedsCap_throws", () => {
+    // 上限 MAX_VERIFY_WINDOW = 10 步：防止外部 window 放大成 HMAC 计算炸弹
+    expectCode(
+      () => verify(provider, params6, "287082", 1, 11),
+      "INVALID_WINDOW",
+    );
+    expect(verify(provider, params6, "287082", 1, 10)).toBe(0);
+  });
+
+  it("verify_nonStringToken_throwsInvalidToken", () => {
+    // JS 调用方可能传 null / 数字：先判容器再取 length，不得漏原生 TypeError；
+    // 归为 INVALID_TOKEN（token 格式非法），与「非纯数字 / 长度不符」同码
+    for (const bad of [null, undefined, 123, {}]) {
+      expectCode(
+        () => verify(provider, params6, bad as unknown as string, 1, 0),
+        "INVALID_TOKEN",
+      );
+    }
+  });
 });

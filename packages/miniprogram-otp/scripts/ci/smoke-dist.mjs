@@ -22,6 +22,7 @@ assert.equal(pkg.dependencies && Object.keys(pkg.dependencies).length, 0);
 const m = require(entry);
 const expected = [
   "HOTP",
+  "MAX_VERIFY_WINDOW",
   "OTPAuthURI",
   "OtpAlgorithm",
   "OtpError",
@@ -58,8 +59,95 @@ assert.throws(
 );
 
 assert.equal(m.OtpErrorCode.INVALID_BASE32_PADDING, "INVALID_BASE32_PADDING");
-assert.equal(Object.keys(m.OtpErrorCode).length, 18);
+assert.equal(
+  m.OtpErrorCode.INVALID_SECRET_CONTAINER,
+  "INVALID_SECRET_CONTAINER",
+);
+assert.equal(m.OtpErrorCode.INVALID_SECRET_LENGTH, "INVALID_SECRET_LENGTH");
+assert.equal(m.OtpErrorCode.INVALID_CLOCK_OFFSET, "INVALID_CLOCK_OFFSET");
+assert.equal(m.OtpErrorCode.INVALID_MIN_SECRET_BITS, "INVALID_MIN_SECRET_BITS");
+assert.equal(Object.keys(m.OtpErrorCode).length, 22);
+assert.equal(m.MAX_VERIFY_WINDOW, 10);
+
+// 非字符串入参 fail-closed：小程序是 JS 调用方，不得漏原生 TypeError
+assert.throws(
+  () => m.Secret.fromBase32(123),
+  (e) =>
+    e instanceof m.OtpError &&
+    e.code === m.OtpErrorCode.INVALID_SECRET_CONTAINER,
+);
+assert.throws(
+  () => new m.TOTP({ secret: "JBSWY3DPEHPK3PXP" }).verify(undefined),
+  (e) => e instanceof m.OtpError && e.code === m.OtpErrorCode.INVALID_TOKEN,
+);
+// fromBytes(ArrayBuffer) 必须是拷贝：调用方清零原 buffer 不影响实例
+const rawSecret = new ArrayBuffer(20);
+new Uint8Array(rawSecret).fill(0x01);
+const copied = m.Secret.fromBytes(rawSecret);
+new Uint8Array(rawSecret).fill(0);
+assert.equal(copied.bytes[0], 0x01);
+assert.throws(
+  () => m.Secret.fromBytes("abc"),
+  (e) =>
+    e instanceof m.OtpError &&
+    e.code === m.OtpErrorCode.INVALID_SECRET_CONTAINER,
+);
+// 8 位无符号视图都放行：Uint8ClampedArray 读取语义与 Uint8Array 一致（ImageData.data）
+assert.deepEqual(
+  Array.from(m.Secret.fromBytes(new Uint8ClampedArray([1, 127, 255])).bytes),
+  [1, 127, 255],
+);
+// Int8Array / Uint16Array 等逐元素转换会丢数据（丢高位字节）→ 仍拒绝
+assert.throws(
+  () => m.Secret.fromBytes(new Uint16Array([0x1234])),
+  (e) =>
+    e instanceof m.OtpError &&
+    e.code === m.OtpErrorCode.INVALID_SECRET_CONTAINER,
+);
+
+// 错误码唯一来源是 core：新增码必须自动出现在产物里，平台无需再抄一份
+assert.throws(
+  () => new m.TOTP({ secret: "JBSWY3DPEHPK3PXP", clockOffsetMs: Number.NaN }),
+  (e) =>
+    e instanceof m.OtpError && e.code === m.OtpErrorCode.INVALID_CLOCK_OFFSET,
+);
+assert.throws(
+  () => m.Secret.generate(0),
+  (e) =>
+    e instanceof m.OtpError && e.code === m.OtpErrorCode.INVALID_SECRET_LENGTH,
+);
+assert.throws(
+  () => new m.TOTP({ secret: "JBSWY3DPEHPK3PXP", clockOffsetMs: 0.5 }),
+  (e) =>
+    e instanceof m.OtpError && e.code === m.OtpErrorCode.INVALID_CLOCK_OFFSET,
+);
+assert.throws(
+  () => new m.TOTP({ secret: "JBSWY3DPEHPK3PXP", minSecretBits: Number.NaN }),
+  (e) =>
+    e instanceof m.OtpError &&
+    e.code === m.OtpErrorCode.INVALID_MIN_SECRET_BITS,
+);
+assert.throws(
+  () =>
+    new m.TOTP({ secret: "JBSWY3DPEHPK3PXP" }).verify("287082", {
+      timestamp: 59000,
+      window: 11,
+    }),
+  (e) => e instanceof m.OtpError && e.code === m.OtpErrorCode.INVALID_WINDOW,
+);
+
+// 可选 options 传 null 等价于未传；strict 非 boolean 按 strict（fail-closed）
+assert.equal(
+  m.OTPAuthURI.parse("otpauth://totp/ACME:alice?secret=JBSWY3DPEHPK3PXP", null)
+    .issuer,
+  "ACME",
+);
+assert.throws(
+  () => m.Secret.fromBase32("MZXW6YT", { strict: 1 }),
+  (e) =>
+    e instanceof m.OtpError && e.code === m.OtpErrorCode.INVALID_BASE32_PADDING,
+);
 
 console.log(
-  "dist smoke OK: 8 exports, RFC 4226/6238 vectors, URI, errors, redaction",
+  "dist smoke OK: 9 exports, RFC 4226/6238 vectors, URI, errors, redaction",
 );

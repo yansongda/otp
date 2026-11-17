@@ -156,6 +156,42 @@ export default function totpTest() {
       expect(t.clockOffsetMs).assertEqual(30000);
       expect(t.verify('359152', { timestamp: 59000 })).assertEqual(0);
     });
+    it('verify_windowExceedsCap_throws', 0, () => {
+      // 上限 MAX_VERIFY_WINDOW = 10 步：11 拒绝。
+      // 「10 合法」只在 core 测试断言：本地 fixture 是黄金表，不覆盖 ±10 个候选。
+      const t: TOTP = new TOTP({ secret: S1, digits: 6 }, fixture);
+      expectThrowsCode(() => {
+        t.verify('287082', { timestamp: 59000, window: 11 });
+      }, OtpErrorCode.INVALID_WINDOW);
+    });
+    it('timestampNegative_notMaskedByClockOffset', 0, () => {
+      // 显式 timestamp 先按口径校验：负数不得因「正偏移抵消」而静默通过。
+      const t: TOTP = new TOTP({ secret: S1, digits: 6, clockOffsetMs: 10000 }, fixture);
+      expectThrowsCode(() => {
+        t.generate(-10000);
+      }, OtpErrorCode.INVALID_TIMESTAMP);
+      expectThrowsCode(() => {
+        t.verify('755224', { timestamp: -10000 });
+      }, OtpErrorCode.INVALID_TIMESTAMP);
+    });
+    it('timestampOffsetOverflow_throwsClockOffset', 0, () => {
+      // 入参合法（MAX_SAFE）但叠加偏移后越界 → INVALID_CLOCK_OFFSET，
+      // 不把合法入参误报成 INVALID_TIMESTAMP。
+      const t: TOTP = new TOTP({ secret: S1, digits: 6, clockOffsetMs: 10 }, fixture);
+      expectThrowsCode(() => {
+        t.generate(Number.MAX_SAFE_INTEGER);
+      }, OtpErrorCode.INVALID_CLOCK_OFFSET);
+    });
+    it('clockOffsetNegative_pushesTimestampBelowEpoch_throwsClockOffset', 0, () => {
+      // 对称场景：timestamp=0 合法，负偏移把它推到 epoch 0 之前 → 仍归因偏移配置。
+      const t: TOTP = new TOTP({ secret: S1, digits: 6, clockOffsetMs: -1 }, fixture);
+      expectThrowsCode(() => {
+        t.generate(0);
+      }, OtpErrorCode.INVALID_CLOCK_OFFSET);
+      expectThrowsCode(() => {
+        t.verify('755224', { timestamp: 0 });
+      }, OtpErrorCode.INVALID_CLOCK_OFFSET);
+    });
 
     // ── syncClockOffset 双场景（先推导再断言）──
     it('syncClockOffset_closure_slowLocal', 0, () => {
@@ -198,10 +234,10 @@ export default function totpTest() {
       }, OtpErrorCode.INVALID_ALGORITHM);
     });
     it('syncClockOffset_nonInteger_throws', 0, () => {
-      // delta 非整数 → INVALID_WINDOW（单参数）
+      // delta 非整数 → INVALID_CLOCK_OFFSET（单参数）
       expectThrowsCode(() => {
         new TOTP({ secret: S1 }, fixture).syncClockOffset(1.5);
-      }, OtpErrorCode.INVALID_WINDOW);
+      }, OtpErrorCode.INVALID_CLOCK_OFFSET);
     });
 
     // ── t0 用例（A.6：t0=1、period=30、timestampMs=31000 → counter=1）──
@@ -257,10 +293,27 @@ export default function totpTest() {
       expectThrowsCode(() => { new TOTP({ secret: S1, t0: 1.5 }, fixture); }, OtpErrorCode.INVALID_T0);
     });
     it('ctor_clockOffsetNaN_throws', 0, () => {
-      expectThrowsCode(() => { new TOTP({ secret: S1, clockOffsetMs: NaN }, fixture); }, OtpErrorCode.INVALID_TIMESTAMP);
+      expectThrowsCode(() => { new TOTP({ secret: S1, clockOffsetMs: NaN }, fixture); }, OtpErrorCode.INVALID_CLOCK_OFFSET);
     });
     it('ctor_clockOffsetInfinity_throws', 0, () => {
-      expectThrowsCode(() => { new TOTP({ secret: S1, clockOffsetMs: Infinity }, fixture); }, OtpErrorCode.INVALID_TIMESTAMP);
+      expectThrowsCode(() => { new TOTP({ secret: S1, clockOffsetMs: Infinity }, fixture); }, OtpErrorCode.INVALID_CLOCK_OFFSET);
+    });
+    it('ctor_clockOffsetFraction_throws', 0, () => {
+      // 小数毫秒偏移无意义：构造期即拒绝，避免运行时以 INVALID_COUNTER 暴露
+      expectThrowsCode(() => { new TOTP({ secret: S1, clockOffsetMs: 0.5 }, fixture); }, OtpErrorCode.INVALID_CLOCK_OFFSET);
+    });
+    it('ctor_clockOffsetUnsafe_throws', 0, () => {
+      expectThrowsCode(() => { new TOTP({ secret: S1, clockOffsetMs: 1e300 }, fixture); }, OtpErrorCode.INVALID_CLOCK_OFFSET);
+    });
+    it('ctor_periodUnsafe_throws', 0, () => {
+      // 秒数必须是安全整数：超大周期语义上等同配置错误
+      expectThrowsCode(() => { new TOTP({ secret: S1, period: 1e300 }, fixture); }, OtpErrorCode.INVALID_PERIOD);
+    });
+    it('timeInputs_fractionOrUnsafe_throws', 0, () => {
+      // 时间戳必须是非负安全整数（小数毫秒无意义）
+      const t: TOTP = new TOTP({ secret: S1, digits: 6 }, fixture);
+      expectThrowsCode(() => { t.generate(1.5); }, OtpErrorCode.INVALID_TIMESTAMP);
+      expectThrowsCode(() => { t.generate(1e300); }, OtpErrorCode.INVALID_TIMESTAMP);
     });
     it('ctor_minSecretBits128_80bit_throws', 0, () => {
       // 80 bit secret（10 字节 JBSWY3DPEHPK3PXP）< 128 → SECRET_TOO_WEAK

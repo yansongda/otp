@@ -4,11 +4,37 @@
 
 ## [Unreleased]
 
+### Breaking changes
+
+- `verify({ window })`：**新增上限 10**（`MAX_VERIFY_WINDOW`；此前无上限，超出抛
+  `INVALID_WINDOW`）
+- 时间参数统一要求安全整数：`timestamp`（非负）、`period`（正）、`t0`（非负）、
+  `clockOffsetMs`；小数 / `NaN` / 超大值不再静默接受
+- 错误码归因调整：`Secret.generate` 长度越界 → `INVALID_SECRET_LENGTH`；`clockOffsetMs`
+  非法、同步偏移越界 → `INVALID_CLOCK_OFFSET`；`minSecretBits` 非法 →
+  `INVALID_MIN_SECRET_BITS`（fail-closed，不再静默关闭强度校验）
+- `Secret.fromBytes` 只接受 8 位无符号视图（`Uint8Array` / `Uint8ClampedArray`）与
+  `ArrayBuffer`，其余（`Int8Array` / `Uint16Array` / `DataView` / 字符串 / array-like）一律
+  `INVALID_SECRET_CONTAINER`；`ArrayBuffer` 入参改为真正的拷贝语义（原先是内存别名）
+- `OTPAuthURI.parse` 的 `digits` / `period` / `counter` 只认纯十进制整数；
+  `OTPAuthURI.build` 对非法参数改为抛错
+- `HOTP.verify` 不再接受 `timestamp`、`TOTP.verify` 不再接受 `counter`（对象字面量会编译失败）
+- `verify` 校验顺序改为「配置类先于输入类」：坏 token 与坏 `counter` / `window` 同时出现时
+  返回 `INVALID_COUNTER` / `INVALID_WINDOW`（此前 `INVALID_TOKEN`）
+- 构造期校验顺序调整为 algorithm 先于 digits：`{ algorithm: "MD5", digits: 5 }` 两项同时
+  非法时现在返回 `INVALID_ALGORITHM`（此前 `INVALID_DIGITS`）
+- `strict` 模式解单字符 secret（如 `"A"`）：`INVALID_BASE32_PADDING` → `SECRET_TOO_SHORT`
+  （与宽松模式同码）
+
 ### Added
 
 - `OtpError.codeString`：保留 core 传入的原始错误码字符串（平台码表是强类型投影，
   未来新增码在枚举尚未同步时仍可拿到真实值）
 - `OtpErrorCode` 取值由 core 唯一提供（barrel 导出），平台层不再手抄码表
+- 新错误码 `INVALID_SECRET_CONTAINER`（secret 容器类型不对）、`INVALID_SECRET_LENGTH`
+  （`Secret.generate` 长度越界）、`INVALID_MIN_SECRET_BITS`（`minSecretBits` 参数非法）、
+  `INVALID_CLOCK_OFFSET`（时钟偏移参数非法）
+- 导出 `MAX_VERIFY_WINDOW`、`HotpVerifyOptions`、`TotpVerifyOptions`
 
 ### Changed
 
@@ -20,7 +46,30 @@
   原型方法丢失；ES5 + 自定义子类仍需调用方自行修正原型链）
 - `otpFail` 校验工厂返回值：返回非 `Error` 或缺少字符串 `code` 时兜底 core 默认类，
   调用方始终能拿到 `instanceof Error` + 可分支的 `code`
-- **对 npm 用户无破坏性变更**：本包对外只新增 `OtpError.codeString`，无删除、无签名变更
+- `{ strict }` 改为 fail-closed：只有「未提供」或明确 `false` 才是宽松，非 boolean
+  （服务端 JSON 的 `1` / `"true"`）按 strict 处理
+- `OTPAuthURI.parse` 的 `counter > 2^53-1` 现在抛 `INVALID_COUNTER`（此前接受且丢精度）
+- `OTPAuthURI.build` 补齐与 parse 对称的校验（此前 `type: "TOTP"` 静默变 hotp、
+  `digits: 5` / `period: 0` 原样输出）：非法参数改为抛码
+- 非字符串入参不再漏原生 `TypeError`：`secret` → `INVALID_SECRET_CONTAINER`、
+  `token` → `INVALID_TOKEN`、`uri` / `build` 的 `issuer`·`account` → `INVALID_OTPAUTH_URI`
+  （含无法百分号编码的孤立代理字符）
+- 可选 `options` 传 `null` 等价于未传（`JSON.parse("null")` 的常见形态），不再漏
+  `TypeError`；`OTPAuthURI.build` 的 `params` 传非对象 → `INVALID_OTPAUTH_URI`
+
+### Fixed
+
+- `Secret.fromBytes(ArrayBuffer)` 改为拷贝语义（原先是内存别名）：调用方清零 / 改写原
+  buffer 不再影响实例密钥
+- `Secret.fromBytes` / `fromBase32` 的容器类型在转换**之前**判定：字符串 / array-like
+  不再被 `new Uint8Array(...)` 静默变成 0 字节空密钥或全零密钥
+- `TOTP.generate/verify(timestamp: 0)`（epoch 0）现在合法（此前抛 `INVALID_TIMESTAMP`）
+- `TOTP` 显式 `timestamp` 合法但叠加 `clockOffsetMs` 后为负 → `INVALID_CLOCK_OFFSET`
+  （不再把偏移配置问题归咎成入参非法）
+- `minSecretBits` 非法值改为 fail-closed（此前 `NaN > 0` 为 false 会**静默关闭**强度校验）
+- `Secret.generate(bytes)` 长度越界改报 `INVALID_SECRET_LENGTH`（此前误用 `SECRET_TOO_WEAK`）
+- `syncClockOffset(1.5)` 改报 `INVALID_CLOCK_OFFSET`（此前误用 `INVALID_WINDOW`）
+- 错误模型改造本身对 npm 用户无破坏性变更（仅新增 `OtpError.codeString`）；本版本的其它破坏性变更见上方 Breaking changes
 
 ### Removed
 

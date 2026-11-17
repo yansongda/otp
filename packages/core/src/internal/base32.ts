@@ -130,8 +130,9 @@ export function encode(bytes: Uint8Array): string {
  * 尾长 ∈ {1,3,6} 会让 decode 静默丢弃余量位。尾长合法时，末字符低位填充位必须为 0
  * —— 等价于 encode(decode(s)) === s，一次再编码比对即可覆盖两种失真。
  *
- * 归一化自身（大小写 / 空白 / 尾部 '='）仍被容忍。错误码优先级与 decode 一致：
- * 空 → EMPTY_SECRET，非法字符 → INVALID_BASE32_CHAR，再到 INVALID_BASE32_PADDING。
+ * 归一化自身（大小写 / 空白 / 尾部 '='）仍被容忍。错误码优先级与 decode 完全一致：
+ * 空 → EMPTY_SECRET，非法字符 → INVALID_BASE32_CHAR，解码后不足 1 字节 → SECRET_TOO_SHORT
+ * （与宽松模式同码，调用方切 strict 不会拿到不同的失败语义），再到 INVALID_BASE32_PADDING。
  */
 export function decodeStrict(input: string): Uint8Array {
   const normalized = normalize(input);
@@ -141,13 +142,15 @@ export function decodeStrict(input: string): Uint8Array {
   }
 
   const values = valuesOf(normalized);
+  // 先解码再判尾长：单字符（尾长 1）在宽松模式下已是 SECRET_TOO_SHORT，
+  // 严格模式若先报 PADDING，同一致命输入会因开关不同而暴露两个不同错误码。
+  const bytes = assemble(values);
 
   const tail = normalized.length % 8;
   if (tail === 1 || tail === 3 || tail === 6) {
     otpFail("INVALID_BASE32_PADDING");
   }
 
-  const bytes = assemble(values);
   if (encode(bytes) !== normalized) {
     otpFail("INVALID_BASE32_PADDING");
   }

@@ -19,9 +19,9 @@ import { fileURLToPath } from 'node:url';
 const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 
 const BASELINE = {
-  localTestCases: 267, // library/src/test 的 it( 数量（PC Local Test）
+  localTestCases: 289, // library/src/test 的 it( 数量（PC Local Test）
   deviceTestCases: 37, // library/src/ohosTest 的 it( 数量（真实 crypto，需设备）
-  errorCodeMembers: 18, // OtpErrorCode 成员数：v1 的 17 个取值冻结，v1.1.0 仅新增 INVALID_BASE32_PADDING
+  errorCodeMembers: 22, // OtpErrorCode 成员数：取值冻结，仅允许显式新增（现含 INVALID_SECRET_CONTAINER / INVALID_MIN_SECRET_BITS / INVALID_CLOCK_OFFSET / INVALID_SECRET_LENGTH）
 };
 
 const LIB_SRC = 'library/src/main/ets';

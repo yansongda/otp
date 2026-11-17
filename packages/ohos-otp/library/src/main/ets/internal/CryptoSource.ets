@@ -51,7 +51,8 @@ export class CryptoFrameworkHmac implements HmacProvider {
 export class CryptoFrameworkRandom implements RandomSource {
   random(bytes: number): Uint8Array {
     if (!(Number.isInteger(bytes) && bytes >= 1 && bytes <= 4096)) {
-      return otpFail('SECRET_TOO_WEAK');
+      // 长度越界是参数错误，不是「密钥强度不足」
+      return otpFail('INVALID_SECRET_LENGTH');
     }
     try {
       return new Uint8Array(cryptoFramework.createRandom().generateRandomSync(bytes).data);
