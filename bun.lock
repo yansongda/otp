@@ -13,14 +13,14 @@
     },
     "packages/core": {
       "name": "@yansongda/otp-core",
-      "version": "0.1.0",
+      "version": "0.0.0",
       "devDependencies": {
         "typescript": "^7.0.2",
       },
     },
     "packages/miniprogram-otp": {
       "name": "@yansongda/miniprogram-otp",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "devDependencies": {
         "@biomejs/biome": "^2.6.6",
         "@types/bun": "^1.4.4",
