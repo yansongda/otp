@@ -6,15 +6,15 @@
 import { type HmacProvider, requireHmac } from "./crypto";
 import { otpFail } from "./errors";
 import { isSafeCounter } from "./internal/counter";
-import { isValidAlgorithm, isValidDigits } from "./internal/digits";
 import {
   type EngineParams,
   generate as engineGenerate,
   verify as engineVerify,
 } from "./internal/engine";
+import { resolveHmacOptions } from "./internal/resolve";
 import type { AlgorithmName, HotpOptions, VerifyOptions } from "./options";
 import { OTPAuthURI } from "./otpauth-uri";
-import { Secret } from "./secret";
+import type { Secret } from "./secret";
 
 export class HOTP {
   private readonly _provider: HmacProvider;
@@ -29,31 +29,22 @@ export class HOTP {
    * @param provider 仅供库内测试注入；调用方省略即走 requireHmac() 的默认实现。
    */
   constructor(options: HotpOptions, provider?: HmacProvider) {
-    const secret = Secret.fromBase32(options.secret);
-    const algorithm =
-      options.algorithm === undefined ? "SHA1" : options.algorithm;
-    const digits = options.digits === undefined ? 6 : options.digits;
+    const resolved = resolveHmacOptions(options);
     const counter = options.counter === undefined ? 0 : options.counter;
     const minSecretBits =
       options.minSecretBits === undefined ? 0 : options.minSecretBits;
 
-    if (!isValidDigits(digits)) {
-      otpFail("INVALID_DIGITS");
-    }
-    if (!isValidAlgorithm(algorithm)) {
-      otpFail("INVALID_ALGORITHM");
-    }
     if (!isSafeCounter(counter)) {
       otpFail("INVALID_COUNTER");
     }
-    if (minSecretBits > 0 && secret.bitLength < minSecretBits) {
+    if (minSecretBits > 0 && resolved.secret.bitLength < minSecretBits) {
       otpFail("SECRET_TOO_WEAK");
     }
 
     this._provider = provider === undefined ? requireHmac() : provider;
-    this._secret = secret;
-    this._algorithm = algorithm;
-    this._digits = digits;
+    this._secret = resolved.secret;
+    this._algorithm = resolved.algorithm;
+    this._digits = resolved.digits;
     this._counter = counter;
     this._issuer = options.issuer;
     this._account = options.account;
@@ -63,6 +54,8 @@ export class HOTP {
     return {
       algorithm: this._algorithm,
       digits: this._digits,
+      // 每次公开调用都经 Secret 取一份拷贝：密钥唯一事实源是 Secret._bytes，
+      // 不在实例里再存一份长期副本（也不把可写数组跨调用交给 provider）。
       key: this._secret.bytes,
     };
   }
