@@ -15,7 +15,7 @@
  *   URI parse：INVALID_OTPAUTH_URI（前缀非法）→ UNSUPPORTED_OTPAUTH_TYPE →
  *             secret 解析 → INVALID_ALGORITHM → INVALID_DIGITS →
  *             INVALID_PERIOD | INVALID_COUNTER
- *   URI build：secret 解析 → INVALID_PERIOD | INVALID_COUNTER
+ *   URI build：仅 secret 解析（period / counter / algorithm / digits 不做校验）
  *   verify：INVALID_TOKEN → INVALID_COUNTER → INVALID_WINDOW
  *
  * 约定：每个已知失败原因使用独立错误码，仅「同一语义条件出现在多个入口」时复用
