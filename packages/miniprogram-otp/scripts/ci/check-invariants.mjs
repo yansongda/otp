@@ -56,6 +56,14 @@ function stripComments(text) {
   return text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
 }
 
+/**
+ * 去掉注释 + 压缩空白后再匹配：结构类断言不得依赖 biome 的换行/缩进。
+ * （早先直接匹配多行原文，一次格式化就会误报。）
+ */
+function squash(text) {
+  return stripComments(text).replace(/\s+/g, " ");
+}
+
 function sourceFiles() {
   // 不变量检查同时覆盖平台层与共享 core（算法实现已移入 packages/core）
   return [
@@ -250,23 +258,25 @@ check('core OtpError 设置 name = "OtpError"', () => {
 });
 
 check("原型修复只在原型退化时执行（core / mp 条件一致）", () => {
-  // 无条件 setPrototypeOf 会把原生子类实例的原型改回基类；两处实现必须保持同一条件
-  const core = stripComments(readText(CORE_ERRORS));
-  const platform = stripComments(readText(ERRORS));
+  // 无条件 setPrototypeOf 会把原生子类实例的原型改回基类；两处实现必须保持同一条件。
+  // 用 squash() 消除换行/缩进差异，参数名用反向引用自校验（改名不会误报）。
+  const core = squash(readText(CORE_ERRORS));
+  const platform = squash(readText(ERRORS));
   const coreGuard =
-    /function repairPrototypeIfDegraded\(\s*target: object\s*\): void \{\s*if \(Object\.getPrototypeOf\(target\) === Error\.prototype\)/.test(
+    /function repairPrototypeIfDegraded\(\s*([A-Za-z_$][\w$]*): object\s*\): void \{\s*if \(Object\.getPrototypeOf\(\1\) === Error\.prototype\)\s*\{/.test(
       core,
     );
   const platformGuard =
-    /if \(Object\.getPrototypeOf\(this\) === Error\.prototype\) \{\s*Object\.setPrototypeOf\(this, OtpError\.prototype\)/.test(
+    /if \(Object\.getPrototypeOf\(([A-Za-z_$][\w$]*)\) === Error\.prototype\) \{\s*Object\.setPrototypeOf\(\1, OtpError\.prototype\)\s*;?/.test(
       platform,
     );
   if (!coreGuard || !platformGuard) {
     throw new Error(
-      "原型修复不再只是「退化为 Error.prototype 时」执行（会破坏子类原型链）",
+      "原型修复不再只是「退化为 Error.prototype 时」执行（会破坏子类原型链）；" +
+        `core=${coreGuard} mp=${platformGuard}（若只是重命名/重构，请同步本守卫）`,
     );
   }
-  return "core / mp 两处条件一致";
+  return "core / mp 两处条件一致（格式无关）";
 });
 
 check("零运行时依赖", () => {

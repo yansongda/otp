@@ -36,8 +36,8 @@
 
 ### Changed
 
-- `OtpError` 的 `name` 固定为 `OtpError`（provider 错误契约：core 的 engine 靠它区分
-  「已知错误原样上抛」与「provider 实现缺陷」）
+- 三端 `OtpError.name` 契约统一为 `OtpError`（provider 错误契约：core 的 engine 靠它区分
+  「已知错误原样上抛」与「provider 实现缺陷」）；**本包此前已是该值，行为不变**，本次新增的是守卫
 - 错误抛出统一走 core 的 `otpFail` → 平台工厂：core 与平台不再有两条错误构造路径
 - 原型链修复改为**只在原型退化为 `Error.prototype` 时**执行（此前无条件
   `Object.setPrototypeOf` 会把 `OtpError` 子类实例的原型改回基类：`instanceof` 子类失效、
@@ -67,10 +67,12 @@
 - `minSecretBits` 非法值改为 fail-closed（此前 `NaN > 0` 为 false 会**静默关闭**强度校验）
 - `Secret.generate(bytes)` 长度越界改报 `INVALID_SECRET_LENGTH`（此前误用 `SECRET_TOO_WEAK`）
 - `syncClockOffset(1.5)` 改报 `INVALID_CLOCK_OFFSET`（此前误用 `INVALID_WINDOW`）
+- 错误模型改造本身对 npm 用户无破坏性变更（仅新增 `OtpError.codeString`）；本版本的其它破坏性变更见上方 Breaking changes
 
 ### Removed
 
-- 类型别名 `OtpFailureCode`（与 `OtpErrorCode` 完全等价，重复声明）
+- core 内部类型别名 `OtpFailureCode`（与 `OtpErrorCode` 等价，重复声明）。它**从未出现在本包
+  发布的类型声明里**（`dist/index.d.ts` 无此名），属于内部清理，npm 用户无感
 
 ## [1.0.1] - 2026-11-12
 
