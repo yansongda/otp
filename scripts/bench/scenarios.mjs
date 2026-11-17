@@ -1,0 +1,222 @@
+/**
+ * 场景表：core 三条链路（pure-js crypto / internal / 公开门面）的固定输入压测。
+ *
+ * 方法学要点：
+ * - 每个场景签名是 `run(i)`，用 i 轮流换输入（不同 message / secret / counter / timestamp）。
+ *   这不是为了"更真实"，而是**必需**：常量入参的纯函数会被 JIT 提出循环
+ *   （实测 `format(123456789, 8)` 常量调用会掉到 2ns/op 的假数字）。
+ * - 输入池全部在模块加载时预分配，测到的只有被测调用的成本；
+ * - 迭代数不写死，由 harness 按 targetMs 校准（见 harness.mjs），慢场景自动少跑；
+ * - 只 import `packages/core/src/**` 的公开或 internal 稳定入口，不碰平台包；
+ * - 旧版本（`--ab <ref>`）缺少某个模块时整组跳过，不中断整轮。
+ *
+ * 注意：本目录刻意不放在 `packages/core/src/`（会被 sync-core 复制进 ohos HAR）
+ * 也不放在 `packages/core/tests/`（会被 `bun test tests` 当测试跑，干扰用例计数）。
+ */
+import { join, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
+const BENCH_DIR = fileURLToPath(new URL(".", import.meta.url));
+const REPO_ROOT = resolve(BENCH_DIR, "../..");
+
+/** core 源码根目录；`--ab` 通过该环境变量指向临时 worktree。 */
+export const CORE_DIR = resolve(
+  process.env.OTP_BENCH_CORE ?? join(REPO_ROOT, "packages/core/src"),
+);
+
+const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+const SECRET = "JBSWY3DPEHPK3PXP"; // 16 字符 = 10 字节
+const FIXED_TS = 1_700_000_000_000;
+/** 掩码池：i & MASK 取模，避免被测调用内部出现可变长循环。 */
+const MASK = 255;
+
+/** 32 个互不相同的 16 字符 base32（错开字母表下标，保证解码路径分散）。 */
+const SECRETS = Array.from({ length: 32 }, (_, n) =>
+  Array.from(
+    { length: 16 },
+    (_, k) => ALPHABET[(n * 7 + k * 11) % ALPHABET.length],
+  ).join(""),
+);
+const LONG_SECRETS = SECRETS.map((secret) => secret.repeat(8)); // 128 字符
+
+const MESSAGES = Array.from({ length: 32 }, (_, n) =>
+  new Uint8Array(8).fill(n + 1),
+);
+const KEYS_SHORT = Array.from({ length: 8 }, (_, n) =>
+  new Uint8Array(20).fill(n + 1),
+);
+const KEYS_LONG = Array.from({ length: 8 }, (_, n) =>
+  new Uint8Array(128).fill(n + 1),
+);
+const BYTES = Array.from({ length: 32 }, (_, n) =>
+  new Uint8Array(20).fill(n + 1),
+);
+const DIGIT_VALUES = Array.from(
+  { length: 256 },
+  (_, n) => (n * 3_600_007) % 100_000_000,
+);
+
+const load = (rel) => import(pathToFileURL(join(CORE_DIR, rel)).href);
+
+/** 单组加载失败（旧版本缺文件）只跳过该组，并记录原因。 */
+async function group(name, modules, build, skipped) {
+  try {
+    const loaded = {};
+    for (const [key, rel] of Object.entries(modules)) {
+      loaded[key] = await load(rel);
+    }
+    return build(loaded).map((scenario) => ({ ...scenario, group: name }));
+  } catch (error) {
+    skipped.push(`${name}: ${error?.message ?? error}`);
+    return [];
+  }
+}
+
+/**
+ * @returns {Promise<{
+ *   scenarios: Array<{ name: string, group: string, targetMs?: number, run: (i: number) => unknown }>,
+ *   skipped: string[],
+ * }>}
+ */
+export async function loadScenarios() {
+  const skipped = [];
+  const scenarios = [];
+
+  scenarios.push(
+    ...(await group(
+      "pure-js",
+      {
+        hmac: "pure-js/hmac.ts",
+        sha1: "pure-js/sha1.ts",
+        sha256: "pure-js/sha256.ts",
+        sha512: "pure-js/sha512.ts",
+      },
+      ({ hmac, sha1, sha256, sha512 }) => [
+        {
+          name: "hmac sha1",
+          run: (i) =>
+            hmac.hmac(sha1.sha1, 64, KEYS_SHORT[i & 7], MESSAGES[i & 31]),
+        },
+        {
+          name: "hmac sha256",
+          run: (i) =>
+            hmac.hmac(sha256.sha256, 64, KEYS_SHORT[i & 7], MESSAGES[i & 31]),
+        },
+        {
+          // 纯 JS hi/lo 实现的 SHA512 明显更贵：给更短的 targetMs 控制总时长
+          name: "hmac sha512",
+          targetMs: 20,
+          run: (i) =>
+            hmac.hmac(sha512.sha512, 128, KEYS_SHORT[i & 7], MESSAGES[i & 31]),
+        },
+        {
+          // key 128B > blockSize 64B：走 RFC 2104「先哈希密钥」分支
+          name: "hmac sha1 long-key",
+          run: (i) =>
+            hmac.hmac(sha1.sha1, 64, KEYS_LONG[i & 7], MESSAGES[i & 31]),
+        },
+      ],
+      skipped,
+    )),
+  );
+
+  scenarios.push(
+    ...(await group(
+      "internal",
+      {
+        base32: "internal/base32.ts",
+        digits: "internal/digits.ts",
+        engine: "internal/engine.ts",
+        secret: "secret.ts",
+        pureJsHmac: "pure-js/pure-js-hmac.ts",
+      },
+      ({ base32, digits, engine, secret, pureJsHmac }) => {
+        const provider = new pureJsHmac.PureJsHmac();
+        const params = {
+          algorithm: "SHA1",
+          digits: 6,
+          key: secret.Secret.fromBase32(SECRET).bytes,
+        };
+        return [
+          {
+            name: "digits.format 8",
+            run: (i) => digits.format(DIGIT_VALUES[i & MASK], 8),
+          },
+          {
+            name: "base32.decode 16B",
+            run: (i) => base32.decode(SECRETS[i & 31]),
+          },
+          {
+            name: "base32.decodeStrict 128ch",
+            run: (i) => base32.decodeStrict(LONG_SECRETS[i & 31]),
+          },
+          {
+            name: "base32.encode 20B",
+            run: (i) => base32.encode(BYTES[i & 31]),
+          },
+          {
+            name: "Secret.fromBase32",
+            run: (i) => secret.Secret.fromBase32(SECRETS[i & 31]),
+          },
+          {
+            // counter 递增是真实形态：verify 窗口扫描就是在扫 counter
+            name: "engine.generate",
+            run: (i) => engine.generate(provider, params, 12_345 + i),
+          },
+        ];
+      },
+      skipped,
+    )),
+  );
+
+  scenarios.push(
+    ...(await group(
+      "facade",
+      {
+        hotp: "hotp.ts",
+        totp: "totp.ts",
+        pureJsHmac: "pure-js/pure-js-hmac.ts",
+      },
+      ({ hotp, totp, pureJsHmac }) => {
+        const provider = new pureJsHmac.PureJsHmac();
+        const options = [
+          { secret: SECRET, algorithm: "SHA1", digits: 6 },
+          { secret: SECRET, algorithm: "SHA256", digits: 6 },
+        ];
+        const hotpInstance = new hotp.HOTP(options[0], provider);
+        const totpInstance = new totp.TOTP(options[0], provider);
+        // verify 需要合法 token：按 counter 0..7 预生成，逐轮换 counter + token
+        const tokens = Array.from({ length: 8 }, (_, n) =>
+          hotpInstance.generate(n),
+        );
+        return [
+          {
+            name: "HOTP.generate",
+            run: (i) => hotpInstance.generate(i),
+          },
+          {
+            name: "HOTP.verify w=0",
+            run: (i) => hotpInstance.verify(tokens[i & 7], { counter: i & 7 }),
+          },
+          {
+            name: "HOTP.verify w=2",
+            targetMs: 30,
+            run: (i) =>
+              hotpInstance.verify(tokens[i & 7], { counter: i & 7, window: 2 }),
+          },
+          {
+            name: "TOTP.generate",
+            run: (i) => totpInstance.generate(FIXED_TS + (i & MASK) * 30_000),
+          },
+          {
+            name: "new HOTP()",
+            run: (i) => new hotp.HOTP(options[i & 1], provider),
+          },
+        ];
+      },
+      skipped,
+    )),
+  );
+
+  return { scenarios, skipped };
+}

@@ -45,6 +45,8 @@ bun run lint
 bun run typecheck
 bun run test
 bun run check
+bun run bench            # core 热路径基准（仅 JSC，只能同机相对比较）
+bun run bench:ab          # 与 main 做 A/B（临时 worktree，不动工作区）
 ```
 
 ohos 构建/测试见 `packages/ohos-otp/AGENTS.md`（DevEco SDK + hvigor 命令）。
