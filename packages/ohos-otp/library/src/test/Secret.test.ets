@@ -94,6 +94,26 @@ export default function secretTest() {
       expectThrowsCode(() => Secret.fromBytes(new ArrayBuffer(0)), OtpErrorCode.EMPTY_SECRET);
     });
 
+    it('fromBytes_acceptsUint8ClampedArray', 0, () => {
+      // Uint8ClampedArray 的读取语义与 Uint8Array 一致（8 位无符号 0-255）
+      const clamped: Uint8ClampedArray = new Uint8ClampedArray(3);
+      clamped[0] = 1;
+      clamped[1] = 127;
+      clamped[2] = 255;
+      const secret: Secret = Secret.fromBytes(clamped);
+      expect(secret.byteLength).assertEqual(3);
+      expect(secret.bytes[0]).assertEqual(1);
+      expect(secret.bytes[2]).assertEqual(255);
+      clamped[0] = 0; // 同样是拷贝语义
+      expect(secret.bytes[0]).assertEqual(1);
+    });
+
+    it('fromBytes_otherTypedArraysFailClosed', 0, () => {
+      // Int8Array / Uint16Array 是逐元素转换（Uint16Array 会丢高位字节）→ 拒绕
+      expectThrowsCode(() => Secret.fromBytes(new Int8Array(3)), OtpErrorCode.INVALID_SECRET_CONTAINER);
+      expectThrowsCode(() => Secret.fromBytes(new Uint16Array(3)), OtpErrorCode.INVALID_SECRET_CONTAINER);
+    });
+
     it('bytesGetter_returnsCopy', 0, () => {
       const secret: Secret = Secret.fromBase32('JBSWY3DPEHPK3PXP');
       const view: Uint8Array = secret.bytes;
