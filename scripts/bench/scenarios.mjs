@@ -1,5 +1,5 @@
 /**
- * 场景表：core 三条链路（pure-js crypto / internal / 公开门面）的固定输入压测。
+ * 场景表：core 四条链路（pure-js crypto / internal / 公开门面 / otpauth URI）的固定输入压测。
  *
  * 方法学要点：
  * - 每个场景签名是 `run(i)`，用 i 轮流换输入（不同 message / secret / counter / timestamp）。
@@ -57,6 +57,58 @@ const DIGIT_VALUES = Array.from(
   { length: 256 },
   (_, n) => (n * 3_600_007) % 100_000_000,
 );
+
+/**
+ * otpauth URI 池：parse 是冷路径（一次扫码一次），池子只为让 i 换输入、避免常量折叠。
+ * 前两条覆盖「原始冒号分隔」与「历史 %3A 分隔」两种 label 形态（#9 改动集中在这里）。
+ */
+const URI_POOL = [
+  `otpauth://totp/ACME:alice@example.com?secret=${SECRET}&issuer=ACME&algorithm=SHA1`,
+  `otpauth://totp/ACME%3Aalice@example.com?secret=${SECRET}&issuer=ACME`,
+  `otpauth://totp/ACME:alice%40example.com?secret=${SECRET}&issuer=ACME&algorithm=SHA256&digits=8&period=60`,
+  `otpauth://hotp/ACME:alice@example.com?secret=${SECRET}&issuer=ACME&counter=42`,
+];
+
+/**
+ * build 入参池：account 必填（label 只能由 account 派生），四种形态覆盖
+ * 「有/无 issuer」「TOTP/HOTP」「account 内含冒号（%3A 编码）」。
+ */
+const BUILD_POOL = [
+  {
+    type: "totp",
+    secret: SECRET,
+    algorithm: "SHA1",
+    digits: 6,
+    period: 30,
+    issuer: "ACME",
+    account: "alice@example.com",
+  },
+  {
+    type: "totp",
+    secret: SECRET,
+    algorithm: "SHA256",
+    digits: 8,
+    period: 60,
+    account: "alice@example.com",
+  },
+  {
+    type: "hotp",
+    secret: SECRET,
+    algorithm: "SHA1",
+    digits: 6,
+    counter: 42,
+    issuer: "ACME",
+    account: "alice@example.com",
+  },
+  {
+    type: "hotp",
+    secret: SECRET,
+    algorithm: "SHA512",
+    digits: 7,
+    counter: 7,
+    account: "a:b",
+  },
+];
 
 /** 单组加载失败（旧版本缺文件）只跳过该组，并记录原因。 */
 async function group(load, name, modules, build, skipped) {
@@ -220,6 +272,26 @@ export async function createScenarios(coreDir = CORE_DIR) {
           },
         ];
       },
+      skipped,
+    )),
+  );
+
+  scenarios.push(
+    ...(await group(
+      load,
+      "uri",
+      { uri: "otpauth-uri.ts" },
+      ({ uri }) => [
+        {
+          // 冷路径（导入一次 QR）：只保证「没有量级退化」，不占热路径预算
+          name: "OTPAuthURI.parse",
+          run: (i) => uri.OTPAuthURI.parse(URI_POOL[i & 3]),
+        },
+        {
+          name: "OTPAuthURI.build",
+          run: (i) => uri.OTPAuthURI.build(BUILD_POOL[i & 3]),
+        },
+      ],
       skipped,
     )),
   );
