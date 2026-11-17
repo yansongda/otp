@@ -104,6 +104,7 @@ packages/core/                # single implementation (not published)
 packages/miniprogram-otp/     # WeChat npm package (tsdown single-file bundle)
 packages/ohos-otp/            # DevEco project + HAR package
 scripts/sync-core.mjs         # core -> ohos library generated copy (CI-checked)
+scripts/bench/                # zero-dependency hot-path benchmarks (not in CI)
 ```
 
 ## Development
@@ -114,6 +115,8 @@ bun run check            # sync check + lint + typecheck + tests
 bun run test             # core (242) + miniprogram (9)
 bun run sync:core        # regenerate ohos core copy
 bun run sync:core:check  # fail if the generated copy drifted
+bun run bench            # hot-path perf baseline (JSC only, relative comparison)
+bun run bench:ab         # A/B current tree vs main via a temp git worktree
 ```
 
 HarmonyOS build and device tests require DevEco Studio; see [`packages/ohos-otp/AGENTS.md`](packages/ohos-otp/AGENTS.md) for the exact commands.

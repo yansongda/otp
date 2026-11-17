@@ -9,6 +9,8 @@
   "scripts": {
     "sync:core": "bun scripts/sync-core.mjs",
     "sync:core:check": "bun scripts/sync-core.mjs --check",
+    "bench": "bun scripts/bench/index.mjs",
+    "bench:ab": "bun scripts/bench/index.mjs --ab main",
     "lint": "biome check",
     "lint:fix": "biome check --fix",
     "typecheck": "bun run --filter '@yansongda/otp-core' typecheck && bun run --filter '@yansongda/miniprogram-otp' typecheck",
