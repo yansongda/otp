@@ -342,11 +342,13 @@ export default function otpAuthUriTest() {
     });
 
     it('roundtrip_minimalRequired', 0, () => {
+      // 最小必填集 = type / secret / algorithm / digits / account（label 必填）
       const p: OtpAuthParams = {
         type: OtpType.TOTP,
         secret: 'JBSWY3DPEHPK3PXP',
         algorithm: OtpAlgorithm.SHA1,
-        digits: 6
+        digits: 6,
+        account: 'alice'
       };
       const back: OtpAuthParams = OTPAuthURI.parse(OTPAuthURI.build(p));
       assertParamsEqual(back, p);
