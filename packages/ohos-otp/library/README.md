@@ -29,7 +29,11 @@ ohpm install @yansongda/otp
 import { TOTP, HOTP, Secret, OTPAuthURI, OtpError } from '@yansongda/otp';
 
 // ---- TOTP: SHA1 / 6 digits / 30s period by default ----
-const totp = new TOTP({ secret: 'JBSWY3DPEHPK3PXP' });
+const totp = new TOTP({
+  secret: 'JBSWY3DPEHPK3PXP',
+  issuer: 'ACME', // optional
+  account: 'alice@example.com' // required by toURI() (sole source of the label)
+});
 
 const code: string = totp.generate();        // current 6-digit code
 const remaining: number = totp.remaining();  // seconds until the window expires (1..30)
@@ -42,7 +46,7 @@ if (delta !== null) {
 }
 
 // Serialize to / restore from an otpauth:// URI
-const uri: string = totp.toURI();
+const uri: string = totp.toURI(); // throws INVALID_OTPAUTH_URI without account
 const restored: TOTP = TOTP.fromURI(uri);
 
 // ---- HOTP: counter-based (RFC 4226) ----
@@ -83,9 +87,9 @@ try {
 | `TotpOptions`       | `period?: number` (seconds)                                                        | `30`                      |
 |                     | `t0?: number` (seconds)                                                            | `0`                       |
 |                     | `clockOffsetMs?: number`                                                           | `0`                       |
-|                     | `issuer?` / `account?: string` (used by `toURI()`)                                 | empty                     |
+|                     | `issuer?` / `account?: string` (used by `toURI()`; `account` is required)          | empty                     |
 | `HotpOptions`       | `counter?: number`                                                                 | `0`                       |
-|                     | `issuer?` / `account?: string` (used by `toURI()`)                                 | empty                     |
+|                     | `issuer?` / `account?: string` (used by `toURI()`; `account` is required)          | empty                     |
 | `VerifyOptions`     | Compatibility superset; prefer per-class `HotpVerifyOptions` / `TotpVerifyOptions` | —                         |
 | `HotpVerifyOptions` | `counter?: number`, `window?: number` (steps `[0, 10]`)                            | `window: 0`               |
 | `TotpVerifyOptions` | `timestamp?: number` (epoch ms safe integer), `window?: number` (steps `[0, 10]`)  | `Date.now()`, `window: 0` |
@@ -114,7 +118,7 @@ try {
 | `secret.bytes` / `secret.byteLength` / `secret.bitLength`                                   | Strength introspection (bytes are a copy)                                                                                                                                        |
 | `secret.toJSON(): string`                                                                   | Redaction hook — returns `'[REDACTED]'` under `JSON.stringify`                                                                                                                   |
 | `OTPAuthURI.parse(uri: string, options?: ParseOptions): OtpAuthParams`                      | Parse an `otpauth://` URI (unknown query params and type-inapplicable ones — TOTP `counter`, HOTP `period` — are ignored; `{ strict: true }` validates the secret tail)          |
-| `OTPAuthURI.build(params: OtpAuthParams): string`                                           | Build a canonical `otpauth://` URI; the label is derived from `account` (omitted when empty)                                                                                     |
+| `OTPAuthURI.build(params: OtpAuthParams): string`                                           | Generate a canonical `otpauth://`; the label derives from `account` only (required, else `INVALID_OTPAUTH_URI`)                                                                  |
 | `interface ParseOptions { strict?: boolean }`                                               | Shared parsing options for `Secret.fromBase32` / `OTPAuthURI.parse`; defaults to lenient                                                                                         |
 | `enum OtpAlgorithm { SHA1, SHA256, SHA512 }`                                                | Algorithm enum (string values)                                                                                                                                                   |
 | `enum OtpType { TOTP = 'totp', HOTP = 'hotp' }`                                             | URI type enum (string values)                                                                                                                                                    |
@@ -170,7 +174,7 @@ All failures throw `OtpError` with a fixed `code` (string). Messages never conta
 | `INVALID_TOKEN`            | Token format is invalid                                          | Not a string, not all digits, or length ≠ `digits`                                                                                                                                                                                                                                                    | Validate user input before calling `verify`                                                          |
 | `CRYPTO_FAILED`            | Provider failure                                                 | Platform `cryptoFramework` error                                                                                                                                                                                                                                                                      | Check system capability, retry; the error message is fixed and never leaks key material              |
 | `CRYPTO_NOT_INITIALIZED`   | Crypto registry is not registered                                | You imported public classes via a deep path without injecting a provider, so the default registration never ran                                                                                                                                                                                       | Import through the package barrel (`@yansongda/otp`) so `installCryptoDefaults()` runs automatically |
-| `INVALID_OTPAUTH_URI`      | URI is invalid                                                   | Not a string, not starting with `otpauth://` (case-insensitive), or `build` got a non-string / unencodable `issuer`·`account`                                                                                                                                                                         | Provide a valid `otpauth://` URI; pass encodable label strings                                       |
+| `INVALID_OTPAUTH_URI`      | URI is invalid                                                   | Not a string, not starting with `otpauth://` (case-insensitive), or `build` got a missing/empty `account` (label is mandatory) or a non-string / unencodable `issuer`·`account`                                                                                                                       | Provide a valid `otpauth://` URI; pass encodable label strings                                       |
 | `UNSUPPORTED_OTPAUTH_TYPE` | URI type is unsupported                                          | Type is not `totp` / `hotp`                                                                                                                                                                                                                                                                           | Use `totp` or `hotp`                                                                                 |
 | `NOT_IMPLEMENTED`          | (never thrown by the library)                                    | Fallback when an unknown code cannot be mapped to the enum (`codeString` keeps the raw value)                                                                                                                                                                                                         | No action needed                                                                                     |
 

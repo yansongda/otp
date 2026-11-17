@@ -21,7 +21,9 @@
 - `OTPAuthURI` label 语义：无原始冒号的 label 一律视为 account；仅当 query `issuer` 与
   label 前缀一致时才把首个 `%3A` 当历史分隔符。仅有 label 前缀、不带 query `issuer` 的
   旧式 `issuer%3Aaccount` URI 将只保留完整 account（issuer 丢失）
-- `build` / `toURI()` 在 `account` 为空时不再把 issuer 写进 label（`otpauth://totp/?...`）
+- `OTPAuthURI.build` / `toURI()` 的 `account` 改为**必填**（缺失或空串抛 `INVALID_OTPAUTH_URI`）：
+  Key URI Format 要求 label 必填，而 label 只能由 `account` 派生；`issuer` 仍可省略。
+  `parse` 侧保持宽松：无 label 的旧 URI 仍能解析（`account` 缺席），但重新序列化需先补 `account`
 - `HOTP.verify` 不再接受 `timestamp`、`TOTP.verify` 不再接受 `counter`（对象字面量会编译失败）
 - `verify` 校验顺序改为「配置类先于输入类」：坏 token 与坏 `counter` / `window` 同时出现时
   返回 `INVALID_COUNTER` / `INVALID_WINDOW`（此前 `INVALID_TOKEN`）

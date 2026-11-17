@@ -102,17 +102,24 @@ describe("platform barrel", () => {
     expect(params.period).toBe(60);
     expect(params.issuer).toBe("ACME");
   });
-  it("OTPAuthURI label round-trips without phantom account", () => {
-    // 规范里无原始冒号的 label 就是 account：issuer-only 不得凭空多出 account；
+  it("OTPAuthURI label derives from account only", () => {
+    // label = issuer:account：account 必填（build 侧 fail-closed），issuer 可空；
     // account 内的冒号编码为 %3A 后必须按整体还原。
-    const issuerOnly = OTPAuthURI.build({
+    const base = {
       type: OtpType.TOTP,
       secret: "JBSWY3DPEHPK3PXP",
       algorithm: OtpAlgorithm.SHA1,
       digits: 6,
-      issuer: "ACME",
-    });
-    const parsedIssuerOnly = OTPAuthURI.parse(issuerOnly);
+    };
+    for (const extra of [{}, { issuer: "ACME" }, { account: "" }]) {
+      expect(thrownCode(() => OTPAuthURI.build({ ...base, ...extra }))).toBe(
+        "INVALID_OTPAUTH_URI",
+      );
+    }
+    // parse 侧保持宽松：无 label 的旧 URI 仍给得出 issuer，account 缺席
+    const parsedIssuerOnly = OTPAuthURI.parse(
+      "otpauth://totp/?secret=JBSWY3DPEHPK3PXP&issuer=ACME",
+    );
     expect(parsedIssuerOnly.issuer).toBe("ACME");
     expect(parsedIssuerOnly.account).toBeUndefined();
 

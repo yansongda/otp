@@ -260,11 +260,16 @@ export default function totpTest() {
     // ── toURI() 逐字断言 + fromURI 往返 ──
     it('toURI_verbatim', 0, () => {
       // build 惯例：digits=8 显式输出、period 默认 30 省略、algorithm 恒输出
-      const uri: string = new TOTP({ secret: S1, digits: 8 }, fixture).toURI();
-      expect(uri).assertEqual('otpauth://totp/?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&algorithm=SHA1&digits=8');
+      const uri: string = new TOTP({ secret: S1, digits: 8, issuer: 'ACME', account: 'alice' }, fixture).toURI();
+      expect(uri).assertEqual('otpauth://totp/ACME:alice?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=ACME&algorithm=SHA1&digits=8');
+    });
+    it('toURI_withoutAccountThrows', 0, () => {
+      // account 是 label 的唯一来源：缺失即 INVALID_OTPAUTH_URI，不静默产出空 label
+      const noAccount: TOTP = new TOTP({ secret: S1 }, fixture);
+      expectThrowsCode(() => { noAccount.toURI(); }, OtpErrorCode.INVALID_OTPAUTH_URI);
     });
     it('fromURI_roundtrip_generate_consistent', 0, () => {
-      const original: TOTP = new TOTP({ secret: S256, algorithm: OtpAlgorithm.SHA256, digits: 8, period: 60 }, fixture);
+      const original: TOTP = new TOTP({ secret: S256, algorithm: OtpAlgorithm.SHA256, digits: 8, period: 60, issuer: 'ACME', account: 'alice' }, fixture);
       const restored: TOTP = TOTP.fromURI(original.toURI());
       // 往返后 algorithm=SHA256/digits=8/period=60 保持 → generate(59000) 命中 SHA256 c0 的 8 位码
       expect(restored.generate(59000)).assertEqual(original.generate(59000));

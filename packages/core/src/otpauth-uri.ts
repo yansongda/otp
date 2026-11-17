@@ -85,6 +85,8 @@ export class OTPAuthURI {
    * secret 规范化为大写无填充 base32；未知参数忽略，query 的 issuer 优先于 label 前缀。
    * 无原始冒号的 label 一律视为 account；仅当 query issuer 存在且与 label 前缀一致时，
    * 才把历史形式 `issuer%3Aaccount` 的首个 %3A 当作分隔符（否则不猜，保留完整 account）。
+   * label 为空（`otpauth://totp/?...`，没有 account）时保持宽松：结果不带 account，
+   * 由调用方决定是否使用；但 build 拒绝这种参数（Key URI Format 的 label 必填）。
    * options.strict 非 false（见 isStrictOption）时 secret 必须是规范 base32，否则 INVALID_BASE32_PADDING。
    * 入参不是字符串（JS 调用方）→ INVALID_OTPAUTH_URI，不漏原生 TypeError；
    * options 传 null 与未传等价。
@@ -263,8 +265,10 @@ export class OTPAuthURI {
 
   /**
    * 由 OtpAuthParams 生成规范 URI。参数顺序固定：secret, issuer, algorithm, digits, period|counter。
-   * label 仅由 account 派生：`issuer:account`（两者百分号编码、分隔冒号保留）；
-   * account 为空时整个 label 省略（不把 issuer 写进 label）。algorithm 始终输出，
+   * label 仅由 account 派生：`issuer:account`（两者百分号编码、分隔冒号保留）。
+   * **account 必填**（缺失 / 空串 → INVALID_OTPAUTH_URI）：Key URI Format 要求 label 必填，
+   * 而 label 只能由 account 派生——issuer 单独写进 label 会被 parse 读成 account。
+   * algorithm 始终输出，
    * digits 仅 !== 6、period 仅 TOTP 且 !== 30 时输出（与 GA 二维码惯例一致），HOTP 始终输出 counter。
    * secret 先经 Base32 规范化（与 parse 对称）；非法 base32 抛对应错误码。
    * 非字符串 `secret`（JS 调用方）→ INVALID_SECRET_CONTAINER；非字符串 / 无法百分号编码的
@@ -274,7 +278,8 @@ export class OTPAuthURI {
    * params.label 是 parse 的回填字段（原始 label），build 一律由 issuer/account 派生，忽略该字段。
    */
   static build(params: OtpAuthParams): string {
-    // 顺序与 parse / errors.ts 优先级一致：type → secret → algorithm → digits → period|counter
+    // 顺序与 parse / errors.ts 优先级一致：type → secret → algorithm → digits →
+    // account（label 必填）→ period|counter。
     // 非对象（JS 调用方传 null / 字符串 / 数字）→ INVALID_OTPAUTH_URI，不漏原生 TypeError；
     // 数组与缺字段的对象仍走字段校验（首个失败点通常是 UNSUPPORTED_OTPAUTH_TYPE）。
     if (params === null || typeof params !== "object") {
@@ -302,16 +307,16 @@ export class OTPAuthURI {
       otpFail("INVALID_OTPAUTH_URI");
     }
 
-    // label：仅当 account 非空时输出（issuer:account 百分号编码、分隔冒号保留）。
-    // account 为空时不把 issuer 写进 label：规范里无原始冒号的 label 就是 account，
-    // 否则 build → parse 会凭空多出一个与 issuer 同名的 account。
-    let label = "";
-    if (account !== "") {
-      if (issuer !== "") {
-        label += `${encodePart(issuer)}:`;
-      }
-      label += encodePart(account);
+    // account 必填：Key URI Format 的 label 必填，而 label 只能由 account 派生。
+    // 也不允许拿 issuer 顶替——无原始冒号的 label 会被 parse 读成 account，
+    // build → parse 就凭空多出一个与 issuer 同名的账号。
+    if (account === "") {
+      otpFail("INVALID_OTPAUTH_URI");
     }
+    const label =
+      issuer === ""
+        ? encodePart(account)
+        : `${encodePart(issuer)}:${encodePart(account)}`;
 
     const parts: string[] = [];
     parts.push(`secret=${secret}`);

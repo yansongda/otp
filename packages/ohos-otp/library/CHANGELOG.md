@@ -16,7 +16,8 @@
   对非法参数改为抛错
 - `OTPAuthURI` label 语义：无原始冒号的 label 一律视为 account；仅当 query `issuer` 与 label
   前缀一致时才把首个 `%3A` 当历史分隔符（仅有 label 前缀的旧式 URI 会丢 issuer）
-- `build` / `toURI()` 在 `account` 为空时不再把 issuer 写进 label
+- `OTPAuthURI.build` / `toURI()` 的 `account` 改为**必填**（缺失或空串抛 `INVALID_OTPAUTH_URI`）：
+  label 必填且只能由 `account` 派生，`issuer` 仍可省略；`parse` 侧保持宽松
 - `HOTP.verify` 不再接受 `timestamp`、`TOTP.verify` 不再接受 `counter`（对象字面量会编译失败）
 - `OtpError.name` 由 `'Error'` 改为 `'OtpError'`（provider 错误契约，三端一致）
 - 非字符串入参不再漏原生 `TypeError`：`secret` → `INVALID_SECRET_CONTAINER`、`token` →

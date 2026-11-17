@@ -79,9 +79,25 @@ describe("hotp", () => {
   }
 
   it("toURI_verbatim", () => {
-    expect(new HOTP({ secret: SEEDS.SHA1_BASE32, counter: 0 }).toURI()).toBe(
-      "otpauth://hotp/?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&algorithm=SHA1&counter=0",
+    expect(
+      new HOTP({
+        secret: SEEDS.SHA1_BASE32,
+        counter: 0,
+        issuer: "ACME",
+        account: "alice",
+      }).toURI(),
+    ).toBe(
+      "otpauth://hotp/ACME:alice?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=ACME&algorithm=SHA1&counter=0",
     );
+  });
+  it("toURI_withoutAccount_failsClosed", () => {
+    // 同 TOTP：account 缺失时 label 为空，不符合 Key URI Format
+    for (const extra of [{}, { issuer: "ACME" }, { account: "" }]) {
+      expectCode(
+        () => new HOTP({ secret: SEEDS.SHA1_BASE32, ...extra }).toURI(),
+        "INVALID_OTPAUTH_URI",
+      );
+    }
   });
 
   it("fromURI_roundtrip_generate_consistent", () => {

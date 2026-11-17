@@ -200,10 +200,12 @@ export default function otpAuthUriTest() {
         type: OtpType.TOTP,
         secret: 'JBSWY3DPEHPK3PXP',
         algorithm: OtpAlgorithm.SHA1,
-        digits: 6
+        digits: 6,
+        account: 'alice'
       };
-      // digits=6 省略、period=30 省略、无 issuer/account 时 label 为空
-      expect(OTPAuthURI.build(p)).assertEqual('otpauth://totp/?secret=JBSWY3DPEHPK3PXP&algorithm=SHA1');
+      // 最小必填集 = type / secret / algorithm / digits / account（label 必填）；
+      // digits=6 省略、period=30 省略、无 issuer 时 label 就是 account
+      expect(OTPAuthURI.build(p)).assertEqual('otpauth://totp/alice?secret=JBSWY3DPEHPK3PXP&algorithm=SHA1');
     });
 
     it('build_exactHotpOutput', 0, () => {
@@ -225,8 +227,8 @@ export default function otpAuthUriTest() {
     it('build_normalizesSecret', 0, () => {
       // 小写+填充的 secret 经 build 规范化为大写无填充（与 parse 的 encode(decode()) 对称）：
       // decode 去空白/尾'='并转大写 → 'JBSWY3DPEHPK3PXP'，再 encode 得同形规范串。
-      const p: OtpAuthParams = { type: OtpType.TOTP, secret: 'jbswy3dpeh pk3pxp=', algorithm: OtpAlgorithm.SHA1, digits: 6 };
-      expect(OTPAuthURI.build(p)).assertEqual('otpauth://totp/?secret=JBSWY3DPEHPK3PXP&algorithm=SHA1');
+      const p: OtpAuthParams = { type: OtpType.TOTP, secret: 'jbswy3dpeh pk3pxp=', algorithm: OtpAlgorithm.SHA1, digits: 6, account: 'alice' };
+      expect(OTPAuthURI.build(p)).assertEqual('otpauth://totp/alice?secret=JBSWY3DPEHPK3PXP&algorithm=SHA1');
     });
 
     it('build_invalidSecretChar_throws', 0, () => {
@@ -299,18 +301,25 @@ export default function otpAuthUriTest() {
       expect(noIssuer.account).assertEqual('ACME:co@example.com');
     });
 
-    it('build_issuerOnlyOmitsLabel', 0, () => {
-      // 规范里无原始冒号的 label 就是 account；issuer 为空 account 时不能把 issuer 写进 label。
-      const p: OtpAuthParams = {
-        type: OtpType.TOTP,
-        secret: 'JBSWY3DPEHPK3PXP',
-        algorithm: OtpAlgorithm.SHA1,
-        digits: 6,
-        issuer: 'ACME'
+    it('build_withoutAccountThrows', 0, () => {
+      // label = issuer:account：issuer 可空、account 不可空（Key URI Format 的 label 必填，
+      // 且 label 只能由 account 派生）。issuer-only 再也不能拿 issuer 顶 label 的位置。
+      const noAccount: OtpAuthParams = {
+        type: OtpType.TOTP, secret: 'JBSWY3DPEHPK3PXP', algorithm: OtpAlgorithm.SHA1, digits: 6
       };
-      const uri: string = OTPAuthURI.build(p);
-      expect(uri).assertEqual('otpauth://totp/?secret=JBSWY3DPEHPK3PXP&issuer=ACME&algorithm=SHA1');
-      const back: OtpAuthParams = OTPAuthURI.parse(uri);
+      const issuerOnly: OtpAuthParams = {
+        type: OtpType.TOTP, secret: 'JBSWY3DPEHPK3PXP', algorithm: OtpAlgorithm.SHA1, digits: 6, issuer: 'ACME'
+      };
+      const emptyAccount: OtpAuthParams = {
+        type: OtpType.TOTP, secret: 'JBSWY3DPEHPK3PXP', algorithm: OtpAlgorithm.SHA1, digits: 6, account: ''
+      };
+      expectThrowsCode(() => { OTPAuthURI.build(noAccount); }, OtpErrorCode.INVALID_OTPAUTH_URI);
+      expectThrowsCode(() => { OTPAuthURI.build(issuerOnly); }, OtpErrorCode.INVALID_OTPAUTH_URI);
+      expectThrowsCode(() => { OTPAuthURI.build(emptyAccount); }, OtpErrorCode.INVALID_OTPAUTH_URI);
+
+      // parse 侧保持宽松：无 label 的旧 URI 仍能解析（account 缺席，由调用方决定）
+      const back: OtpAuthParams = OTPAuthURI.parse(
+        'otpauth://totp/?secret=JBSWY3DPEHPK3PXP&issuer=ACME');
       expect(back.issuer).assertEqual('ACME');
       expect(back.account).assertUndefined();
     });

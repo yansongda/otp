@@ -77,8 +77,13 @@ export default function hotpTest() {
 
     // ── toURI() 逐字断言（build 惯例：digits 默认 6 省略、HOTP 恒输出 counter）──
     it('toURI_verbatim', 0, () => {
-      const uri: string = new HOTP({ secret: SECRET, counter: 0 }, fixture).toURI();
-      expect(uri).assertEqual('otpauth://hotp/?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&algorithm=SHA1&counter=0');
+      const uri: string = new HOTP({ secret: SECRET, counter: 0, issuer: 'ACME', account: 'alice' }, fixture).toURI();
+      expect(uri).assertEqual('otpauth://hotp/ACME:alice?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=ACME&algorithm=SHA1&counter=0');
+    });
+    it('toURI_withoutAccountThrows', 0, () => {
+      // 同 TOTP：account 缺失时 label 为空，不符合 Key URI Format
+      const noAccount: HOTP = new HOTP({ secret: SECRET, counter: 0 }, fixture);
+      expectThrowsCode(() => { noAccount.toURI(); }, OtpErrorCode.INVALID_OTPAUTH_URI);
     });
 
     // ── fromURI(toURI()) 往返：generate() 结果一致 ──

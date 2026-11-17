@@ -54,7 +54,11 @@ import {
 } from "@yansongda/miniprogram-otp";
 
 // TOTP: SHA1 / 6 digits / 30 seconds by default
-const totp = new TOTP({ secret: "JBSWY3DPEHPK3PXP" });
+const totp = new TOTP({
+  secret: "JBSWY3DPEHPK3PXP",
+  issuer: "ACME", // optional
+  account: "alice@example.com", // required by toURI() (sole source of the label)
+});
 
 totp.generate(); // current code
 totp.remaining(); // seconds left in the current step: 1..period
@@ -66,7 +70,7 @@ if (delta !== null) {
   totp.syncClockOffset(delta); // RFC 6238 §6 resynchronization
 }
 
-const uri = totp.toURI();
+const uri = totp.toURI(); // throws INVALID_OTPAUTH_URI without account
 const restored = TOTP.fromURI(uri);
 
 // HOTP: counter-based
@@ -103,9 +107,9 @@ try {
 | `TotpOptions`       | `period?: number` (seconds)                                                                                   | `30`                      |
 |                     | `t0?: number` (seconds)                                                                                       | `0`                       |
 |                     | `clockOffsetMs?: number` (safe-integer ms)                                                                    | `0`                       |
-|                     | `issuer?` / `account?: string` (only used by `toURI()`)                                                       | empty                     |
+|                     | `issuer?` / `account?: string` (only used by `toURI()`; `account` is required)                                | empty                     |
 | `HotpOptions`       | `counter?: number`                                                                                            | `0`                       |
-|                     | `issuer?` / `account?: string` (only used by `toURI()`)                                                       | empty                     |
+|                     | `issuer?` / `account?: string` (only used by `toURI()`; `account` is required)                                | empty                     |
 | `VerifyOptions`     | Compatibility superset of the per-class options below; pass `HotpVerifyOptions` / `TotpVerifyOptions` instead | —                         |
 | `HotpVerifyOptions` | `counter?: number`, `window?: number` (steps `[0, 10]`)                                                       | `window: 0`               |
 | `TotpVerifyOptions` | `timestamp?: number` (epoch ms safe integer), `window?: number` (steps `[0, 10]`)                             | `Date.now()`, `window: 0` |
@@ -134,7 +138,7 @@ try {
 | `secret.bytes` / `secret.byteLength` / `secret.bitLength`                                   | Byte view (copy) / byte length / bit length                                                                                            |
 | `secret.toJSON(): string`                                                                   | Always `[REDACTED]`; `JSON.stringify` is safe                                                                                          |
 | `OTPAuthURI.parse(uri: string, options?: ParseOptions): OtpAuthParams`                      | Parse `otpauth://`; unknown query parameters and type-inapplicable ones (TOTP `counter`, HOTP `period`) are ignored                    |
-| `OTPAuthURI.build(params: OtpAuthParams): string`                                           | Build canonical `otpauth://`; the label is derived from `account` (omitted when empty)                                                 |
+| `OTPAuthURI.build(params: OtpAuthParams): string`                                           | Generate a canonical `otpauth://`; the label derives from `account` only (required, else `INVALID_OTPAUTH_URI`)                        |
 | `interface ParseOptions { strict?: boolean }`                                               | Shared by `Secret.fromBase32` and `OTPAuthURI.parse`                                                                                   |
 | `OtpAlgorithm` / `OtpType`                                                                  | String-valued constants; literals such as `"SHA1"` also work                                                                           |
 | `class OtpError extends Error { readonly code: OtpErrorCode; readonly codeString: string }` | Stable code for branching (`codeString` keeps the raw code when unmapped)                                                              |
@@ -177,7 +181,7 @@ All failures throw `OtpError` with a fixed `code`. Messages never contain secret
 | `INVALID_TOKEN`            | Token is not a string, is not numeric, or its length differs from `digits`                                                                                                                                                                                                                                       |
 | `CRYPTO_FAILED`            | Internal HMAC failure (native crypto error); no key material is leaked                                                                                                                                                                                                                                           |
 | `CRYPTO_NOT_INITIALIZED`   | No provider registered; import the package barrel                                                                                                                                                                                                                                                                |
-| `INVALID_OTPAUTH_URI`      | `uri` is not a string, does not start with `otpauth://` (case-insensitive), or `build` received a non-string / unencodable `issuer`·`account`                                                                                                                                                                    |
+| `INVALID_OTPAUTH_URI`      | `uri` is not a string, does not start with `otpauth://` (case-insensitive), or `build` got a missing/empty `account` (label is mandatory) or a non-string / unencodable `issuer`·`account`                                                                                                                       |
 | `UNSUPPORTED_OTPAUTH_TYPE` | Type is not `totp` / `hotp` (parse and build)                                                                                                                                                                                                                                                                    |
 | `NOT_IMPLEMENTED`          | Reserved fallback for an error code the platform cannot map (never thrown by the library; `codeString` keeps the raw code)                                                                                                                                                                                       |
 

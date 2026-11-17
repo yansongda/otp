@@ -176,14 +176,16 @@ describe("otpauth-uri", () => {
   });
 
   it("build_exactMinimalTotpOutput", () => {
+    // 最小必填集 = type / secret / algorithm / digits / account（label 必填）
     expect(
       OTPAuthURI.build({
         type: OtpType.TOTP,
         secret: "JBSWY3DPEHPK3PXP",
         algorithm: OtpAlgorithm.SHA1,
         digits: 6,
+        account: "alice",
       }),
-    ).toBe("otpauth://totp/?secret=JBSWY3DPEHPK3PXP&algorithm=SHA1");
+    ).toBe("otpauth://totp/alice?secret=JBSWY3DPEHPK3PXP&algorithm=SHA1");
   });
 
   it("build_exactHotpOutput", () => {
@@ -209,8 +211,9 @@ describe("otpauth-uri", () => {
         secret: "jbswy3dpeh pk3pxp=",
         algorithm: OtpAlgorithm.SHA1,
         digits: 6,
+        account: "alice",
       }),
-    ).toBe("otpauth://totp/?secret=JBSWY3DPEHPK3PXP&algorithm=SHA1");
+    ).toBe("otpauth://totp/alice?secret=JBSWY3DPEHPK3PXP&algorithm=SHA1");
   });
 
   it("build_invalidSecretChar_throws", () => {
@@ -269,10 +272,11 @@ describe("otpauth-uri", () => {
       secret: "JBSWY3DPEHPK3PXP",
       algorithm: OtpAlgorithm.SHA1,
       digits: 6,
+      account: "alice",
     } as const;
     const back = OTPAuthURI.parse(OTPAuthURI.build(p));
     expect(back.period).toBe(30);
-    expect(back.account).toBeUndefined();
+    expect(back.account).toBe("alice");
     expect(back.issuer).toBeUndefined();
   });
   it("build_unsupportedType_throws", () => {
@@ -324,6 +328,7 @@ describe("otpauth-uri", () => {
             secret: "JBSWY3DPEHPK3PXP",
             algorithm: OtpAlgorithm.SHA1,
             digits: 6,
+            account: "alice",
             period,
           }),
         "INVALID_PERIOD",
@@ -340,6 +345,7 @@ describe("otpauth-uri", () => {
             secret: "JBSWY3DPEHPK3PXP",
             algorithm: OtpAlgorithm.SHA1,
             digits: 6,
+            account: "alice",
             counter,
           }),
         "INVALID_COUNTER",
@@ -545,21 +551,27 @@ describe("otpauth-uri", () => {
     expect(noIssuer.account).toBe("ACME:co@example.com");
   });
 
-  it("build_issuerOnly_doesNotEmitLabel", () => {
-    // 规范里无原始冒号的 label 就是 account；issuer 为空 account 时不能把 issuer 写进 label
-    const uri = OTPAuthURI.build({
+  it("build_withoutAccount_failsClosed", () => {
+    // label = issuer:account，issuer 可空、account 不可空：空 label 不符合 Key URI Format，
+    // 而且拿 issuer 顶 label 会被 parse 读成 account（往返凭空多出一个账号）→ 一律拒绝
+    const base = {
       type: OtpType.TOTP,
       secret: "JBSWY3DPEHPK3PXP",
       algorithm: OtpAlgorithm.SHA1,
       digits: 6,
-      issuer: "ACME",
-    });
-    expect(uri).toBe(
-      "otpauth://totp/?secret=JBSWY3DPEHPK3PXP&issuer=ACME&algorithm=SHA1",
-    );
-    const p = OTPAuthURI.parse(uri);
-    expect(p.issuer).toBe("ACME");
-    expect(p.account).toBeUndefined();
+    };
+    for (const extra of [
+      {},
+      { issuer: "ACME" },
+      { issuer: "AC:ME" },
+      { account: "" },
+      { issuer: "ACME", account: "" },
+    ]) {
+      expectCode(
+        () => OTPAuthURI.build({ ...base, ...extra }),
+        "INVALID_OTPAUTH_URI",
+      );
+    }
   });
 
   it("build_accountWithColon_roundTrips", () => {
@@ -576,19 +588,6 @@ describe("otpauth-uri", () => {
       expect(p.account).toBe(account);
       expect(p.issuer).toBeUndefined();
     }
-  });
-
-  it("build_issuerWithColon_noAccount_roundTrips", () => {
-    const uri = OTPAuthURI.build({
-      type: OtpType.TOTP,
-      secret: "JBSWY3DPEHPK3PXP",
-      algorithm: OtpAlgorithm.SHA1,
-      digits: 6,
-      issuer: "AC:ME",
-    });
-    const p = OTPAuthURI.parse(uri);
-    expect(p.issuer).toBe("AC:ME");
-    expect(p.account).toBeUndefined();
   });
 
   it("parse_nonStringUri_failsClosed", () => {

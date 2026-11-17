@@ -29,7 +29,11 @@ ohpm install @yansongda/otp
 import { TOTP, HOTP, Secret, OTPAuthURI, OtpError } from '@yansongda/otp';
 
 // ---- TOTP：默认 SHA1 / 6 位 / 30 秒周期 ----
-const totp = new TOTP({ secret: 'JBSWY3DPEHPK3PXP' });
+const totp = new TOTP({
+  secret: 'JBSWY3DPEHPK3PXP',
+  issuer: 'ACME', // 可选
+  account: 'alice@example.com' // toURI() 必填（label 的唯一来源）
+});
 
 const code: string = totp.generate();        // 当前 6 位验证码
 const remaining: number = totp.remaining();  // 本窗口剩余整秒（1..30）
@@ -42,7 +46,7 @@ if (delta !== null) {
 }
 
 // 序列化为 / 从 otpauth:// URI 恢复
-const uri: string = totp.toURI();
+const uri: string = totp.toURI(); // 需要 account，否则抛 INVALID_OTPAUTH_URI
 const restored: TOTP = TOTP.fromURI(uri);
 
 // ---- HOTP：基于计数器（RFC 4226）----
@@ -83,9 +87,9 @@ try {
 | `TotpOptions`       | `period?: number`（秒）                                                              | `30`                      |
 |                     | `t0?: number`（秒）                                                                  | `0`                       |
 |                     | `clockOffsetMs?: number`                                                             | `0`                       |
-|                     | `issuer?` / `account?: string`（仅 `toURI()` 使用）                                  | 空                        |
+|                     | `issuer?` / `account?: string`（仅 `toURI()` 使用；`account` 必填）                  | 空                        |
 | `HotpOptions`       | `counter?: number`                                                                   | `0`                       |
-|                     | `issuer?` / `account?: string`（仅 `toURI()` 使用）                                  | 空                        |
+|                     | `issuer?` / `account?: string`（仅 `toURI()` 使用；`account` 必填）                  | 空                        |
 | `VerifyOptions`     | 历史合并形态（兼容保留）；优先用按类收窄的 `HotpVerifyOptions` / `TotpVerifyOptions` | —                         |
 | `HotpVerifyOptions` | `counter?: number`、`window?: number`（[0, 10] 步）                                  | `window: 0`               |
 | `TotpVerifyOptions` | `timestamp?: number`（epoch ms 安全整数）、`window?: number`（[0, 10] 步）           | `Date.now()`、`window: 0` |
@@ -114,7 +118,7 @@ try {
 | `secret.bytes` / `secret.byteLength` / `secret.bitLength`                                   | 强度自省（bytes 为拷贝）                                                                                                                     |
 | `secret.toJSON(): string`                                                                   | 序列化脱敏——`JSON.stringify` 时返回 `'[REDACTED]'`                                                                                           |
 | `OTPAuthURI.parse(uri: string, options?: ParseOptions): OtpAuthParams`                      | 解析 `otpauth://` URI（未知 query 参数与 type 不适用的参数（TOTP 的 `counter`、HOTP 的 `period`）忽略；`{ strict: true }` 校验 secret 尾部） |
-| `OTPAuthURI.build(params: OtpAuthParams): string`                                           | 生成规范 `otpauth://` URI；label 仅由 `account` 派生（`account` 为空则省略）                                                                 |
+| `OTPAuthURI.build(params: OtpAuthParams): string`                                           | 生成规范 `otpauth://`；label 仅由 `account` 派生（`account` 必填，缺失抛 `INVALID_OTPAUTH_URI`）                                             |
 | `interface ParseOptions { strict?: boolean }`                                               | `Secret.fromBase32` / `OTPAuthURI.parse` 共用的解析选项；缺省为宽松                                                                          |
 | `enum OtpAlgorithm { SHA1, SHA256, SHA512 }`                                                | 算法枚举（字符串值）                                                                                                                         |
 | `enum OtpType { TOTP = 'totp', HOTP = 'hotp' }`                                             | URI 类型枚举（字符串值）                                                                                                                     |
@@ -170,7 +174,7 @@ try {
 | `INVALID_TOKEN`            | token 格式非法                                | 不是字符串，或非纯数字，或长度 ≠ `digits`                                                                                                                                                                                                           | 调用 `verify` 前先校验用户输入                                                    |
 | `CRYPTO_FAILED`            | provider 失败                                 | 平台 `cryptoFramework` 异常                                                                                                                                                                                                                         | 检查系统能力后重试；错误文案固定，不泄漏密钥材料                                  |
 | `CRYPTO_NOT_INITIALIZED`   | crypto 注册表未注册                           | 经深路径导入公开类且未注入 provider，默认注册从未执行                                                                                                                                                                                               | 从包 barrel（`@yansongda/otp`）导入以自动触发 `installCryptoDefaults()`           |
-| `INVALID_OTPAUTH_URI`      | URI 非法                                      | 不是字符串、不以 `otpauth://` 开头（大小写不敏感），或 build 的 issuer·account 非字符串 / 无法百分号编码                                                                                                                                            | 提供合法 `otpauth://` URI；label 参数传可编码的字符串                             |
+| `INVALID_OTPAUTH_URI`      | URI 非法                                      | 不是字符串、不以 `otpauth://` 开头（大小写不敏感），或 build 的 `account` 缺失 / 为空（label 必填）、issuer·account 非字符串 / 无法百分号编码                                                                                                       | 提供合法 `otpauth://` URI；label 参数传可编码的字符串                             |
 | `UNSUPPORTED_OTPAUTH_TYPE` | URI 类型不支持                                | 类型非 `totp` / `hotp`                                                                                                                                                                                                                              | 使用 `totp` 或 `hotp`                                                             |
 | `NOT_IMPLEMENTED`          | （从不抛出）                                  | 内部预留占位                                                                                                                                                                                                                                        | 无需处理                                                                          |
 

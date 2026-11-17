@@ -118,7 +118,9 @@ export interface OtpAuthParams {
   period?: number;
   counter?: number;
   issuer?: string;
+  /** `build` 必填（Key URI Format 的 label 只能由 account 派生）；parse 对无 label 的 URI 不填。 */
   account?: string;
+  /** 仅 parse 回填：整体解码后的 label，不保证能反推出 issuer/account。 */
   label?: string;
 }
 

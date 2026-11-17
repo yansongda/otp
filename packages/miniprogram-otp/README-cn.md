@@ -54,7 +54,11 @@ import {
 } from "@yansongda/miniprogram-otp";
 
 // TOTP：默认 SHA1 / 6 位 / 30 秒
-const totp = new TOTP({ secret: "JBSWY3DPEHPK3PXP" });
+const totp = new TOTP({
+  secret: "JBSWY3DPEHPK3PXP",
+  issuer: "ACME", // 可选
+  account: "alice@example.com", // toURI() 必填（label 的唯一来源）
+});
 
 totp.generate(); // 当前验证码
 totp.remaining(); // 当前窗口剩余整秒：1..period
@@ -66,7 +70,7 @@ if (delta !== null) {
   totp.syncClockOffset(delta); // RFC 6238 §6 重新同步
 }
 
-const uri = totp.toURI();
+const uri = totp.toURI(); // 需要 account，否则抛 INVALID_OTPAUTH_URI
 const restored = TOTP.fromURI(uri);
 
 // HOTP：基于计数器
@@ -103,9 +107,9 @@ try {
 | `TotpOptions`       | `period?: number`（秒）                                                              | `30`                      |
 |                     | `t0?: number`（秒）                                                                  | `0`                       |
 |                     | `clockOffsetMs?: number`（安全整数毫秒）                                             | `0`                       |
-|                     | `issuer?` / `account?: string`（仅 `toURI()` 使用）                                  | 空                        |
+|                     | `issuer?` / `account?: string`（仅 `toURI()` 使用；`account` 必填）                  | 空                        |
 | `HotpOptions`       | `counter?: number`                                                                   | `0`                       |
-|                     | `issuer?` / `account?: string`（仅 `toURI()` 使用）                                  | 空                        |
+|                     | `issuer?` / `account?: string`（仅 `toURI()` 使用；`account` 必填）                  | 空                        |
 | `VerifyOptions`     | 历史合并形态（兼容保留）；优先用按类收窄的 `HotpVerifyOptions` / `TotpVerifyOptions` | —                         |
 | `HotpVerifyOptions` | `counter?: number`、`window?: number`（[0, 10] 步）                                  | `window: 0`               |
 | `TotpVerifyOptions` | `timestamp?: number`（epoch ms 安全整数）、`window?: number`（[0, 10] 步）           | `Date.now()`、`window: 0` |
@@ -134,7 +138,7 @@ try {
 | `secret.bytes` / `secret.byteLength` / `secret.bitLength`                                   | 字节视图（拷贝）/ 字节长度 / 位数                                                                            |
 | `secret.toJSON(): string`                                                                   | 固定返回 `[REDACTED]`；`JSON.stringify` 安全                                                                 |
 | `OTPAuthURI.parse(uri: string, options?: ParseOptions): OtpAuthParams`                      | 解析 `otpauth://`；未知参数与 type 不适用的参数（TOTP 的 `counter`、HOTP 的 `period`）均忽略                 |
-| `OTPAuthURI.build(params: OtpAuthParams): string`                                           | 生成规范 `otpauth://`；label 仅由 `account` 派生（`account` 为空则省略）                                     |
+| `OTPAuthURI.build(params: OtpAuthParams): string`                                           | 生成规范 `otpauth://`；label 仅由 `account` 派生（`account` 必填，缺失抛 `INVALID_OTPAUTH_URI`）             |
 | `interface ParseOptions { strict?: boolean }`                                               | `Secret.fromBase32` / `OTPAuthURI.parse` 共用                                                                |
 | `OtpAlgorithm` / `OtpType`                                                                  | 字符串常量；也接受 `"SHA1"` 等字面量                                                                         |
 | `class OtpError extends Error { readonly code: OtpErrorCode; readonly codeString: string }` | 稳定错误码，便于分支（未知码用 `codeString` 保留原值）                                                       |
@@ -177,7 +181,7 @@ try {
 | `INVALID_TOKEN`            | token 不是字符串、非纯数字，或长度不等于 digits                                                                                                                                                                                                                |
 | `CRYPTO_FAILED`            | 内部 HMAC 失败（原生 crypto 异常）；不泄漏密钥                                                                                                                                                                                                                 |
 | `CRYPTO_NOT_INITIALIZED`   | 未注册 provider；应从包 barrel 导入                                                                                                                                                                                                                            |
-| `INVALID_OTPAUTH_URI`      | URI 不是字符串、不以 `otpauth://` 开头（大小写不敏感），或 build 的 issuer·account 非字符串 / 无法百分号编码                                                                                                                                                   |
+| `INVALID_OTPAUTH_URI`      | URI 不是字符串、不以 `otpauth://` 开头（大小写不敏感），或 build 的 `account` 缺失 / 为空（label 必填）、issuer·account 非字符串 / 无法百分号编码                                                                                                              |
 | `UNSUPPORTED_OTPAUTH_TYPE` | 类型不是 `totp` / `hotp`（parse 与 build）                                                                                                                                                                                                                     |
 | `NOT_IMPLEMENTED`          | 平台无法映射错误码时的兜底（库内不抛出；`codeString` 保留原始值）                                                                                                                                                                                              |
 
