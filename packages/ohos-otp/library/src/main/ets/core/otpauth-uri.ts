@@ -17,8 +17,15 @@ import {
   isStrictOption,
 } from "./options";
 
-/** 百分号解码；失败回退原串（不抛错，最大化互操作）。 */
+/**
+ * 百分号解码；失败回退原串（不抛错，最大化互操作）。
+ * 没有 `%` 时 `decodeURIComponent` 只会原样返回（也抛不出错），直接短路：
+ * parse 的 label / issuer / account 与 query 键值都走这里，纯文本占多数。
+ */
 function decodePart(raw: string): string {
+  if (raw.indexOf("%") === -1) {
+    return raw;
+  }
   try {
     return decodeURIComponent(raw);
   } catch {
@@ -50,23 +57,35 @@ function encodePart(raw: string): string {
  * 不相等属于签发方的数据问题，不应改变分隔符的判定（否则同一 label 会有两种解释）。
  * 手工扫描而非 `toLowerCase().indexOf("%3a")`：`İ`、`ẞ` 这类小写后长度会变的字符会让
  * 下标与原始串错位。返回分隔符起点下标；没有分隔符返回 -1（宽度由 `:` / `%3A` 再判：1 或 3）。
+ *
+ * 实现用原生 `indexOf` 找候选（逐字符 JS 循环在纯文本 label 上是 parse 的主要成本）：
+ * `:` 一次原生扫描；`%3A` 先找 `%3` 候选、再判第三个字符是 `a`/`A`，因此也不会被
+ * 上面那类「小写后长度变化」的字符影响。
  */
-function findLabelSeparator(input: string): number {
-  for (let i = 0; i < input.length; i++) {
-    const c = input.charAt(i);
-    if (c === ":") {
-      return i;
+function findPercent3AFrom(input: string, from: number): number {
+  let i = input.indexOf("%3", from);
+  while (i !== -1) {
+    if (i + 2 < input.length) {
+      const c = input.charAt(i + 2);
+      if (c === "a" || c === "A") {
+        return i;
+      }
     }
-    if (
-      c === "%" &&
-      i + 2 < input.length &&
-      input.charAt(i + 1) === "3" &&
-      input.charAt(i + 2).toLowerCase() === "a"
-    ) {
-      return i;
-    }
+    i = input.indexOf("%3", i + 1);
   }
   return -1;
+}
+
+function findLabelSeparator(input: string): number {
+  const colon = input.indexOf(":");
+  const pct = findPercent3AFrom(input, 0);
+  if (colon === -1) {
+    return pct;
+  }
+  if (pct === -1 || colon < pct) {
+    return colon;
+  }
+  return pct;
 }
 
 /**
