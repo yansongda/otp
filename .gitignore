@@ -1,5 +1,7 @@
 # ---- Node / Bun ----
 node_modules/
+# bun workspace 的 node_modules 是符号链接；带尾斜杠的模式匹配不到符号链接，必须再来一条
+node_modules
 .bun/
 dist/
 *.log
