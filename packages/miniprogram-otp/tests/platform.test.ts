@@ -103,8 +103,7 @@ describe("platform barrel", () => {
     expect(params.issuer).toBe("ACME");
   });
   it("OTPAuthURI label derives from account only", () => {
-    // label = issuer:account：account 必填（build 侧 fail-closed），issuer 可空；
-    // account 内的冒号编码为 %3A 后必须按整体还原。
+    // label = issuer:account：account 必填（build 侧 fail-closed），issuer 可空。
     const base = {
       type: OtpType.TOTP,
       secret: "JBSWY3DPEHPK3PXP",
@@ -123,16 +122,29 @@ describe("platform barrel", () => {
     expect(parsedIssuerOnly.issuer).toBe("ACME");
     expect(parsedIssuerOnly.account).toBeUndefined();
 
-    const accountColon = OTPAuthURI.build({
-      type: OtpType.TOTP,
-      secret: "JBSWY3DPEHPK3PXP",
-      algorithm: OtpAlgorithm.SHA1,
-      digits: 6,
-      account: "a:b",
-    });
-    const parsedAccountColon = OTPAuthURI.parse(accountColon);
-    expect(parsedAccountColon.account).toBe("a:b");
-    expect(parsedAccountColon.issuer).toBeUndefined();
+    // label 的分隔符按 Key URI Format 的 ABNF：`:` 或 `%3A`（与 query issuer 无关）
+    const parsedEncodedSeparator = OTPAuthURI.parse(
+      "otpauth://totp/ACME%3Aalice?secret=JBSWY3DPEHPK3PXP",
+    );
+    expect(parsedEncodedSeparator.issuer).toBe("ACME");
+    expect(parsedEncodedSeparator.account).toBe("alice");
+    // 原生冒号先出现时，account 里编码的 %3A 原样保留（只切首个分隔符）
+    const parsedColonAccount = OTPAuthURI.parse(
+      "otpauth://totp/ACME:a%3Ab?secret=JBSWY3DPEHPK3PXP",
+    );
+    expect(parsedColonAccount.issuer).toBe("ACME");
+    expect(parsedColonAccount.account).toBe("a:b");
+    // 含冒号的 issuer/account 无法被规范序列化：build fail-closed
+    expect(
+      thrownCode(() =>
+        OTPAuthURI.build({ ...base, issuer: "ACME", account: "a:b" }),
+      ),
+    ).toBe("INVALID_OTPAUTH_URI");
+    expect(
+      thrownCode(() =>
+        OTPAuthURI.build({ ...base, issuer: "AC:ME", account: "alice" }),
+      ),
+    ).toBe("INVALID_OTPAUTH_URI");
   });
 
   it("errorCodes come from core and stay in sync", () => {

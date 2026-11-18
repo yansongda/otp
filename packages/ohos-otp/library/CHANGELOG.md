@@ -14,8 +14,10 @@
   `ArrayBuffer` 入参改为真正的拷贝语义
 - `OTPAuthURI.parse` 的 `digits` / `period` / `counter` 只认纯十进制整数；`OTPAuthURI.build`
   对非法参数改为抛错
-- `OTPAuthURI` label 语义：无原始冒号的 label 一律视为 account；仅当 query `issuer` 与 label
-  前缀一致时才把首个 `%3A` 当历史分隔符（仅有 label 前缀的旧式 URI 会丢 issuer）
+- `OTPAuthURI` label 语义按 Key URI Format 的 ABNF 收敛：分隔符是「首个 `:` 或 `%3A`」，
+  与 query 里有没有 `issuer` 无关；含冒号的 `issuer` / `account` 改为抛 `INVALID_OTPAUTH_URI`
+  （ABNF 明文禁止，含冒号的段会被任何规范解析器当分隔符切开），`issuer` 非空时 `account`
+  也不得以空格开头（分隔符后的空格是 padding）
 - `OTPAuthURI.build` / `toURI()` 的 `account` 改为**必填**（缺失或空串抛 `INVALID_OTPAUTH_URI`）：
   label 必填且只能由 `account` 派生，`issuer` 仍可省略；`parse` 侧保持宽松
 - `HOTP.verify` 不再接受 `timestamp`、`TOTP.verify` 不再接受 `counter`（对象字面量会编译失败）
@@ -63,7 +65,8 @@
 - epoch 0（1970-01-01）为合法时间戳
 - `OTPAuthURI.parse` 的 `issuer=` 空 query 值按「未提供」处理，不再抹掉 label 里的合法 issuer
 - `OTPAuthURI.build` / `toURI()` 不再漏原生 `URIError`：孤立代理字符收敛为 `INVALID_OTPAUTH_URI`
-- 历史 `%3A` 分隔符识别改为大小写不敏感扫描：小写后会变长的字符（`İ`）不再导致下标错位、丢 issuer
+- label 分隔符按 ABNF（`:` / `%3A`）无条件识别，并剥离分隔符后的空格 padding（`*"%20"`）；
+  此前依赖 query `issuer` 与前缀相等，规范的 `issuer%3Aaccount` 形态会丢 issuer
 
 ## 1.1.1 - 2026-11-12
 

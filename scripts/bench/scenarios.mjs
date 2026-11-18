@@ -60,18 +60,20 @@ const DIGIT_VALUES = Array.from(
 
 /**
  * otpauth URI 池：parse 是冷路径（一次扫码一次），池子只为让 i 换输入、避免常量折叠。
- * 前两条覆盖「原始冒号分隔」与「历史 %3A 分隔」两种 label 形态（#9 改动集中在这里）。
+ * 四种形态对应 ABNF 的四条分支：原始 `:` 分隔（HOTP）、`%3A` 分隔且无 `issuer=`、
+ * 分隔符后带空格 padding（`*"%20"`）、无分隔符（整段即 account）。
  */
 const URI_POOL = [
-  `otpauth://totp/ACME:alice@example.com?secret=${SECRET}&issuer=ACME&algorithm=SHA1`,
-  `otpauth://totp/ACME%3Aalice@example.com?secret=${SECRET}&issuer=ACME`,
-  `otpauth://totp/ACME:alice%40example.com?secret=${SECRET}&issuer=ACME&algorithm=SHA256&digits=8&period=60`,
   `otpauth://hotp/ACME:alice@example.com?secret=${SECRET}&issuer=ACME&counter=42`,
+  `otpauth://totp/ACME%3Aalice@example.com?secret=${SECRET}`,
+  `otpauth://totp/ACME%3A%20alice%40example.com?secret=${SECRET}&algorithm=SHA256&digits=8&period=60`,
+  `otpauth://totp/alice%40example.com?secret=${SECRET}&issuer=ACME`,
 ];
 
 /**
  * build 入参池：account 必填（label 只能由 account 派生），四种形态覆盖
- * 「有/无 issuer」「TOTP/HOTP」「account 内含冒号（%3A 编码）」。
+ * 「有/无 issuer」「TOTP/HOTP」「account 内含 `@`（href 编码）」；
+ * 冒号属 ABNF 禁止字符，build 会 fail-closed，不能进基准池。
  */
 const BUILD_POOL = [
   {
@@ -106,7 +108,7 @@ const BUILD_POOL = [
     algorithm: "SHA512",
     digits: 7,
     counter: 7,
-    account: "a:b",
+    account: "alice@example.com",
   },
 ];
 

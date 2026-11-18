@@ -201,6 +201,19 @@ describe("totp", () => {
       );
     }
   });
+  it("toURI_rejectsColonInLabelParts", () => {
+    // Key URI Format 的 ABNF 禁止 issuer/account 含冒号：含冒号的段会被任何规范解析器
+    // 当 label 分隔符切开，能解析但无法被规范序列化
+    for (const extra of [
+      { account: "a:b" },
+      { issuer: "AC:ME", account: "alice" },
+    ]) {
+      expectCode(
+        () => new TOTP({ secret: SEEDS.SHA1_BASE32, ...extra }).toURI(),
+        "INVALID_OTPAUTH_URI",
+      );
+    }
+  });
 
   it("fromURI_roundtrip_generate_consistent", () => {
     const original = new TOTP({

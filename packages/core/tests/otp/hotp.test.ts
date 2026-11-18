@@ -99,6 +99,18 @@ describe("hotp", () => {
       );
     }
   });
+  it("toURI_rejectsColonInLabelParts", () => {
+    // 同 TOTP：ABNF 禁止 issuer/account 含冒号（会被当 label 分隔符切开）
+    for (const extra of [
+      { account: "a:b" },
+      { issuer: "AC:ME", account: "alice" },
+    ]) {
+      expectCode(
+        () => new HOTP({ secret: SEEDS.SHA1_BASE32, ...extra }).toURI(),
+        "INVALID_OTPAUTH_URI",
+      );
+    }
+  });
 
   it("fromURI_roundtrip_generate_consistent", () => {
     const original = new HOTP({

@@ -19,6 +19,7 @@
  *   URI build：UNSUPPORTED_OTPAUTH_TYPE → INVALID_SECRET_CONTAINER（secret 非字符串）→
  *             secret 解析 → INVALID_ALGORITHM → INVALID_DIGITS →
  *             INVALID_OTPAUTH_URI（issuer/account 非字符串、account 缺失或为空、
+ *             issuer/account 含冒号、issuer 非空时 account 以空格开头，
  *             或无法百分号编码）→
  *             INVALID_PERIOD | INVALID_COUNTER
  *   verify：INVALID_TIMESTAMP（仅 TOTP 显式 timestamp）→ INVALID_CLOCK_OFFSET（TOTP
@@ -66,7 +67,8 @@ export const OtpErrorCode = {
   CRYPTO_FAILED: "CRYPTO_FAILED",
   CRYPTO_NOT_INITIALIZED: "CRYPTO_NOT_INITIALIZED",
   // URI 非字符串 / 不以 otpauth:// 开头 / build 的 account 缺失或为空（label 必填）/ build 的
-  // issuer·account 非字符串或含无法百分号编码的字符
+  // issuer·account 非字符串、含冒号（Key URI Format 禁止）、issuer 非空时 account 以空格开头
+  // （分隔符后的空格是 ABNF 的 padding），或含无法百分号编码的字符
   INVALID_OTPAUTH_URI: "INVALID_OTPAUTH_URI",
   UNSUPPORTED_OTPAUTH_TYPE: "UNSUPPORTED_OTPAUTH_TYPE",
   NOT_IMPLEMENTED: "NOT_IMPLEMENTED",

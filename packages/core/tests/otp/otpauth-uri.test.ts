@@ -509,46 +509,91 @@ describe("otpauth-uri", () => {
     expect(OTPAuthURI.build(OTPAuthURI.parse(hotpUri))).toBe(hotpUri);
   });
 
-  it("parse_issuerWithColon_staysWhole", () => {
-    // build 把 issuer 内部的冒号编码为 %3A；parse 必须先按原始串切分再逐段解码，
-    // 否则 issuer 会被冒号截断（build → parse 往返丢 issuer）
-    const built = OTPAuthURI.build({
+  it("build_rejectsColonInIssuerOrAccount", () => {
+    // Key URI Format 的 ABNF 明文：label = accountname / issuer (":" / "%3A") *"%20" accountname，
+    // 且 "Neither issuer nor account name may themselves contain a colon"——
+    // 含冒号的段无论怎么百分号编码，都会被规范解析器当分隔符切开，编码侧只能 fail-closed
+    const base = {
       type: OtpType.TOTP,
       secret: "JBSWY3DPEHPK3PXP",
       algorithm: OtpAlgorithm.SHA1,
       digits: 6,
-      issuer: "AC:ME",
-      account: "alice",
-    });
-    expect(built).toBe(
-      "otpauth://totp/AC%3AME:alice?secret=JBSWY3DPEHPK3PXP&issuer=AC%3AME&algorithm=SHA1",
-    );
-    const parsed = OTPAuthURI.parse(built);
-    expect(parsed.issuer).toBe("AC:ME");
-    expect(parsed.account).toBe("alice");
+    };
+    for (const extra of [
+      { issuer: "AC:ME", account: "alice" },
+      { issuer: "ACME", account: "a:b" },
+      { account: "a:b" },
+    ]) {
+      expectCode(
+        () => OTPAuthURI.build({ ...base, ...extra }),
+        "INVALID_OTPAUTH_URI",
+      );
+    }
   });
 
-  it("parse_legacyEncodedSeparatorIsCaseInsensitive", () => {
-    // 兼容把分隔符整体编码为 %3A / %3a 的 URI（issuer%3Aaccount）：
-    // 仅当 query issuer 存在且与 label 前缀一致时才拆分（且大小写不敏感）
-    const upper = OTPAuthURI.parse(
-      "otpauth://totp/ACME%3Aco@example.com?secret=JBSWY3DPEHPK3PXP&issuer=ACME",
-    );
-    expect(upper.issuer).toBe("ACME");
-    expect(upper.account).toBe("co@example.com");
+  it("parse_percent3ASeparatorIsSeparator", () => {
+    // ABNF 里分隔符是 `:` 或 `%3A`（大小写不敏感），与 query 里有没有 issuer 无关
+    for (const label of ["ACME%3Aco@example.com", "ACME%3aco@example.com"]) {
+      const p = OTPAuthURI.parse(
+        `otpauth://totp/${label}?secret=JBSWY3DPEHPK3PXP`,
+      );
+      expect(p.issuer).toBe("ACME");
+      expect(p.account).toBe("co@example.com");
+    }
 
-    const lower = OTPAuthURI.parse(
-      "otpauth://totp/ACME%3aco@example.com?secret=JBSWY3DPEHPK3PXP&issuer=ACME",
+    // query issuer 存在但与 label 前缀不一致：规范要求两者相等（属签发方数据问题），
+    // 不改变分隔符判定；issuer 量仍以 query 为准
+    const mismatch = OTPAuthURI.parse(
+      "otpauth://totp/ACME%3Aalice?secret=JBSWY3DPEHPK3PXP&issuer=OTHER",
     );
-    expect(lower.issuer).toBe("ACME");
-    expect(lower.account).toBe("co@example.com");
+    expect(mismatch.issuer).toBe("OTHER");
+    expect(mismatch.account).toBe("alice");
+  });
 
-    // 无 query issuer 时不能猜：规范语义下整段 label 就是 account（数据不丢）
-    const noIssuer = OTPAuthURI.parse(
-      "otpauth://totp/ACME%3Aco@example.com?secret=JBSWY3DPEHPK3PXP",
+  it("parse_specExampleWithSpacePadding", () => {
+    // 规范自带示例：Big%20Corporation%3A%20alice%40bigco.com
+    // ABNF 的 `*"%20"` 表示分隔符后的空格是 padding，不属于 account
+    const p = OTPAuthURI.parse(
+      "otpauth://totp/Big%20Corporation%3A%20alice%40bigco.com?secret=JBSWY3DPEHPK3PXP&issuer=Big%20Corporation",
     );
-    expect(noIssuer.issuer).toBeUndefined();
-    expect(noIssuer.account).toBe("ACME:co@example.com");
+    expect(p.issuer).toBe("Big Corporation");
+    expect(p.account).toBe("alice@bigco.com");
+  });
+
+  it("parse_firstSeparatorWins", () => {
+    // 分隔符是「首个 `:` 或 `%3A`」：混合形态下 `%3A` 先出现，就按它切
+    const p = OTPAuthURI.parse(
+      "otpauth://totp/ACME%3Aalice:bob?secret=JBSWY3DPEHPK3PXP",
+    );
+    expect(p.issuer).toBe("ACME");
+    expect(p.account).toBe("alice:bob");
+
+    // 反之，原始冒号先出现时，account 里编码的 `%3A` 保持完整（不会被再切）
+    const encoded = OTPAuthURI.parse(
+      "otpauth://totp/ACME:a%3Ab?secret=JBSWY3DPEHPK3PXP",
+    );
+    expect(encoded.issuer).toBe("ACME");
+    expect(encoded.account).toBe("a:b");
+  });
+
+  it("build_rejectsLeadingSpaceAccountWhenIssuerPresent", () => {
+    // 分隔符后的空格是 ABNF 的 padding（parse 会剥掉）：issuer 形态下不允许以空格开头的
+    // account，否则 build → parse 不闭合；无 issuer 时没有分隔符，前导空格属于账号本身
+    const base = {
+      type: OtpType.TOTP,
+      secret: "JBSWY3DPEHPK3PXP",
+      algorithm: OtpAlgorithm.SHA1,
+      digits: 6,
+    };
+    expectCode(
+      () => OTPAuthURI.build({ ...base, issuer: "ACME", account: " alice" }),
+      "INVALID_OTPAUTH_URI",
+    );
+    const uri = OTPAuthURI.build({ ...base, account: " alice" });
+    expect(uri).toBe(
+      "otpauth://totp/%20alice?secret=JBSWY3DPEHPK3PXP&algorithm=SHA1",
+    );
+    expect(OTPAuthURI.parse(uri).account).toBe(" alice");
   });
 
   it("build_withoutAccount_failsClosed", () => {
@@ -563,7 +608,6 @@ describe("otpauth-uri", () => {
     for (const extra of [
       {},
       { issuer: "ACME" },
-      { issuer: "AC:ME" },
       { account: "" },
       { issuer: "ACME", account: "" },
     ]) {
@@ -571,22 +615,6 @@ describe("otpauth-uri", () => {
         () => OTPAuthURI.build({ ...base, ...extra }),
         "INVALID_OTPAUTH_URI",
       );
-    }
-  });
-
-  it("build_accountWithColon_roundTrips", () => {
-    // account 内的冒号编码为 %3A；parse 无原始冒号时不得再把它当分隔符
-    for (const account of ["a:b", "a:b:c", "ACME:a"]) {
-      const uri = OTPAuthURI.build({
-        type: OtpType.TOTP,
-        secret: "JBSWY3DPEHPK3PXP",
-        algorithm: OtpAlgorithm.SHA1,
-        digits: 6,
-        account,
-      });
-      const p = OTPAuthURI.parse(uri);
-      expect(p.account).toBe(account);
-      expect(p.issuer).toBeUndefined();
     }
   });
 
@@ -716,9 +744,9 @@ describe("otpauth-uri", () => {
     );
   });
 
-  it("parse_legacySeparator_survivesCaseExpandingChars", () => {
-    // 'İ' 小写后会多出一个组合字符（长度变化），旧实现用 toLowerCase 取下标会错位，
-    // 把历史分隔符识别失败；这里改用大小写不敏感的手工扫描，必须仍能切开
+  it("parse_separatorScan_survivesCaseExpandingChars", () => {
+    // 'İ' 小写后会多出一个组合字符（长度变化），用 toLowerCase 取下标会错位；
+    // 分隔符扫描改成逐字符比较后不再受影响（且不再依赖 query issuer）
     const p = OTPAuthURI.parse(
       "otpauth://totp/%C4%B0%3Aacct%3Abob?secret=JBSWY3DPEHPK3PXP&issuer=%C4%B0",
     );

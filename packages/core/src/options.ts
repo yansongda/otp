@@ -116,8 +116,13 @@ export interface OtpAuthParams {
   digits: number;
   period?: number;
   counter?: number;
+  /** 不得含冒号（Key URI Format 的 ABNF 禁止）：build 遇含冒号的 issuer 抛 INVALID_OTPAUTH_URI。 */
   issuer?: string;
-  /** `build` 必填（Key URI Format 的 label 只能由 account 派生）；parse 对无 label 的 URI 不填。 */
+  /**
+   * `build` 必填（Key URI Format 的 label 只能由 account 派生），且不得含冒号；
+   * `issuer` 非空时也不得以空格开头（分隔符后的空格是 ABNF 的 padding）。
+   * parse 对无 label 的 URI 不填。
+   */
   account?: string;
   /** 仅 parse 回填：整体解码后的 label，不保证能反推出 issuer/account。 */
   label?: string;

@@ -18,9 +18,12 @@
   `INVALID_SECRET_CONTAINER`；`ArrayBuffer` 入参改为真正的拷贝语义（原先是内存别名）
 - `OTPAuthURI.parse` 的 `digits` / `period` / `counter` 只认纯十进制整数；
   `OTPAuthURI.build` 对非法参数改为抛错
-- `OTPAuthURI` label 语义：无原始冒号的 label 一律视为 account；仅当 query `issuer` 与
-  label 前缀一致时才把首个 `%3A` 当历史分隔符。仅有 label 前缀、不带 query `issuer` 的
-  旧式 `issuer%3Aaccount` URI 将只保留完整 account（issuer 丢失）
+- `OTPAuthURI` label 语义按 Key URI Format 的 ABNF 收敛：分隔符是「原始串中首个 `:` 或
+  `%3A`（大小写不敏感）」，与 query 里有没有 `issuer` 无关；`issuer` 参数仍优先于 label 前缀，
+  但不再影响切分。含冒号的 `issuer` / `account` 不再支持：`build` / `toURI()` 抛
+  `INVALID_OTPAUTH_URI`（ABNF 明文："Neither issuer nor account name may themselves contain
+  a colon"，含冒号的段会被任何规范解析器当分隔符切开）；`issuer` 非空时 `account` 也不得
+  以空格开头（分隔符后的空格是 ABNF 的 padding）
 - `OTPAuthURI.build` / `toURI()` 的 `account` 改为**必填**（缺失或空串抛 `INVALID_OTPAUTH_URI`）：
   Key URI Format 要求 label 必填，而 label 只能由 `account` 派生；`issuer` 仍可省略。
   `parse` 侧保持宽松：无 label 的旧 URI 仍能解析（`account` 缺席），但重新序列化需先补 `account`
@@ -76,6 +79,9 @@
 - `minSecretBits` 非法值改为 fail-closed（此前 `NaN > 0` 为 false 会**静默关闭**强度校验）
 - `Secret.generate(bytes)` 长度越界改报 `INVALID_SECRET_LENGTH`（此前误用 `SECRET_TOO_WEAK`）
 - `syncClockOffset(1.5)` 改报 `INVALID_CLOCK_OFFSET`（此前误用 `INVALID_WINDOW`）
+- `OTPAuthURI.parse` 的 label 分隔符按 ABNF 识别：`%3A` 与 `%3a` 无条件当分隔符
+  （此前只在 query `issuer` 与前缀相等时才切，导致规范的 `issuer%3Aaccount` 形态丢 issuer），
+  并剥离分隔符后的空格 padding（`*"%20"`，如规范示例 `Big%20Corporation%3A%20alice%40bigco.com`）
 - 错误模型改造本身对 npm 用户无破坏性变更（仅新增 `OtpError.codeString`）；本版本的其它破坏性变更见上方 Breaking changes
 
 ### Removed

@@ -40,16 +40,26 @@ function encodePart(raw: string): string {
 }
 
 /**
- * 不区分大小写查找首个 `%3A` 的下标；找不到返回 -1。
- * 不用 `labelRaw.toLowerCase().indexOf("%3a")`：部分字符（`İ`、`ẞ`）小写后会改变长度，
- * 使下标与原始串错位，历史分隔符识别随之失效（会退化保留完整 account，不会截断，但会丢 issuer）。
+ * 按 Key URI Format 的 label ABNF（IANA Provisional #13829）定位分隔符：
+ *
+ *   label = accountname / issuer (":" / "%3A") *"%20" accountname
+ *
+ * 判定是「原始串中首个 `:` 或 `%3A`（十六进制大小写不敏感）」，与 ABNF 的书写顺序一致，
+ * 也与主流实现（如 hectorm/otpauth 的 `split(/(?::|%3A) *(.+)/i)`）一致。
+ * 刻意不依赖 query 里有没有 issuer、也不比较前缀与 issuer 是否相等：规范要求两者相等，
+ * 不相等属于签发方的数据问题，不应改变分隔符的判定（否则同一 label 会有两种解释）。
+ * 手工扫描而非 `toLowerCase().indexOf("%3a")`：`İ`、`ẞ` 这类小写后长度会变的字符会让
+ * 下标与原始串错位。返回分隔符起点下标；没有分隔符返回 -1（宽度由 `:` / `%3A` 再判：1 或 3）。
  */
-function indexOfPercent3A(input: string): number {
-  for (let i = 0; i + 2 < input.length; i++) {
-    if (input.charAt(i) !== "%") {
-      continue;
+function findLabelSeparator(input: string): number {
+  for (let i = 0; i < input.length; i++) {
+    const c = input.charAt(i);
+    if (c === ":") {
+      return i;
     }
     if (
+      c === "%" &&
+      i + 2 < input.length &&
       input.charAt(i + 1) === "3" &&
       input.charAt(i + 2).toLowerCase() === "a"
     ) {
@@ -57,6 +67,31 @@ function indexOfPercent3A(input: string): number {
     }
   }
   return -1;
+}
+
+/**
+ * 剥掉分隔符之后的前导空格 padding（ABNF 的 `*"%20"`：`%20` 序列与原始空格都算）。
+ * 这些空格属于 label 的语法分隔，不属于 account 名。与之对称，build 在 issuer 非空时
+ * 拒绝以空格开头的 account，保证 `build → parse` 往返闭合。
+ */
+function stripPadding(raw: string): string {
+  let i = 0;
+  while (i < raw.length) {
+    if (raw.charAt(i) === " ") {
+      i += 1;
+      continue;
+    }
+    if (
+      raw.charAt(i) === "%" &&
+      raw.charAt(i + 1) === "2" &&
+      raw.charAt(i + 2) === "0"
+    ) {
+      i += 3;
+      continue;
+    }
+    break;
+  }
+  return raw.substring(i);
 }
 
 /**
@@ -81,11 +116,12 @@ function parseDecimal(raw: string): number | null {
 export class OTPAuthURI {
   /**
    * 解析 otpauth:// URI 为 OtpAuthParams：scheme 大小写不敏感 → type 限 totp/hotp →
-   * query 手写拆分 → label 按**原始串**首个冒号切分后逐段百分号解码（失败回退原串）→
+   * query 手写拆分 → label 在**原始串**上定位 ABNF 分隔符后逐段百分号解码（失败回退原串）→
    * digits / period / counter 只接受纯十进制整数（拒绝 0x / 科学计数 / 小数）→
    * secret 规范化为大写无填充 base32；未知参数忽略，query 的 issuer 优先于 label 前缀。
-   * 无原始冒号的 label 一律视为 account；仅当 query issuer 存在且与 label 前缀一致时，
-   * 才把历史形式 `issuer%3Aaccount` 的首个 %3A 当作分隔符（否则不猜，保留完整 account）。
+   * label 按 Key URI Format 的 ABNF 解析：`label = accountname / issuer (":" / "%3A")
+   * *"%20" accountname` —— 原始串中首个 `:` 或 `%3A`（十六进制大小写不敏感）即分隔符，
+   * 其后空格是 padding；没有分隔符时整段就是 account。
    * label 为空（`otpauth://totp/?...`，没有 account）时保持宽松：结果不带 account，
    * 由调用方决定是否使用；但 build 拒绝这种参数（Key URI Format 的 label 必填）。
    * options.strict 非 false（见 isStrictOption）时 secret 必须是规范 base32，否则 INVALID_BASE32_PADDING。
@@ -144,39 +180,22 @@ export class OTPAuthURI {
     const labelRaw =
       slashIndex === -1 ? "" : beforeQuery.substring(slashIndex + 1);
     // label 字段（parse 回填用）保留整体解码结果；失败回退原串
-    let label = labelRaw;
-    try {
-      label = decodeURIComponent(labelRaw);
-    } catch {
-      label = labelRaw;
-    }
-    // 切分与解码顺序：必须**先按原始串**切分，再逐段解码。
-    // build 会把 issuer 内部的冒号编码为 %3A（label 里只有分隔冒号是原字符），
-    // 若先整体解码再切分，issuer 里的 %3A 会被误当分隔符（build → parse 往返丢 issuer）。
+    const label = decodePart(labelRaw);
+    // 切分与解码顺序：先在**原始串**上按 ABNF 定位分隔符，再逐段百分号解码。
+    // 不在解码后的串上切：`%3A` 解码后就与分隔冒号无法区分（回填的 label 也因此不保证
+    // 能反推出 issuer/account，见 options.ts 的说明）；先切后解码则每段只解一次。
     let issuerFromLabel = "";
     let account = "";
-    const colonIndex = labelRaw.indexOf(":");
-    if (colonIndex !== -1) {
-      issuerFromLabel = decodePart(labelRaw.substring(0, colonIndex));
-      account = decodePart(labelRaw.substring(colonIndex + 1));
+    const sepIndex = findLabelSeparator(labelRaw);
+    if (sepIndex === -1) {
+      // 无分隔符：ABNF 的 `label = accountname`，整段都是账号（与 label 同值，省一次解码）
+      account = label;
     } else {
-      // 无原始分隔冒号：规范语义是「整段 label 就是 account」。
-      // 唯一例外是历史 URI 把分隔符整体编码为 %3A（issuer%3Aaccount）：只有 query issuer
-      // 同时存在、且与 label 前缀一致时，才能安全地把它当分隔符。否则宁可保留完整 account，
-      // 也不猜——build 产物把 account 内的冒号编码为 %3A，猜错会把 account 截断。
-      const issuerQueryForLabel = params.get("issuer");
-      const pctIndex = indexOfPercent3A(labelRaw);
-      if (
-        pctIndex !== -1 &&
-        issuerQueryForLabel !== undefined &&
-        issuerQueryForLabel !== "" &&
-        decodePart(labelRaw.substring(0, pctIndex)) === issuerQueryForLabel
-      ) {
-        issuerFromLabel = issuerQueryForLabel;
-        account = decodePart(labelRaw.substring(pctIndex + 3));
-      } else {
-        account = decodePart(labelRaw);
-      }
+      const sepWidth = labelRaw.charAt(sepIndex) === ":" ? 1 : 3;
+      issuerFromLabel = decodePart(labelRaw.substring(0, sepIndex));
+      account = decodePart(
+        stripPadding(labelRaw.substring(sepIndex + sepWidth)),
+      );
     }
 
     // secret 必填，经 Base32 校验（空 / 非法字符 / 过短各自抛码）；strict 追加规范形式校验
@@ -269,6 +288,9 @@ export class OTPAuthURI {
    * label 仅由 account 派生：`issuer:account`（两者百分号编码、分隔冒号保留）。
    * **account 必填**（缺失 / 空串 → INVALID_OTPAUTH_URI）：Key URI Format 要求 label 必填，
    * 而 label 只能由 account 派生——issuer 单独写进 label 会被 parse 读成 account。
+   * **issuer / account 不得含冒号**（ABNF 明文禁止 → INVALID_OTPAUTH_URI）：含冒号的段
+   * 必然被任何按规范实现的解析器（包括本库 parse）当分隔符切开；`issuer` 非空时 account
+   * 也不得以空格开头（分隔符后的空格是 ABNF 的 padding，parse 会剥掉，往返不闭合）。
    * algorithm 始终输出，
    * digits 仅 !== 6、period 仅 TOTP 且 !== 30 时输出（与 GA 二维码惯例一致），HOTP 始终输出 counter。
    * secret 先经 Base32 规范化（与 parse 对称）；非法 base32 抛对应错误码。
@@ -312,6 +334,17 @@ export class OTPAuthURI {
     // 也不允许拿 issuer 顶替——无原始冒号的 label 会被 parse 读成 account，
     // build → parse 就凭空多出一个与 issuer 同名的账号。
     if (account === "") {
+      otpFail("INVALID_OTPAUTH_URI");
+    }
+    // ABNF 明文：issuer 与 account 都不允许含冒号（"Neither issuer nor account name may
+    // themselves contain a colon"）。含冒号的段无论怎么百分号编码，都会被规范解析器
+    // 当分隔符切开——编码侧 fail-closed，不产出必然被别人读错的 URI。
+    if (issuer.indexOf(":") !== -1 || account.indexOf(":") !== -1) {
+      otpFail("INVALID_OTPAUTH_URI");
+    }
+    // 分隔符后的空格按 ABNF 是 padding，parse 会剥掉；因此 issuer 形态下 account 不得
+    // 以空格开头（否则 build → parse 不闭合）。无 issuer 时没有分隔符，前导空格属于账号。
+    if (issuer !== "" && account.charAt(0) === " ") {
       otpFail("INVALID_OTPAUTH_URI");
     }
     const label =
