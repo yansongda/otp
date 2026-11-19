@@ -78,22 +78,22 @@ try {
 
 ### 选项
 
-| 类型                | 字段                                                                                 | 默认值                    |
-| ------------------- | ------------------------------------------------------------------------------------ | ------------------------- |
-| `HmacOptions`       | `secret: string`（必填，base32 宽松解析）                                            | —                         |
-|                     | `algorithm?: OtpAlgorithm`                                                           | `SHA1`                    |
-|                     | `digits?: number`（仅 6 / 7 / 8）                                                    | `6`                       |
-|                     | `minSecretBits?: number`                                                             | `0`（不强制）             |
-| `TotpOptions`       | `period?: number`（秒）                                                              | `30`                      |
-|                     | `t0?: number`（秒）                                                                  | `0`                       |
-|                     | `clockOffsetMs?: number`                                                             | `0`                       |
-|                     | `issuer?` / `account?: string`（构造期可选；`toURI()` 必填）                         | 空                        |
-| `HotpOptions`       | `counter?: number`                                                                   | `0`                       |
-|                     | `issuer?` / `account?: string`（构造期可选；`toURI()` 必填）                         | 空                        |
-| `VerifyOptions`     | `HotpVerifyOptions` / `TotpVerifyOptions` 的超集（同时接受两者），优先用按类选项     | —                         |
-| `HotpVerifyOptions` | `counter?: number`、`window?: number`（[0, 10] 步）                                  | `window: 0`               |
-| `TotpVerifyOptions` | `timestamp?: number`（epoch ms 安全整数）、`window?: number`（[0, 10] 步）           | `Date.now()`、`window: 0` |
-| `MAX_VERIFY_WINDOW` | 漂移窗口上限（步，双向）                                                             | `10`                      |
+| 类型                | 字段                                                                             | 默认值                    |
+| ------------------- | -------------------------------------------------------------------------------- | ------------------------- |
+| `HmacOptions`       | `secret: string`（必填，base32 宽松解析）                                        | —                         |
+|                     | `algorithm?: OtpAlgorithm`                                                       | `SHA1`                    |
+|                     | `digits?: number`（仅 6 / 7 / 8）                                                | `6`                       |
+|                     | `minSecretBits?: number`                                                         | `0`（不强制）             |
+| `TotpOptions`       | `period?: number`（秒）                                                          | `30`                      |
+|                     | `t0?: number`（秒）                                                              | `0`                       |
+|                     | `clockOffsetMs?: number`                                                         | `0`                       |
+|                     | `issuer?` / `account?: string`（构造期可选；`toURI()` 必填）                     | 空                        |
+| `HotpOptions`       | `counter?: number`                                                               | `0`                       |
+|                     | `issuer?` / `account?: string`（构造期可选；`toURI()` 必填）                     | 空                        |
+| `VerifyOptions`     | `HotpVerifyOptions` / `TotpVerifyOptions` 的超集（同时接受两者），优先用按类选项 | —                         |
+| `HotpVerifyOptions` | `counter?: number`、`window?: number`（[0, 10] 步）                              | `window: 0`               |
+| `TotpVerifyOptions` | `timestamp?: number`（epoch ms 安全整数）、`window?: number`（[0, 10] 步）       | `Date.now()`、`window: 0` |
+| `MAX_VERIFY_WINDOW` | 漂移窗口上限（步，双向）                                                         | `10`                      |
 
 ### 类与方法
 
