@@ -144,7 +144,7 @@ export function decodeStrict(input: string): Uint8Array {
 
   const values = valuesOf(normalized);
   // 先解码再判尾长：单字符（尾长 1）在宽松模式下已是 SECRET_TOO_SHORT，
-  // 严檢模式若先报 PADDING，同一致命输入会因开关不同而暴露两个不同错误码。
+  // 严格模式若先报 PADDING，同一致命输入会因开关不同而暴露两个不同错误码。
   const bytes = assemble(values);
 
   const tail = normalized.length % 8;

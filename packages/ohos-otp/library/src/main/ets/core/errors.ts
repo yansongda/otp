@@ -15,11 +15,15 @@
  *             INVALID_MIN_SECRET_BITS → SECRET_TOO_WEAK → INVALID_PERIOD →
  *             INVALID_T0 → INVALID_CLOCK_OFFSET
  *   URI parse：INVALID_OTPAUTH_URI（入参非字符串 / 前缀非法）→ UNSUPPORTED_OTPAUTH_TYPE →
- *             secret 解析 → INVALID_ALGORITHM → INVALID_DIGITS →
- *             INVALID_PERIOD | INVALID_COUNTER
+ *             INVALID_OTPAUTH_URI（已知 query 参数重复）→ secret 解析 → INVALID_ALGORITHM →
+ *             INVALID_DIGITS → INVALID_PERIOD | INVALID_COUNTER →
+ *             INVALID_OTPAUTH_URI（label：account 缺失或为空、account 含冒号、
+ *             或 label 段无法百分号编码）
  *   URI build：UNSUPPORTED_OTPAUTH_TYPE → INVALID_SECRET_CONTAINER（secret 非字符串）→
  *             secret 解析 → INVALID_ALGORITHM → INVALID_DIGITS →
- *             INVALID_OTPAUTH_URI（issuer/account 非字符串或无法百分号编码）→
+ *             INVALID_OTPAUTH_URI（account 缺失 / 为空 / 含冒号；issuer·account 非字符串
+ *             或无法百分号编码。issuer 含冒号、account 以空格开头**不报错**：改为省略
+ *             label 前缀、只写 issuer= 参数）→
  *             INVALID_PERIOD | INVALID_COUNTER
  *   verify：INVALID_TIMESTAMP（仅 TOTP 显式 timestamp）→ INVALID_CLOCK_OFFSET（TOTP
  *           叠加 clockOffsetMs 后越界）→ INVALID_COUNTER → INVALID_WINDOW → INVALID_TOKEN
@@ -58,12 +62,15 @@ export const OtpErrorCode = {
   // clockOffsetMs 非安全整数；syncClockOffset 的 delta 非安全整数 / 累加结果超出安全整数；
   // 或 TOTP 的 timestamp + clockOffsetMs 叠加后超出安全整数
   INVALID_CLOCK_OFFSET: "INVALID_CLOCK_OFFSET",
+  // verify 漂移窗口（单位 = 时间步，双向）：必须是 [0, MAX_VERIFY_WINDOW] 内的整数，
+  // 上限见 options.ts（防止外部 window 放大成 HMAC 计算炸弹）
   INVALID_WINDOW: "INVALID_WINDOW",
   // token 非纯数字 / 长度不等于 digits / 非字符串（JS 调用方）
   INVALID_TOKEN: "INVALID_TOKEN",
   CRYPTO_FAILED: "CRYPTO_FAILED",
   CRYPTO_NOT_INITIALIZED: "CRYPTO_NOT_INITIALIZED",
-  // URI 非字符串 / 不以 otpauth:// 开头 / build 的 issuer·account 非字符串或含无法百分号编码的字符
+  // URI 非字符串 / 不以 otpauth:// 开头 / 已知 query 参数重复 / label 段非法（account 缺失或
+  // 为空、含冒号 —— Key URI Format 明文禁止）/ issuer·account 非字符串或无法百分号编码
   INVALID_OTPAUTH_URI: "INVALID_OTPAUTH_URI",
   UNSUPPORTED_OTPAUTH_TYPE: "UNSUPPORTED_OTPAUTH_TYPE",
   NOT_IMPLEMENTED: "NOT_IMPLEMENTED",
