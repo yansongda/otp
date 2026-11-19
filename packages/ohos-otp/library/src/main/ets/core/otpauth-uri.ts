@@ -1,4 +1,4 @@
-// AUTO-GENERATED from packages/core/src/otpauth-uri.ts (core@6ab4943). DO NOT EDIT. Run: bun run sync:core
+// AUTO-GENERATED from packages/core/src/otpauth-uri.ts (core@8940019). DO NOT EDIT. Run: bun run sync:core
 /**
  * OTPAuthURI：otpauth:// URI 解析与生成（零平台依赖）。
  * 遵循 Google Authenticator Key URI Format（IANA Provisional #13829）与 IETF 个人稿
