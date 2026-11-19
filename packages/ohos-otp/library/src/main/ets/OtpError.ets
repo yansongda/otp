@@ -34,12 +34,18 @@ export enum OtpErrorCode {
   INVALID_TIMESTAMP = 'INVALID_TIMESTAMP',
   // clockOffsetMs 非安全整数，或 syncClockOffset 的 delta 非安全整数 / 累加结果超出安全整数
   INVALID_CLOCK_OFFSET = 'INVALID_CLOCK_OFFSET',
+  // verify 漂移窗口（单位 = 时间步，双向）：必须是 [0, MAX_VERIFY_WINDOW] 内的整数，
+  // 上限见 core options.ts（防止外部 window 放大成 HMAC 计算炸弹）
   INVALID_WINDOW = 'INVALID_WINDOW',
   // token 非纯数字 / 长度不等于 digits / 非字符串（JS 调用方）
   INVALID_TOKEN = 'INVALID_TOKEN',
   CRYPTO_FAILED = 'CRYPTO_FAILED',
   CRYPTO_NOT_INITIALIZED = 'CRYPTO_NOT_INITIALIZED',
-  // URI 非字符串 / 不以 otpauth:// 开头 / build 的 issuer·account 非字符串或无法百分号编码
+  // URI 非字符串 / 不以 otpauth:// 开头 / 已知 query 参数重复 / label 段非法（parse 与 build
+  // 同口径：account 缺失或为空、account 含冒号 —— Key URI Format 明文禁止）/ issuer·account
+  // 非字符串或含无法百分号编码的字符。
+  // 注意：issuer 含冒号、account 以空格开头**不**报错 —— build 改为省略 label 前缀、只写
+  // issuer= 参数（issuer 参数是 pchar，允许冒号；分隔符后的空格按 ABNF 只是 padding）。
   INVALID_OTPAUTH_URI = 'INVALID_OTPAUTH_URI',
   UNSUPPORTED_OTPAUTH_TYPE = 'UNSUPPORTED_OTPAUTH_TYPE',
   NOT_IMPLEMENTED = 'NOT_IMPLEMENTED'

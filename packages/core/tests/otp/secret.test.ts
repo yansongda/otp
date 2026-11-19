@@ -109,6 +109,33 @@ describe("secret", () => {
     }
   });
 
+  it("fromBytes_acceptsUint8ClampedArray", () => {
+    // Uint8ClampedArray 的读取语义与 Uint8Array 完全一致（8 位无符号 0-255，差别只在写入时
+    // clamp vs wrap），ImageData.data 等 Web 侧 API 直接给出该类型：必须接受且值域不变。
+    const clamped = new Uint8ClampedArray([0x01, 0x7f, 0xff]);
+    const secret = Secret.fromBytes(clamped);
+    expect(secret.byteLength).toBe(3);
+    expect(Array.from(secret.bytes)).toEqual([0x01, 0x7f, 0xff]);
+    // 同样是拷贝语义：改写入参不影响实例内密钥
+    clamped[0] = 0x00;
+    expect(secret.bytes[0]).toBe(0x01);
+  });
+
+  it("fromBytes_otherTypedArrays_failClosed", () => {
+    // Int8Array / Uint16Array / DataView 一律拒绝：new Uint8Array(x) 对 TypedArray 是逐元素
+    // 而非逐字节转换（Uint16Array 会静默丢掉高位字节），必须由调用方显式转换。
+    for (const bad of [
+      new Int8Array([1, 2, 3]),
+      new Uint16Array([0x1234, 0x5678]),
+      new DataView(new ArrayBuffer(4)),
+    ]) {
+      expectCode(
+        () => Secret.fromBytes(bad as unknown as Uint8Array),
+        "INVALID_SECRET_CONTAINER",
+      );
+    }
+  });
+
   it("fromBytes_arrayBuffer_copiesInput", () => {
     // ArrayBuffer 是合法字节容器（wx.getRandomValues 的 randomValues 可直接传）。
     // new Uint8Array(arrayBuffer) 是视图而非拷贝：必须拷一份，否则调用方清零/改写

@@ -81,9 +81,42 @@ describe("hotp", () => {
   }
 
   it("toURI_verbatim", () => {
-    expect(new HOTP({ secret: SEEDS.SHA1_BASE32, counter: 0 }).toURI()).toBe(
-      "otpauth://hotp/?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&algorithm=SHA1&counter=0",
+    expect(
+      new HOTP({
+        secret: SEEDS.SHA1_BASE32,
+        counter: 0,
+        issuer: "ACME",
+        account: "alice",
+      }).toURI(),
+    ).toBe(
+      "otpauth://hotp/ACME:alice?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=ACME&algorithm=SHA1&counter=0",
     );
+  });
+  it("toURI_withoutAccount_failsClosed", () => {
+    // 同 TOTP：account 缺失时 label 为空，不符合 Key URI Format
+    for (const extra of [{}, { issuer: "ACME" }, { account: "" }]) {
+      expectCode(
+        () => new HOTP({ secret: SEEDS.SHA1_BASE32, ...extra }).toURI(),
+        "INVALID_OTPAUTH_URI",
+      );
+    }
+  });
+  it("toURI_colonHandling", () => {
+    // account 含冒号 → label 段不可表示，只能 fail-closed；
+    // issuer 含冒号 → 省略 label 前缀、只写 issuer= 参数（issuer 参数是 pchar，允许冒号）
+    expectCode(
+      () => new HOTP({ secret: SEEDS.SHA1_BASE32, account: "a:b" }).toURI(),
+      "INVALID_OTPAUTH_URI",
+    );
+    const uri = new HOTP({
+      secret: SEEDS.SHA1_BASE32,
+      issuer: "AC:ME",
+      account: "alice",
+    }).toURI();
+    expect(uri.slice(0, uri.indexOf("?"))).toBe("otpauth://hotp/alice");
+    expect(uri).toContain("issuer=AC%3AME");
+    const back = HOTP.fromURI(uri);
+    expect(back.toURI()).toBe(uri);
   });
 
   it("fromURI_roundtrip_generate_consistent", () => {

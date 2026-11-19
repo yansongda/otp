@@ -13,18 +13,35 @@
 - 错误码归因调整：`Secret.generate` 长度越界 → `INVALID_SECRET_LENGTH`；`clockOffsetMs`
   非法、同步偏移越界 → `INVALID_CLOCK_OFFSET`；`minSecretBits` 非法 →
   `INVALID_MIN_SECRET_BITS`（fail-closed，不再静默关闭强度校验）
-- `Secret.fromBytes` 非字节容器 → `INVALID_SECRET_CONTAINER`；`ArrayBuffer` 入参改为真正的
-  拷贝语义（原先是内存别名）
+- `Secret.fromBytes` 只接受 8 位无符号视图（`Uint8Array` / `Uint8ClampedArray`）与
+  `ArrayBuffer`，其余（`Int8Array` / `Uint16Array` / `DataView` / 字符串 / array-like）一律
+  `INVALID_SECRET_CONTAINER`；`ArrayBuffer` 入参改为真正的拷贝语义（原先是内存别名）
 - `OTPAuthURI.parse` 的 `digits` / `period` / `counter` 只认纯十进制整数；
   `OTPAuthURI.build` 对非法参数改为抛错
-- `OTPAuthURI` label 语义：无原始冒号的 label 一律视为 account；仅当 query `issuer` 与
-  label 前缀一致时才把首个 `%3A` 当历史分隔符。仅有 label 前缀、不带 query `issuer` 的
-  旧式 `issuer%3Aaccount` URI 将只保留完整 account（issuer 丢失）
-- `build` / `toURI()` 在 `account` 为空时不再把 issuer 写进 label（`otpauth://totp/?...`）
+- `OTPAuthURI` label 语义按 Key URI Format 的 ABNF 收敛：分隔符是「原始串中首个 `:` 或
+  `%3A`（大小写不敏感）」，与 query 里有没有 `issuer` 无关；`issuer` 参数仍优先于 label 前缀，
+  但不再影响切分；分隔符后的 `%20`（以及原始空格）按 padding 剥离
+- `OTPAuthURI.parse` 与 `build` 的 label 契约统一为 fail-closed（此前 parse 放宽，导致「解析
+  出来的参数要等到 `toURI()` 才抛错」）：`account` 缺失 / 为空 / 含冒号（明文 "Neither issuer
+  nor account name may themselves contain a colon"）、label 段不可百分号编码（孤立代理字符）、
+  已知 query 参数（secret / issuer / algorithm / digits / period / counter）重复出现 →
+  `INVALID_OTPAUTH_URI`。因此 `build(parse(uri))` 恒可序列化
+- `OTPAuthURI.build` / `toURI()` 的 `account` 改为**必填**（缺失或空串抛 `INVALID_OTPAUTH_URI`）：
+  Key URI Format 要求 label 必填，而 label 只能由 `account` 派生；`issuer` 仍可省略
+- `OTPAuthURI.build` / `toURI()`：`issuer` 含冒号或 `account` 以空格开头**不再报错**，改为省略
+  label 前缀、只写 `issuer=` 参数（`issuer` 参数是 pchar，允许冒号；label 前缀不允许）
+- `OtpAuthParams.account` 由可选改为**必填**（类型级；JS / JSON 调用方仍由运行期校验兜底）
+- 分隔符后的**原始空格**也按 padding 剥离：`ACME: alice` 的 `account` 从 `" alice"` 变为
+  `"alice"`（规范只写 `%20`，此处为宽容超集，已在 README 标注）
+- **存量数据迁移（一次性）**：1.x 在无 `account` 时产出的 `otpauth://totp/?secret=…`（以及已经
+  印出去的二维码）现在会被 `parse` / `TOTP.fromURI` / `HOTP.fromURI` 以 `INVALID_OTPAUTH_URI`
+  拒收。用存下来的 `secret` 重建并补 `account` / `issuer`：
+  `new TOTP({ secret, issuer, account }).toURI()`（或 `OTPAuthURI.build(params)`）
 - `HOTP.verify` 不再接受 `timestamp`、`TOTP.verify` 不再接受 `counter`（对象字面量会编译失败）
-- 移除类型别名 `OtpFailureCode`；`OtpErrorCode` 取值由 core 唯一提供
 - `verify` 校验顺序改为「配置类先于输入类」：坏 token 与坏 `counter` / `window` 同时出现时
   返回 `INVALID_COUNTER` / `INVALID_WINDOW`（此前 `INVALID_TOKEN`）
+- 构造期校验顺序调整为 algorithm 先于 digits：`{ algorithm: "MD5", digits: 5 }` 两项同时
+  非法时现在返回 `INVALID_ALGORITHM`（此前 `INVALID_DIGITS`）
 - `OTPAuthURI.parse` 的 `issuer=` 空 query 值按「未提供」处理，不再抹掉 label 里的合法 issuer
 - `strict` 模式解单字符 secret（如 `"A"`）：`INVALID_BASE32_PADDING` → `SECRET_TOO_SHORT`
   （与宽松模式同码）
@@ -34,8 +51,6 @@
 - `OtpError.codeString`：保留 core 传入的原始错误码字符串（平台码表是强类型投影，
   未来新增码在枚举尚未同步时仍可拿到真实值）
 - `OtpErrorCode` 取值由 core 唯一提供（barrel 导出），平台层不再手抄码表
-- provider 契约写进 `HmacProvider` / `RandomSource` 的接口注释：`key` / `message` 只读，
-  不得修改或跨调用保留引用（库每次公开调用传一份密钥副本）
 - 新错误码 `INVALID_SECRET_CONTAINER`（secret 容器类型不对）、`INVALID_SECRET_LENGTH`
   （`Secret.generate` 长度越界）、`INVALID_MIN_SECRET_BITS`（`minSecretBits` 参数非法）、
   `INVALID_CLOCK_OFFSET`（时钟偏移参数非法）
@@ -43,8 +58,8 @@
 
 ### Changed
 
-- `OtpError` 的 `name` 固定为 `OtpError`（provider 错误契约：core 的 engine 靠它区分
-  「已知错误原样上抛」与「provider 实现缺陷」）
+- 三端 `OtpError.name` 契约统一为 `OtpError`（provider 错误契约：core 的 engine 靠它区分
+  「已知错误原样上抛」与「provider 实现缺陷」）；**本包此前已是该值，行为不变**，本次新增的是守卫
 - 错误抛出统一走 core 的 `otpFail` → 平台工厂：core 与平台不再有两条错误构造路径
 - 原型链修复改为**只在原型退化为 `Error.prototype` 时**执行（此前无条件
   `Object.setPrototypeOf` 会把 `OtpError` 子类实例的原型改回基类：`instanceof` 子类失效、
@@ -64,15 +79,6 @@
 
 ### Fixed
 
-- provider 错误契约：失败必须抛 `name === "OtpError"` 的错误，engine 只把**未知**错误收敛为
-  `CRYPTO_FAILED`（此前任意 provider 异常原样透传，调用方拿不到 `OtpError`）；provider 的
-  非 `Uint8Array` 返回值同样收敛
-- provider 摘要长度必须与算法匹配（SHA1=20 / SHA256=32 / SHA512=64）：不匹配统一
-  `CRYPTO_FAILED`（此前 SHA256/512 返回 20 字节摘要会被静默截断）
-- 随机源返回值类型与长度校验：非 `Uint8Array`（字符串 / array-like / `null`）或长度不符
-  一律 `CRYPTO_FAILED`（此前字符串可静默产出 0 字节空密钥，`null` 漏 `TypeError`）
-- 纯 JS provider 的算法查表改用 switch：`HASH_SPECS["constructor"]` 会命中
-  `Object.prototype` 继承键，把「算法不被接受」错报成 `CRYPTO_FAILED`
 - `Secret.fromBytes(ArrayBuffer)` 改为拷贝语义（原先是内存别名）：调用方清零 / 改写原
   buffer 不再影响实例密钥
 - `Secret.fromBytes` / `fromBase32` 的容器类型在转换**之前**判定：字符串 / array-like
@@ -83,10 +89,15 @@
 - `minSecretBits` 非法值改为 fail-closed（此前 `NaN > 0` 为 false 会**静默关闭**强度校验）
 - `Secret.generate(bytes)` 长度越界改报 `INVALID_SECRET_LENGTH`（此前误用 `SECRET_TOO_WEAK`）
 - `syncClockOffset(1.5)` 改报 `INVALID_CLOCK_OFFSET`（此前误用 `INVALID_WINDOW`）
+- `OTPAuthURI.parse` 的 label 分隔符按 ABNF 识别：`%3A` 与 `%3a` 无条件当分隔符
+  （此前只在 query `issuer` 与前缀相等时才切，导致规范的 `issuer%3Aaccount` 形态丢 issuer），
+  并剥离分隔符后的空格 padding（`*"%20"`，如规范示例 `Big%20Corporation%3A%20alice%40bigco.com`）
+- 错误模型改造本身对 npm 用户无破坏性变更（仅新增 `OtpError.codeString`）；本版本的其它破坏性变更见上方 Breaking changes
 
 ### Removed
 
-- 类型别名 `OtpFailureCode`（与 `OtpErrorCode` 完全等价，重复声明）
+- core 内部类型别名 `OtpFailureCode`（与 `OtpErrorCode` 等价，重复声明）。它**从未出现在本包
+  发布的类型声明里**（`dist/index.d.ts` 无此名），属于内部清理，npm 用户无感
 
 ## [1.0.1] - 2026-11-12
 

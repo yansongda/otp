@@ -25,7 +25,11 @@ export interface HmacOptions {
 export interface TotpOptions extends HmacOptions {
   /** 默认 30（RFC 6238 §5.2 推荐值），正整数秒。 */
   period?: number;
-  /** 默认 0（RFC 6238 §4.1 的 T0，单位秒）。 */
+  /**
+   * 默认 0（RFC 6238 §4.1 的 T0，单位秒）；须为非负安全整数。
+   * 注意：t0 晚于当前时刻时时间步为负，generate / verify 抛 INVALID_COUNTER
+   * （按 counter 越界归因，属既有行为，不另设码）。
+   */
   t0?: number;
   /**
    * 默认 0；时钟偏移补偿，仅 TOTP 有效。
@@ -89,7 +93,7 @@ export interface ParseOptions {
  * strict 开关解析（fail-closed）：只有「未提供」或明确 `false` 才是宽松模式。
  *
  * 为什么不写 `options.strict === true`：小程序端是 JS 调用，配置可能来自服务端 JSON
- * （`{ strict: 1 }` / `{ strict: "true" }`）”真值会静默退化为宽松解析，让「导入边界」的
+ * （`{ strict: 1 }` / `{ strict: "true" }`）的真值会静默退化为宽松解析，让「导入边界」的
  * 严格校验形同虚设。非 boolean 一律按 strict 处理（宁可多拒，不可漏放）。
  * `null` / `undefined` options 与未传等价（JS 调用方 `JSON.parse` 可能得到 `null`）。
  */
@@ -110,10 +114,23 @@ export interface OtpAuthParams {
   secret: string;
   algorithm: string;
   digits: number;
+  // period（仅 totp）/ counter（仅 hotp）按 type 判别，但刻意**不**建模为判别联合：
+  // ArkTS 不支持字面量类型，跨 core ↔ .ets 边界的公开签名只能用基础类型（见根 AGENTS.md）。
   period?: number;
   counter?: number;
+  /**
+   * 可选。issuer 参数是 pchar（RFC 3986 允许冒号），但 label 前缀不允许；因此 **build 在
+   * issuer 含冒号时省略 label 前缀、只写 `issuer=` query**，保证 `build → parse` 无损往返。
+   */
   issuer?: string;
-  account?: string;
+  /**
+   * **必填**（Key URI Format 的 label 唯一来源），且不得含冒号。
+   * parse 与 build 口径一致：parse 要求 URI 里有非空且不含冒号的 account，build 拒绕
+   * 缺失 / 为空 / 含冒号的 account —— 因此 `build(parse(uri))` 恒可序列化。
+   * 以空格开头时 build 省略 label 前缀（否则会被当作 ABNF 的分隔符 padding 剥掉）。
+   */
+  account: string;
+  /** 仅 parse 回填：整体解码后的 label，不保证能反推出 issuer/account。 */
   label?: string;
 }
 

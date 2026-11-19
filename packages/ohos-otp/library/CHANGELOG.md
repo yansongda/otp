@@ -9,18 +9,34 @@
   小数 / `NaN` / 超大值不再静默接受
 - 错误码归因调整：`Secret.generate` 长度越界 → `INVALID_SECRET_LENGTH`；`clockOffsetMs` 非法、
   同步偏移越界 → `INVALID_CLOCK_OFFSET`；`minSecretBits` 非法 → `INVALID_MIN_SECRET_BITS`（fail-closed）
-- `Secret.fromBytes` 非字节容器 → `INVALID_SECRET_CONTAINER`；`ArrayBuffer` 入参改为真正的拷贝语义
+- `Secret.fromBytes` 只接受 8 位无符号视图（`Uint8Array` / `Uint8ClampedArray`）与 `ArrayBuffer`，
+  其余（`Int8Array` / `Uint16Array` / `DataView` / 字符串 / array-like）一律 `INVALID_SECRET_CONTAINER`；
+  `ArrayBuffer` 入参改为真正的拷贝语义
 - `OTPAuthURI.parse` 的 `digits` / `period` / `counter` 只认纯十进制整数；`OTPAuthURI.build`
   对非法参数改为抛错
-- `OTPAuthURI` label 语义：无原始冒号的 label 一律视为 account；仅当 query `issuer` 与 label
-  前缀一致时才把首个 `%3A` 当历史分隔符（仅有 label 前缀的旧式 URI 会丢 issuer）
-- `build` / `toURI()` 在 `account` 为空时不再把 issuer 写进 label
+- `OTPAuthURI` label 语义按 Key URI Format 的 ABNF 收敛：分隔符是「首个 `:` 或 `%3A`」，
+  与 query 里有没有 `issuer` 无关；分隔符后的 `%20`（以及原始空格）按 padding 剥离
+- `parse` 与 `build` 的 label 契约统一为 fail-closed：`account` 缺失 / 为空 / 含冒号（明文
+  "Neither issuer nor account name may themselves contain a colon"）、label 段不可百分号编码、
+  已知 query 参数重复出现 → `INVALID_OTPAUTH_URI`（`build(parse(uri))` 恒可序列化）
+- `OTPAuthURI.build` / `toURI()` 的 `account` 改为**必填**（缺失或空串抛 `INVALID_OTPAUTH_URI`）：
+  label 必填且只能由 `account` 派生，`issuer` 仍可省略
+- `OTPAuthURI.build` / `toURI()`：`issuer` 含冒号或 `account` 以空格开头**不再报错**，改为省略
+  label 前缀、只写 `issuer=` 参数
+- `OtpAuthParams.account` 由可选改为**必填**（类型级；运行期仍校验空串）
+- 分隔符后的**原始空格**也按 padding 剥离（规范只写 `%20`，此处为宽容超集）
+- **存量数据迁移（一次性）**：1.x 在无 `account` 时产出的 `otpauth://totp/?secret=…`（以及已经
+  印出去的二维码）现在会被 `parse` / `TOTP.fromURI` / `HOTP.fromURI` 以 `INVALID_OTPAUTH_URI`
+  拒收。用存下来的 `secret` 重建并补 `account` / `issuer`：
+  `new TOTP({ secret, issuer, account }).toURI()`（或 `OTPAuthURI.build(params)`）
 - `HOTP.verify` 不再接受 `timestamp`、`TOTP.verify` 不再接受 `counter`（对象字面量会编译失败）
 - `OtpError.name` 由 `'Error'` 改为 `'OtpError'`（provider 错误契约，三端一致）
 - 非字符串入参不再漏原生 `TypeError`：`secret` → `INVALID_SECRET_CONTAINER`、`token` →
   `INVALID_TOKEN`、`uri` / `build` 的 `issuer`·`account` → `INVALID_OTPAUTH_URI`
 - `verify` 校验顺序改为「配置类先于输入类」：坏 token 与坏 `counter` / `window` 同时出现时
   返回 `INVALID_COUNTER` / `INVALID_WINDOW`（此前 `INVALID_TOKEN`）
+- 构造期校验顺序调整为 algorithm 先于 digits：`{ algorithm: "MD5", digits: 5 }` 两项同时
+  非法时现在返回 `INVALID_ALGORITHM`（此前 `INVALID_DIGITS`）
 - `OTPAuthURI.parse` 的 `counter > 2^53-1` 现在抛 `INVALID_COUNTER`（此前接受且丢精度）
 - `TOTP.generate/verify(timestamp: 0)`（epoch 0）现在合法
 - `strict` 模式解单字符 secret：`INVALID_BASE32_PADDING` → `SECRET_TOO_SHORT`
@@ -47,12 +63,6 @@
 
 #### Fixed
 
-- provider 错误契约：失败必须抛 `name === 'OtpError'` 的错误，engine 只把未知错误收敛为
-  `CRYPTO_FAILED`；已知错误码原样上抛（保留 `INVALID_ALGORITHM` 等精确码）
-- provider 摘要长度必须与算法匹配（SHA1=20 / SHA256=32 / SHA512=64），不匹配统一 `CRYPTO_FAILED`
-- 随机源返回值非 `Uint8Array` / 长度不符 / 抛出非 `OtpError` 一律收敛为 `CRYPTO_FAILED`
-- ohos `CryptoSource`：未知算法不再静默降级 SHA1，改抛 `INVALID_ALGORITHM`
-  （与 pure-js provider 对齐）；`toMacAlgName` 移到 `try` 外，避免被自身 catch 二次包裹
 - `Secret.fromBytes(ArrayBuffer)` 改为拷贝，调用方清零 / 改写原 buffer 不再影响实例密钥
 - `Secret.fromBytes` / `fromBase32` 的容器类型在转换之前判定：字符串 / array-like 不再被
   静默变成 0 字节或全零密钥
@@ -64,7 +74,8 @@
 - epoch 0（1970-01-01）为合法时间戳
 - `OTPAuthURI.parse` 的 `issuer=` 空 query 值按「未提供」处理，不再抹掉 label 里的合法 issuer
 - `OTPAuthURI.build` / `toURI()` 不再漏原生 `URIError`：孤立代理字符收敛为 `INVALID_OTPAUTH_URI`
-- 历史 `%3A` 分隔符识别改为大小写不敏感扫描：小写后会变长的字符（`İ`）不再导致下标错位、丢 issuer
+- label 分隔符按 ABNF（`:` / `%3A`）无条件识别，并剥离分隔符后的空格 padding（`*"%20"`）；
+  此前依赖 query `issuer` 与前缀相等，规范的 `issuer%3Aaccount` 形态会丢 issuer
 
 ## 1.1.1 - 2026-11-12
 

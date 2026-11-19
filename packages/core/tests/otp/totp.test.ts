@@ -183,9 +183,42 @@ describe("totp", () => {
   });
 
   it("toURI_verbatim", () => {
-    expect(new TOTP({ secret: SEEDS.SHA1_BASE32, digits: 8 }).toURI()).toBe(
-      "otpauth://totp/?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&algorithm=SHA1&digits=8",
+    expect(
+      new TOTP({
+        secret: SEEDS.SHA1_BASE32,
+        digits: 8,
+        issuer: "ACME",
+        account: "alice",
+      }).toURI(),
+    ).toBe(
+      "otpauth://totp/ACME:alice?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=ACME&algorithm=SHA1&digits=8",
     );
+  });
+  it("toURI_withoutAccount_failsClosed", () => {
+    // account 是 label 的唯一来源；缺了就产不出符合规范的 URI，不静默写空 label
+    for (const extra of [{}, { issuer: "ACME" }, { account: "" }]) {
+      expectCode(
+        () => new TOTP({ secret: SEEDS.SHA1_BASE32, ...extra }).toURI(),
+        "INVALID_OTPAUTH_URI",
+      );
+    }
+  });
+  it("toURI_colonHandling", () => {
+    // account 含冒号 → label 段不可表示，只能 fail-closed；
+    // issuer 含冒号 → 省略 label 前缀、只写 issuer= 参数（issuer 参数是 pchar，允许冒号）
+    expectCode(
+      () => new TOTP({ secret: SEEDS.SHA1_BASE32, account: "a:b" }).toURI(),
+      "INVALID_OTPAUTH_URI",
+    );
+    const uri = new TOTP({
+      secret: SEEDS.SHA1_BASE32,
+      issuer: "AC:ME",
+      account: "alice",
+    }).toURI();
+    expect(uri.slice(0, uri.indexOf("?"))).toBe("otpauth://totp/alice");
+    expect(uri).toContain("issuer=AC%3AME");
+    const back = TOTP.fromURI(uri);
+    expect(back.toURI()).toBe(uri);
   });
 
   it("fromURI_roundtrip_generate_consistent", () => {
@@ -194,6 +227,8 @@ describe("totp", () => {
       algorithm: "SHA256",
       digits: 8,
       period: 60,
+      issuer: "ACME",
+      account: "alice",
     });
     const restored = TOTP.fromURI(original.toURI());
     expect(restored.generate(59000)).toBe(original.generate(59000));
