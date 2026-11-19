@@ -147,14 +147,14 @@ function hasLoneSurrogate(raw: string): boolean {
  * 已知参数重复出现 → 整条 URI 拒绝（草案："A consumer MUST reject the URI if any known
  * parameter appears more than once"）；未知参数重复仍忽略（草案：SHOULD ignore）。
  */
-const KNOWN_QUERY_KEYS = [
+const KNOWN_QUERY_KEYS = new Set([
   "secret",
   "issuer",
   "algorithm",
   "digits",
   "period",
   "counter",
-];
+]);
 
 /**
  * URI 数字参数解析：只接受纯十进制数字串（拒绝 0x / 科学计数 / 正负号 / 小数 / 空白）。
@@ -236,10 +236,7 @@ export class OTPAuthURI {
           value = pair.substring(eqIndex + 1);
         }
         const decodedKey = decodePart(key).toLowerCase();
-        if (
-          KNOWN_QUERY_KEYS.indexOf(decodedKey) !== -1 &&
-          params.has(decodedKey)
-        ) {
+        if (KNOWN_QUERY_KEYS.has(decodedKey) && params.has(decodedKey)) {
           // 已知参数重复：不得静默「后者覆盖前者」，否则 algorithm/digits 可被后段改写
           otpFail("INVALID_OTPAUTH_URI");
         }
