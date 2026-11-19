@@ -55,17 +55,6 @@ export default function otpAuthUriTest() {
       expect(p.account).assertEqual('john@example.com');
     });
 
-    it('parse_labelPercent3ASeparator', 0, () => {
-      // 历史形态：分隔符整体编码为 %3A。label 百分号解码后按首个冒号切分 issuer/account，
-      // 所以 %3A 与原始 ':' 等价；query 的 issuer 仍优先于 label 前缀。
-      const p: OtpAuthParams = OTPAuthURI.parse(
-        'otpauth://totp/ACME%3Aco@example.com?secret=JBSWY3DPEHPK3PXP'
-      );
-      expect(p.type).assertEqual(OtpType.TOTP);
-      expect(p.issuer).assertEqual('ACME');
-      expect(p.account).assertEqual('co@example.com');
-    });
-
     it('parse_missingOptionalDefaults', 0, () => {
       // 无 algorithm/digits/period → SHA1/6/30
       const p: OtpAuthParams = OTPAuthURI.parse(
@@ -211,10 +200,12 @@ export default function otpAuthUriTest() {
         type: OtpType.TOTP,
         secret: 'JBSWY3DPEHPK3PXP',
         algorithm: OtpAlgorithm.SHA1,
-        digits: 6
+        digits: 6,
+        account: 'alice'
       };
-      // digits=6 省略、period=30 省略、无 issuer/account 时 label 为空
-      expect(OTPAuthURI.build(p)).assertEqual('otpauth://totp/?secret=JBSWY3DPEHPK3PXP&algorithm=SHA1');
+      // 最小必填集 = type / secret / algorithm / digits / account（label 必填）；
+      // digits=6 省略、period=30 省略、无 issuer 时 label 就是 account
+      expect(OTPAuthURI.build(p)).assertEqual('otpauth://totp/alice?secret=JBSWY3DPEHPK3PXP&algorithm=SHA1');
     });
 
     it('build_exactHotpOutput', 0, () => {
@@ -236,13 +227,13 @@ export default function otpAuthUriTest() {
     it('build_normalizesSecret', 0, () => {
       // 小写+填充的 secret 经 build 规范化为大写无填充（与 parse 的 encode(decode()) 对称）：
       // decode 去空白/尾'='并转大写 → 'JBSWY3DPEHPK3PXP'，再 encode 得同形规范串。
-      const p: OtpAuthParams = { type: OtpType.TOTP, secret: 'jbswy3dpeh pk3pxp=', algorithm: OtpAlgorithm.SHA1, digits: 6 };
-      expect(OTPAuthURI.build(p)).assertEqual('otpauth://totp/?secret=JBSWY3DPEHPK3PXP&algorithm=SHA1');
+      const p: OtpAuthParams = { type: OtpType.TOTP, secret: 'jbswy3dpeh pk3pxp=', algorithm: OtpAlgorithm.SHA1, digits: 6, account: 'alice' };
+      expect(OTPAuthURI.build(p)).assertEqual('otpauth://totp/alice?secret=JBSWY3DPEHPK3PXP&algorithm=SHA1');
     });
 
     it('build_invalidSecretChar_throws', 0, () => {
       // secret 含 base32 字母表外字符 → 与 parse 同样抛 INVALID_BASE32_CHAR
-      const p: OtpAuthParams = { type: OtpType.TOTP, secret: 'JBSW!@#', algorithm: OtpAlgorithm.SHA1, digits: 6 };
+      const p: OtpAuthParams = { type: OtpType.TOTP, secret: 'JBSW!@#', algorithm: OtpAlgorithm.SHA1, digits: 6, account: 'alice' };
       expectThrowsCode(() => { OTPAuthURI.build(p); }, OtpErrorCode.INVALID_BASE32_CHAR);
     });
 
@@ -274,15 +265,213 @@ export default function otpAuthUriTest() {
       assertParamsEqual(back, p);
     });
 
+    it('build_colonHandling', 0, () => {
+      // label 段不得含冒号（"Neither issuer nor account name may themselves contain a colon"）：
+      // account 段的冒号不可表示，只能 fail-closed；issuer 是 pchar（RFC 3986 允许冒号），
+      // 落在 issuer 参数上即可 —— 此时省略 label 前缀，往返无损
+      const colonAccount: OtpAuthParams = {
+        type: OtpType.TOTP, secret: 'JBSWY3DPEHPK3PXP', algorithm: OtpAlgorithm.SHA1,
+        digits: 6, issuer: 'ACME', account: 'a:b'
+      };
+      const colonOnlyAccount: OtpAuthParams = {
+        type: OtpType.TOTP, secret: 'JBSWY3DPEHPK3PXP', algorithm: OtpAlgorithm.SHA1,
+        digits: 6, account: 'a:b'
+      };
+      expectThrowsCode(() => { OTPAuthURI.build(colonAccount); }, OtpErrorCode.INVALID_OTPAUTH_URI);
+      expectThrowsCode(() => { OTPAuthURI.build(colonOnlyAccount); }, OtpErrorCode.INVALID_OTPAUTH_URI);
+
+      const colonIssuer: OtpAuthParams = {
+        type: OtpType.TOTP, secret: 'JBSWY3DPEHPK3PXP', algorithm: OtpAlgorithm.SHA1,
+        digits: 6, issuer: 'AC:ME', account: 'alice'
+      };
+      const uri: string = OTPAuthURI.build(colonIssuer);
+      expect(uri).assertEqual(
+        'otpauth://totp/alice?secret=JBSWY3DPEHPK3PXP&issuer=AC%3AME&algorithm=SHA1');
+      const back: OtpAuthParams = OTPAuthURI.parse(uri);
+      expect(back.issuer).assertEqual('AC:ME');
+      expect(back.account).assertEqual('alice');
+    });
+
+    it('parse_percent3ASeparatorIsSeparator', 0, () => {
+      // ABNF 里分隔符是 `:` 或 `%3A`（大小写不敏感），与 query 里有没有 issuer 无关
+      const upper: OtpAuthParams = OTPAuthURI.parse(
+        'otpauth://totp/ACME%3Aco@example.com?secret=JBSWY3DPEHPK3PXP');
+      expect(upper.issuer).assertEqual('ACME');
+      expect(upper.account).assertEqual('co@example.com');
+      const lower: OtpAuthParams = OTPAuthURI.parse(
+        'otpauth://totp/ACME%3aco@example.com?secret=JBSWY3DPEHPK3PXP');
+      expect(lower.issuer).assertEqual('ACME');
+      expect(lower.account).assertEqual('co@example.com');
+
+      // query issuer 存在但与 label 前缀不一致：规范要求两者相等（属签发方数据问题），
+      // 不改变分隔符判定；issuer 量仍以 query 为准
+      const mismatch: OtpAuthParams = OTPAuthURI.parse(
+        'otpauth://totp/ACME%3Aalice?secret=JBSWY3DPEHPK3PXP&issuer=OTHER');
+      expect(mismatch.issuer).assertEqual('OTHER');
+      expect(mismatch.account).assertEqual('alice');
+    });
+
+    it('parse_specExampleWithSpacePadding', 0, () => {
+      // Key URI Format 自带示例：Big%20Corporation%3A%20alice%40bigco.com
+      // ABNF 的 `*"%20"` 表示分隔符后的空格是 padding，不属于 account
+      const p: OtpAuthParams = OTPAuthURI.parse(
+        'otpauth://totp/Big%20Corporation%3A%20alice%40bigco.com?secret=JBSWY3DPEHPK3PXP&issuer=Big%20Corporation');
+      expect(p.issuer).assertEqual('Big Corporation');
+      expect(p.account).assertEqual('alice@bigco.com');
+    });
+
+    it('parse_colonInAccountThrows', 0, () => {
+      // 按首个 `:` / `%3A` 切分之后残余的冒号必然落在 account 里；规范禁止 label 段含
+      // 冒号（且无法再序列化）→ parse 与 build 同口径拒绝
+      expectThrowsCode(() => {
+        OTPAuthURI.parse('otpauth://totp/ACME%3Aalice:bob?secret=JBSWY3DPEHPK3PXP');
+      }, OtpErrorCode.INVALID_OTPAUTH_URI);
+      expectThrowsCode(() => {
+        OTPAuthURI.parse('otpauth://totp/ACME:a%3Ab?secret=JBSWY3DPEHPK3PXP');
+      }, OtpErrorCode.INVALID_OTPAUTH_URI);
+    });
+
+    it('build_leadingSpaceAccountOmitsLabelPrefix', 0, () => {
+      // 分隔符后的空格按 ABNF 是 padding（parse 会剥掉）：带 issuer 时若写前缀，
+      // 前导空格会被吃掉。issuer 参数才是权威、label 前缀是可选的 → 省略前缀。
+      const withIssuer: OtpAuthParams = {
+        type: OtpType.TOTP, secret: 'JBSWY3DPEHPK3PXP', algorithm: OtpAlgorithm.SHA1,
+        digits: 6, issuer: 'ACME', account: ' alice'
+      };
+      const uri: string = OTPAuthURI.build(withIssuer);
+      expect(uri).assertEqual(
+        'otpauth://totp/%20alice?secret=JBSWY3DPEHPK3PXP&issuer=ACME&algorithm=SHA1');
+      const back: OtpAuthParams = OTPAuthURI.parse(uri);
+      expect(back.issuer).assertEqual('ACME');
+      expect(back.account).assertEqual(' alice');
+
+      const noIssuer: OtpAuthParams = {
+        type: OtpType.TOTP, secret: 'JBSWY3DPEHPK3PXP', algorithm: OtpAlgorithm.SHA1,
+        digits: 6, account: ' alice'
+      };
+      const noIssuerUri: string = OTPAuthURI.build(noIssuer);
+      expect(noIssuerUri).assertEqual(
+        'otpauth://totp/%20alice?secret=JBSWY3DPEHPK3PXP&algorithm=SHA1');
+      expect(OTPAuthURI.parse(noIssuerUri).account).assertEqual(' alice');
+    });
+
+    it('emptyAccountFailsClosed', 0, () => {
+      // label 只能由 account 派生，且 account 不可为空（Key URI Format 的 label 必填、
+      // 草案 `account = 1*`）。`OtpAuthParams.account` 是**必填**字段，因此「字段缺失」
+      // 由编译器拦截（ArkTS 侧无需也无从绕过）；运行期仍拒空串与空 label。
+      const emptyAccount: OtpAuthParams = {
+        type: OtpType.TOTP, secret: 'JBSWY3DPEHPK3PXP', algorithm: OtpAlgorithm.SHA1, digits: 6, account: ''
+      };
+      expectThrowsCode(() => { OTPAuthURI.build(emptyAccount); }, OtpErrorCode.INVALID_OTPAUTH_URI);
+      expectThrowsCode(() => {
+        OTPAuthURI.parse('otpauth://totp/?secret=JBSWY3DPEHPK3PXP&issuer=ACME');
+      }, OtpErrorCode.INVALID_OTPAUTH_URI);
+      expectThrowsCode(() => {
+        OTPAuthURI.parse('otpauth://totp/ACME:?secret=JBSWY3DPEHPK3PXP');
+      }, OtpErrorCode.INVALID_OTPAUTH_URI);
+    });
+
+    it('parse_labelContractAndDuplicates', 0, () => {
+      // 已知参数重复 → 拒绝（草案 consumer MUST reject）；未知参数重复忽略
+      expectThrowsCode(() => {
+        OTPAuthURI.parse('otpauth://totp/alice?secret=JBSWY3DPEHPK3PXP&secret=MZXW6YTBOI');
+      }, OtpErrorCode.INVALID_OTPAUTH_URI);
+      const unknown: OtpAuthParams = OTPAuthURI.parse(
+        'otpauth://totp/alice?secret=JBSWY3DPEHPK3PXP&foo=1&foo=2');
+      expect(unknown.account).assertEqual('alice');
+
+      // padding 矩阵：分隔符后可有零到多个 %20（原始空格为宽容超集）；无分隔符不剥
+      const twoPadded: OtpAuthParams = OTPAuthURI.parse(
+        'otpauth://totp/ACME%3A%20%20alice?secret=JBSWY3DPEHPK3PXP');
+      expect(twoPadded.account).assertEqual('alice');
+      const noSeparator: OtpAuthParams = OTPAuthURI.parse(
+        'otpauth://totp/%20alice?secret=JBSWY3DPEHPK3PXP');
+      expect(noSeparator.account).assertEqual(' alice');
+
+      // `%253A` 解码后是字面量 `%3A`，不是分隔符
+      const literal: OtpAuthParams = OTPAuthURI.parse(
+        'otpauth://totp/ACME%253Aalice?secret=JBSWY3DPEHPK3PXP');
+      expect(literal.issuer).assertUndefined();
+      expect(literal.account).assertEqual('ACME%3Aalice');
+    });
+
     it('roundtrip_minimalRequired', 0, () => {
+      // 最小必填集 = type / secret / algorithm / digits / account（label 必填）
       const p: OtpAuthParams = {
         type: OtpType.TOTP,
         secret: 'JBSWY3DPEHPK3PXP',
         algorithm: OtpAlgorithm.SHA1,
-        digits: 6
+        digits: 6,
+        account: 'alice'
       };
       const back: OtpAuthParams = OTPAuthURI.parse(OTPAuthURI.build(p));
       assertParamsEqual(back, p);
+    });
+
+    it('roundtrip_labelContractInvariant', 0, () => {
+      // 不变量：parse 成功 ⇒ build 不抛 ⇒ 再 parse 得到同一组 label 字段，且二次序列化逐字稳定。
+      // 语料与 core 的 parse_buildRoundTripInvariant 同源（固定语料，无随机）。
+      const accepted: string[] = [
+        'otpauth://totp/ACME:alice?secret=JBSWY3DPEHPK3PXP',
+        'otpauth://totp/ACME%3Aalice?secret=JBSWY3DPEHPK3PXP',
+        'otpauth://totp/ACME%3a%20alice?secret=JBSWY3DPEHPK3PXP',
+        'otpauth://totp/Big%20Corporation%3A%20alice%40bigco.com?secret=JBSWY3DPEHPK3PXP&issuer=Big%20Corporation',
+        'otpauth://totp/alice?secret=JBSWY3DPEHPK3PXP&issuer=AC%3AME',
+        'otpauth://totp/alice?secret=JBSWY3DPEHPK3PXP&issuer=',
+        'otpauth://totp/%20alice?secret=JBSWY3DPEHPK3PXP&issuer=ACME',
+        'otpauth://totp/%20alice?secret=JBSWY3DPEHPK3PXP',
+        'otpauth://totp/ACME%253Aalice?secret=JBSWY3DPEHPK3PXP',
+        'otpauth://hotp/ACME:alice?secret=JBSWY3DPEHPK3PXP&counter=42',
+        'otpauth://hotp/alice?secret=JBSWY3DPEHPK3PXP&counter=0&digits=8',
+        'otpauth://totp/alice?secret=JBSWY3DPEHPK3PXP&algorithm=sha256&digits=8&period=60',
+        'OTPAUTH://TOTP/Alice%20Smith?SECRET=JBSWY3DPEHPK3PXP'
+      ];
+      for (let i = 0; i < accepted.length; i++) {
+        const p: OtpAuthParams = OTPAuthURI.parse(accepted[i]);
+        const rebuilt: string = OTPAuthURI.build(p);
+        const again: OtpAuthParams = OTPAuthURI.parse(rebuilt);
+        expect(again.type).assertEqual(p.type);
+        expect(again.account).assertEqual(p.account);
+        expect(again.digits).assertEqual(p.digits);
+        // 可选字段用哨兵归一，避免向 hypium 传 undefined
+        const issuerIn: string = p.issuer === undefined ? '' : p.issuer;
+        const issuerOut: string = again.issuer === undefined ? '' : again.issuer;
+        expect(issuerOut).assertEqual(issuerIn);
+        const periodIn: number = p.period === undefined ? -1 : p.period;
+        const periodOut: number = again.period === undefined ? -1 : again.period;
+        expect(periodOut).assertEqual(periodIn);
+        const counterIn: number = p.counter === undefined ? -1 : p.counter;
+        const counterOut: number = again.counter === undefined ? -1 : again.counter;
+        expect(counterOut).assertEqual(counterIn);
+        // 二次序列化必须逐字稳定（幂等）
+        expect(OTPAuthURI.build(again)).assertEqual(rebuilt);
+      }
+    });
+
+    it('build_loneSurrogateLabel_throws', 0, () => {
+      // 孤立代理字符（如被截断的 emoji）会让 encodeURIComponent 抛原生 URIError；
+      // 公开契约是一切失败均抛 OtpError，必须收敛为 INVALID_OTPAUTH_URI
+      const loneSurrogate: string = String.fromCharCode(0xd800);
+      const p: OtpAuthParams = {
+        type: OtpType.TOTP,
+        secret: 'JBSWY3DPEHPK3PXP',
+        algorithm: OtpAlgorithm.SHA1,
+        digits: 6,
+        account: loneSurrogate
+      };
+      expectThrowsCode(() => OTPAuthURI.build(p), OtpErrorCode.INVALID_OTPAUTH_URI);
+    });
+
+    it('parse_separatorScanAfterExpandingCaseChar', 0, () => {
+      // 'İ'（U+0130）小写后变成两个码位（i + U+0307）：在 `labelRaw.toLowerCase()` 上取
+      // `%3A` 下标会比原始串多 1 → 切错。必须是**原始**的 İ 才触发；分隔符扫描改用原生
+      // indexOf 后不再受影响
+      const dotI: string = String.fromCharCode(0x130);
+      const uri: string = 'otpauth://totp/' + dotI +
+        '%3Aalice?secret=JBSWY3DPEHPK3PXP';
+      const p: OtpAuthParams = OTPAuthURI.parse(uri);
+      expect(p.issuer).assertEqual(dotI);
+      expect(p.account).assertEqual('alice');
     });
 
     it('parse_inapplicableParamsIgnored', 0, () => {

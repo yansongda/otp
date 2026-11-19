@@ -18,8 +18,8 @@ const CORE_ERRORS = "../core/src/errors.ts";
 const SECRET = "../core/src/secret.ts";
 
 const BASELINE = {
-  // 算法测试已迁至 packages/core（296 条）；本包只保留平台层契约测试
-  testDeclarations: 17,
+  // 算法测试已迁至 packages/core（304 条）；本包只保留平台层契约测试
+  testDeclarations: 19,
   testFiles: 1,
   errorCodeMembers: 22,
 };
@@ -277,6 +277,19 @@ check("原型修复只在原型退化时执行（core / mp 条件一致）", () 
     );
   }
   return "core / mp 两处条件一致（格式无关）";
+});
+
+check("barrel 不使用 as unknown as 整体断言", () => {
+  // 整体断言会吞掉 core 的签名漂移：barrel 只允许窄化的 `as`（如 parse 返回值投影、
+  // 错误码字符串 → 平台字面量联合），不允许「先擦成 unknown 再断言成别的形状」。
+  // 不限定变量名/换行，避免换个写法就绕过。
+  const text = stripComments(readText(BARREL));
+  if (/as\s+unknown\s+as/.test(text)) {
+    throw new Error(
+      "src/index.ts 出现 as unknown as 整体断言；请改为显式 wrapper 或窄化断言",
+    );
+  }
+  return "无 as unknown as（仅窄化断言）";
 });
 
 check("零运行时依赖", () => {

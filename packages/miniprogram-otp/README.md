@@ -54,7 +54,11 @@ import {
 } from "@yansongda/miniprogram-otp";
 
 // TOTP: SHA1 / 6 digits / 30 seconds by default
-const totp = new TOTP({ secret: "JBSWY3DPEHPK3PXP" });
+const totp = new TOTP({
+  secret: "JBSWY3DPEHPK3PXP",
+  issuer: "ACME", // optional
+  account: "alice@example.com", // required by toURI() (sole source of the label)
+});
 
 totp.generate(); // current code
 totp.remaining(); // seconds left in the current step: 1..period
@@ -66,7 +70,7 @@ if (delta !== null) {
   totp.syncClockOffset(delta); // RFC 6238 §6 resynchronization
 }
 
-const uri = totp.toURI();
+const uri = totp.toURI(); // throws INVALID_OTPAUTH_URI without account
 const restored = TOTP.fromURI(uri);
 
 // HOTP: counter-based
@@ -103,9 +107,9 @@ try {
 | `TotpOptions`       | `period?: number` (seconds)                                                                                   | `30`                      |
 |                     | `t0?: number` (seconds)                                                                                       | `0`                       |
 |                     | `clockOffsetMs?: number` (safe-integer ms)                                                                    | `0`                       |
-|                     | `issuer?` / `account?: string` (only used by `toURI()`)                                                       | empty                     |
+|                     | `issuer?` / `account?: string` (optional here; `toURI()` requires `account`)                                  | empty                     |
 | `HotpOptions`       | `counter?: number`                                                                                            | `0`                       |
-|                     | `issuer?` / `account?: string` (only used by `toURI()`)                                                       | empty                     |
+|                     | `issuer?` / `account?: string` (optional here; `toURI()` requires `account`)                                  | empty                     |
 | `VerifyOptions`     | Compatibility superset of the per-class options below; pass `HotpVerifyOptions` / `TotpVerifyOptions` instead | —                         |
 | `HotpVerifyOptions` | `counter?: number`, `window?: number` (steps `[0, 10]`)                                                       | `window: 0`               |
 | `TotpVerifyOptions` | `timestamp?: number` (epoch ms safe integer), `window?: number` (steps `[0, 10]`)                             | `Date.now()`, `window: 0` |
@@ -113,31 +117,31 @@ try {
 
 ### Classes and methods
 
-| API                                                                                         | Description                                                                                                                            |
-| ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `new TOTP(options: TotpOptions)`                                                            | Validate options synchronously; throws `OtpError` on invalid input                                                                     |
-| `totp.generate(timestampMs?: number): string`                                               | Generate code; defaults to now                                                                                                         |
-| `totp.verify(token: string, options?: TotpVerifyOptions): number \| null`                   | Constant-time comparison; returns hit delta or `null`                                                                                  |
-| `totp.remaining(timestampMs?: number): number`                                              | Seconds left in the current step, `[1, period]`                                                                                        |
-| `totp.progress(timestampMs?: number): number`                                               | Step progress, `[0, 1)`                                                                                                                |
-| `totp.syncClockOffset(delta: number): void`                                                 | `clockOffsetMs += delta * period * 1000` (delta must be a safe integer, may be negative)                                               |
-| `totp.clockOffsetMs: number`                                                                | Current clock offset in ms                                                                                                             |
-| `totp.toURI(): string` / `TOTP.fromURI(uri: string): TOTP`                                  | Serialize / restore TOTP                                                                                                               |
-| `new HOTP(options: HotpOptions)`                                                            | Validate options synchronously                                                                                                         |
-| `hotp.generate(counter?: number): string`                                                   | Generate code; defaults to the constructor counter                                                                                     |
-| `hotp.verify(token: string, options?: HotpVerifyOptions): number \| null`                   | Return counter delta or `null`                                                                                                         |
-| `hotp.toURI(): string` / `HOTP.fromURI(uri: string): HOTP`                                  | Serialize / restore HOTP                                                                                                               |
-| `Secret.fromBase32(s: string, options?: ParseOptions): Secret`                              | Parse Base32; lenient by default (non-string input throws `INVALID_SECRET_CONTAINER`)                                                  |
-| `Secret.fromBytes(bytes: Uint8Array \| Uint8ClampedArray \| ArrayBuffer): Secret`           | Copy bytes (8-bit unsigned views + `ArrayBuffer`); empty throws `EMPTY_SECRET`, other container types throw `INVALID_SECRET_CONTAINER` |
-| `Secret.generate(bytes = 20): Secret`                                                       | Generate via the internal `RandomSource` registry; on WeChat no default source is registered, see limitations                          |
-| `secret.toBase32(): string`                                                                 | Canonical uppercase, unpadded Base32                                                                                                   |
-| `secret.bytes` / `secret.byteLength` / `secret.bitLength`                                   | Byte view (copy) / byte length / bit length                                                                                            |
-| `secret.toJSON(): string`                                                                   | Always `[REDACTED]`; `JSON.stringify` is safe                                                                                          |
-| `OTPAuthURI.parse(uri: string, options?: ParseOptions): OtpAuthParams`                      | Parse `otpauth://`; unknown query parameters and type-inapplicable ones (TOTP `counter`, HOTP `period`) are ignored                    |
-| `OTPAuthURI.build(params: OtpAuthParams): string`                                           | Build canonical `otpauth://`                                                                                                           |
-| `interface ParseOptions { strict?: boolean }`                                               | Shared by `Secret.fromBase32` and `OTPAuthURI.parse`                                                                                   |
-| `OtpAlgorithm` / `OtpType`                                                                  | String-valued constants; literals such as `"SHA1"` also work                                                                           |
-| `class OtpError extends Error { readonly code: OtpErrorCode; readonly codeString: string }` | Stable code for branching (`codeString` keeps the raw code when unmapped)                                                              |
+| API                                                                                         | Description                                                                                                                                                                                                                                                                                                                                             |
+| ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `new TOTP(options: TotpOptions)`                                                            | Validate options synchronously; throws `OtpError` on invalid input                                                                                                                                                                                                                                                                                      |
+| `totp.generate(timestampMs?: number): string`                                               | Generate code; defaults to now                                                                                                                                                                                                                                                                                                                          |
+| `totp.verify(token: string, options?: TotpVerifyOptions): number \| null`                   | Constant-time comparison; returns hit delta or `null`                                                                                                                                                                                                                                                                                                   |
+| `totp.remaining(timestampMs?: number): number`                                              | Seconds left in the current step, `[1, period]`                                                                                                                                                                                                                                                                                                         |
+| `totp.progress(timestampMs?: number): number`                                               | Step progress, `[0, 1)`                                                                                                                                                                                                                                                                                                                                 |
+| `totp.syncClockOffset(delta: number): void`                                                 | `clockOffsetMs += delta * period * 1000` (delta must be a safe integer, may be negative)                                                                                                                                                                                                                                                                |
+| `totp.clockOffsetMs: number`                                                                | Current clock offset in ms                                                                                                                                                                                                                                                                                                                              |
+| `totp.toURI(): string` / `TOTP.fromURI(uri: string): TOTP`                                  | Serialize / restore TOTP                                                                                                                                                                                                                                                                                                                                |
+| `new HOTP(options: HotpOptions)`                                                            | Validate options synchronously                                                                                                                                                                                                                                                                                                                          |
+| `hotp.generate(counter?: number): string`                                                   | Generate code; defaults to the constructor counter                                                                                                                                                                                                                                                                                                      |
+| `hotp.verify(token: string, options?: HotpVerifyOptions): number \| null`                   | Return counter delta or `null`                                                                                                                                                                                                                                                                                                                          |
+| `hotp.toURI(): string` / `HOTP.fromURI(uri: string): HOTP`                                  | Serialize / restore HOTP                                                                                                                                                                                                                                                                                                                                |
+| `Secret.fromBase32(s: string, options?: ParseOptions): Secret`                              | Parse Base32; lenient by default (non-string input throws `INVALID_SECRET_CONTAINER`)                                                                                                                                                                                                                                                                   |
+| `Secret.fromBytes(bytes: Uint8Array \| Uint8ClampedArray \| ArrayBuffer): Secret`           | Copy bytes (8-bit unsigned views + `ArrayBuffer`); empty throws `EMPTY_SECRET`, other container types throw `INVALID_SECRET_CONTAINER`                                                                                                                                                                                                                  |
+| `Secret.generate(bytes = 20): Secret`                                                       | Generate via the internal `RandomSource` registry; on WeChat no default source is registered, see limitations                                                                                                                                                                                                                                           |
+| `secret.toBase32(): string`                                                                 | Canonical uppercase, unpadded Base32                                                                                                                                                                                                                                                                                                                    |
+| `secret.bytes` / `secret.byteLength` / `secret.bitLength`                                   | Byte view (copy) / byte length / bit length                                                                                                                                                                                                                                                                                                             |
+| `secret.toJSON(): string`                                                                   | Always `[REDACTED]`; `JSON.stringify` is safe                                                                                                                                                                                                                                                                                                           |
+| `OTPAuthURI.parse(uri: string, options?: ParseOptions): OtpAuthParams`                      | Parse `otpauth://`; unknown query parameters and type-inapplicable ones (TOTP `counter`, HOTP `period`) are ignored; the label splits per the Key URI Format ABNF (`:` or `%3A`, spaces after it are padding). Invalid label (missing/empty/colon-containing `account`, unencodable segment) or a repeated known parameter throws `INVALID_OTPAUTH_URI` |
+| `OTPAuthURI.build(params: OtpAuthParams): string`                                           | Generate a canonical `otpauth://`; the label derives from `account` only (required, and must not contain a colon, else `INVALID_OTPAUTH_URI`). The label prefix is omitted (leaving only `issuer=`) when `issuer` contains a colon or `account` starts with a space                                                                                     |
+| `interface ParseOptions { strict?: boolean }`                                               | Shared by `Secret.fromBase32` and `OTPAuthURI.parse`                                                                                                                                                                                                                                                                                                    |
+| `OtpAlgorithm` / `OtpType`                                                                  | String-valued constants; literals such as `"SHA1"` also work                                                                                                                                                                                                                                                                                            |
+| `class OtpError extends Error { readonly code: OtpErrorCode; readonly codeString: string }` | Stable code for branching (`codeString` keeps the raw code when unmapped)                                                                                                                                                                                                                                                                               |
 
 ## Strict Base32
 
@@ -151,6 +155,27 @@ try {
 | `A` (tail length 1, decodes to 0 bytes)                  | 1             | `SECRET_TOO_SHORT`    | `SECRET_TOO_SHORT` (same code)        |
 | `AAA` / `MZXW6Y` (impossible tail length)                | 3 / 6         | OK                    | `INVALID_BASE32_PADDING`              |
 | `AB1` (illegal character)                                | 3             | `INVALID_BASE32_CHAR` | `INVALID_BASE32_CHAR` (checked first) |
+
+## otpauth label semantics
+
+The label is the only source of the account name. Normative text is Google's Key URI Format
+(IANA provisional scheme `otpauth`, CRI #13829 — **not** an RFC):
+`label = accountname / issuer (":" / "%3A") *"%20" accountname`.
+
+- **Splitting**: the separator is the first `:` or `%3A` (hex case-insensitive) in the **raw**
+  string; spaces and `%20` right after it are padding. Without a separator the whole label is the
+  account. This does not depend on the `issuer` query parameter (`issuer` still wins as a value).
+- **Same contract on both sides (fail-closed)**: a missing / empty / colon-containing `account`,
+  a label segment that cannot be percent-encoded (lone surrogate), or a repeated known query
+  parameter (`secret` / `issuer` / `algorithm` / `digits` / `period` / `counter`) →
+  `INVALID_OTPAUTH_URI`. So `build(parse(uri))` can never throw.
+- **The label prefix is optional**: when `issuer` contains a colon (the `issuer` _parameter_ is
+  `pchar`, i.e. colons are allowed there, while the label prefix is not) or `account` starts with
+  a space (it would be stripped as padding), `build` writes only the `issuer=` parameter and
+  omits the label prefix.
+- **Known deviation (lenient superset)**: raw spaces after the separator are stripped as padding
+  too. The ABNF only mentions `%20`, and a raw space is not even a legal URI character — some
+  issuers emit it anyway, so it is tolerated. Pre-clean the label if you need strictness.
 
 ## Error codes
 
@@ -177,7 +202,7 @@ All failures throw `OtpError` with a fixed `code`. Messages never contain secret
 | `INVALID_TOKEN`            | Token is not a string, is not numeric, or its length differs from `digits`                                                                                                                                                                                                                                       |
 | `CRYPTO_FAILED`            | Internal HMAC failure (native crypto error); no key material is leaked                                                                                                                                                                                                                                           |
 | `CRYPTO_NOT_INITIALIZED`   | No provider registered; import the package barrel                                                                                                                                                                                                                                                                |
-| `INVALID_OTPAUTH_URI`      | `uri` is not a string, does not start with `otpauth://` (case-insensitive), or `build` received a non-string / unencodable `issuer`·`account`                                                                                                                                                                    |
+| `INVALID_OTPAUTH_URI`      | `uri` is not a string, does not start with `otpauth://` (case-insensitive), a known query parameter repeats, the label is invalid (missing / empty / colon-containing `account`, or a label segment that cannot be percent-encoded), or `build` got a non-string / unencodable `issuer`·`account`                |
 | `UNSUPPORTED_OTPAUTH_TYPE` | Type is not `totp` / `hotp` (parse and build)                                                                                                                                                                                                                                                                    |
 | `NOT_IMPLEMENTED`          | Reserved fallback for an error code the platform cannot map (never thrown by the library; `codeString` keeps the raw code)                                                                                                                                                                                       |
 

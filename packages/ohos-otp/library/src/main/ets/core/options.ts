@@ -115,10 +115,23 @@ export interface OtpAuthParams {
   secret: string;
   algorithm: string;
   digits: number;
+  // period（仅 totp）/ counter（仅 hotp）按 type 判别，但刻意**不**建模为判别联合：
+  // ArkTS 不支持字面量类型，跨 core ↔ .ets 边界的公开签名只能用基础类型（见根 AGENTS.md）。
   period?: number;
   counter?: number;
+  /**
+   * 可选。issuer 参数是 pchar（RFC 3986 允许冒号），但 label 前缀不允许；因此 **build 在
+   * issuer 含冒号时省略 label 前缀、只写 `issuer=` query**，保证 `build → parse` 无损往返。
+   */
   issuer?: string;
-  account?: string;
+  /**
+   * **必填**（Key URI Format 的 label 唯一来源），且不得含冒号。
+   * parse 与 build 口径一致：parse 要求 URI 里有非空且不含冒号的 account，build 拒绕
+   * 缺失 / 为空 / 含冒号的 account —— 因此 `build(parse(uri))` 恒可序列化。
+   * 以空格开头时 build 省略 label 前缀（否则会被当作 ABNF 的分隔符 padding 剥掉）。
+   */
+  account: string;
+  /** 仅 parse 回填：整体解码后的 label，不保证能反推出 issuer/account。 */
   label?: string;
 }
 

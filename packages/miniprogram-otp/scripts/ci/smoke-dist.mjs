@@ -39,7 +39,12 @@ assert.equal(hotp.generate(0), "755224");
 assert.equal(hotp.generate(1), "287082");
 assert.equal(hotp.verify("287082", { counter: 1 }), 0);
 
-const totp = new m.TOTP({ secret: seed, digits: 8 });
+const totp = new m.TOTP({
+  secret: seed,
+  digits: 8,
+  issuer: "ACME",
+  account: "alice",
+});
 assert.equal(totp.generate(59000), "94287082");
 assert.equal(totp.remaining(59000), 1);
 assert.equal(totp.progress(15000), 0.5);
@@ -47,6 +52,12 @@ assert.equal(totp.progress(15000), 0.5);
 const uri = totp.toURI();
 assert.equal(m.TOTP.fromURI(uri).generate(59000), "94287082");
 assert.equal(m.OTPAuthURI.parse(uri).type, m.OtpType.TOTP);
+// account 是 label 的唯一来源：缺失时构建期 fail-closed（不产出空 label 的 URI）
+assert.throws(
+  () => new m.TOTP({ secret: seed, digits: 8 }).toURI(),
+  (e) =>
+    e instanceof m.OtpError && e.code === m.OtpErrorCode.INVALID_OTPAUTH_URI,
+);
 
 const secret = m.Secret.fromBase32("JBSWY3DPEHPK3PXP");
 assert.equal(secret.byteLength, 10);

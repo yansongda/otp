@@ -18,11 +18,31 @@
   `INVALID_SECRET_CONTAINER`；`ArrayBuffer` 入参改为真正的拷贝语义（原先是内存别名）
 - `OTPAuthURI.parse` 的 `digits` / `period` / `counter` 只认纯十进制整数；
   `OTPAuthURI.build` 对非法参数改为抛错
+- `OTPAuthURI` label 语义按 Key URI Format 的 ABNF 收敛：分隔符是「原始串中首个 `:` 或
+  `%3A`（大小写不敏感）」，与 query 里有没有 `issuer` 无关；`issuer` 参数仍优先于 label 前缀，
+  但不再影响切分；分隔符后的 `%20`（以及原始空格）按 padding 剥离
+- `OTPAuthURI.parse` 与 `build` 的 label 契约统一为 fail-closed（此前 parse 放宽，导致「解析
+  出来的参数要等到 `toURI()` 才抛错」）：`account` 缺失 / 为空 / 含冒号（明文 "Neither issuer
+  nor account name may themselves contain a colon"）、label 段不可百分号编码（孤立代理字符）、
+  已知 query 参数（secret / issuer / algorithm / digits / period / counter）重复出现 →
+  `INVALID_OTPAUTH_URI`。因此 `build(parse(uri))` 恒可序列化
+- `OTPAuthURI.build` / `toURI()` 的 `account` 改为**必填**（缺失或空串抛 `INVALID_OTPAUTH_URI`）：
+  Key URI Format 要求 label 必填，而 label 只能由 `account` 派生；`issuer` 仍可省略
+- `OTPAuthURI.build` / `toURI()`：`issuer` 含冒号或 `account` 以空格开头**不再报错**，改为省略
+  label 前缀、只写 `issuer=` 参数（`issuer` 参数是 pchar，允许冒号；label 前缀不允许）
+- `OtpAuthParams.account` 由可选改为**必填**（类型级；JS / JSON 调用方仍由运行期校验兜底）
+- 分隔符后的**原始空格**也按 padding 剥离：`ACME: alice` 的 `account` 从 `" alice"` 变为
+  `"alice"`（规范只写 `%20`，此处为宽容超集，已在 README 标注）
+- **存量数据迁移（一次性）**：1.x 在无 `account` 时产出的 `otpauth://totp/?secret=…`（以及已经
+  印出去的二维码）现在会被 `parse` / `TOTP.fromURI` / `HOTP.fromURI` 以 `INVALID_OTPAUTH_URI`
+  拒收。用存下来的 `secret` 重建并补 `account` / `issuer`：
+  `new TOTP({ secret, issuer, account }).toURI()`（或 `OTPAuthURI.build(params)`）
 - `HOTP.verify` 不再接受 `timestamp`、`TOTP.verify` 不再接受 `counter`（对象字面量会编译失败）
 - `verify` 校验顺序改为「配置类先于输入类」：坏 token 与坏 `counter` / `window` 同时出现时
   返回 `INVALID_COUNTER` / `INVALID_WINDOW`（此前 `INVALID_TOKEN`）
 - 构造期校验顺序调整为 algorithm 先于 digits：`{ algorithm: "MD5", digits: 5 }` 两项同时
   非法时现在返回 `INVALID_ALGORITHM`（此前 `INVALID_DIGITS`）
+- `OTPAuthURI.parse` 的 `issuer=` 空 query 值按「未提供」处理，不再抹掉 label 里的合法 issuer
 - `strict` 模式解单字符 secret（如 `"A"`）：`INVALID_BASE32_PADDING` → `SECRET_TOO_SHORT`
   （与宽松模式同码）
 
@@ -69,6 +89,9 @@
 - `minSecretBits` 非法值改为 fail-closed（此前 `NaN > 0` 为 false 会**静默关闭**强度校验）
 - `Secret.generate(bytes)` 长度越界改报 `INVALID_SECRET_LENGTH`（此前误用 `SECRET_TOO_WEAK`）
 - `syncClockOffset(1.5)` 改报 `INVALID_CLOCK_OFFSET`（此前误用 `INVALID_WINDOW`）
+- `OTPAuthURI.parse` 的 label 分隔符按 ABNF 识别：`%3A` 与 `%3a` 无条件当分隔符
+  （此前只在 query `issuer` 与前缀相等时才切，导致规范的 `issuer%3Aaccount` 形态丢 issuer），
+  并剥离分隔符后的空格 padding（`*"%20"`，如规范示例 `Big%20Corporation%3A%20alice%40bigco.com`）
 - 错误模型改造本身对 npm 用户无破坏性变更（仅新增 `OtpError.codeString`）；本版本的其它破坏性变更见上方 Breaking changes
 
 ### Removed

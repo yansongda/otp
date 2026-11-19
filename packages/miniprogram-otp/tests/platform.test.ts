@@ -14,6 +14,7 @@ import {
   Secret,
   TOTP,
 } from "../src/index";
+import type { OtpAuthParams } from "../src/types";
 
 /** 期望抛出指定错误码（断言 code 比消息匹配更精确）。 */
 function thrownCode(fn: () => unknown): string {
@@ -102,6 +103,64 @@ describe("platform barrel", () => {
     expect(params.period).toBe(60);
     expect(params.issuer).toBe("ACME");
   });
+  it("OTPAuthURI label contract matches core", () => {
+    // label 的唯一来源是 account：缺失 / 为空 / 含冒号 → parse 与 build 都 fail-closed
+    const base = {
+      type: OtpType.TOTP,
+      secret: "JBSWY3DPEHPK3PXP",
+      algorithm: OtpAlgorithm.SHA1,
+      digits: 6,
+    };
+    // 造「运行时会漏字段」的入参（TS 类型已强制 account 必填，JS 调用方仍可能漏）
+    const asParams = (raw: Record<string, unknown>): OtpAuthParams =>
+      raw as unknown as OtpAuthParams;
+    for (const extra of [
+      {},
+      { issuer: "ACME" },
+      { account: "" },
+      { issuer: "ACME", account: "" },
+    ]) {
+      expect(
+        thrownCode(() => OTPAuthURI.build(asParams({ ...base, ...extra }))),
+      ).toBe("INVALID_OTPAUTH_URI");
+    }
+    // parse 同口径：空 label、account 含冒号（规范禁止，任何解析器都会切开）
+    expect(
+      thrownCode(() =>
+        OTPAuthURI.parse("otpauth://totp/?secret=JBSWY3DPEHPK3PXP&issuer=ACME"),
+      ),
+    ).toBe("INVALID_OTPAUTH_URI");
+    expect(
+      thrownCode(() =>
+        OTPAuthURI.parse("otpauth://totp/ACME:a%3Ab?secret=JBSWY3DPEHPK3PXP"),
+      ),
+    ).toBe("INVALID_OTPAUTH_URI");
+
+    // 分隔符按 Key URI Format 的 ABNF：`:` 或 `%3A`（与 query 里有没有 issuer 无关）
+    const encodedSeparator = OTPAuthURI.parse(
+      "otpauth://totp/ACME%3Aalice?secret=JBSWY3DPEHPK3PXP",
+    );
+    expect(encodedSeparator.issuer).toBe("ACME");
+    expect(encodedSeparator.account).toBe("alice");
+
+    // issuer **参数**允许冒号（RFC 3986 pchar），label 前缀不允许 → 省略前缀，往返稳定
+    const uri = OTPAuthURI.build({
+      ...base,
+      issuer: "AC:ME",
+      account: "alice",
+    });
+    expect(uri).toBe(
+      "otpauth://totp/alice?secret=JBSWY3DPEHPK3PXP&issuer=AC%3AME&algorithm=SHA1",
+    );
+    expect(OTPAuthURI.build(OTPAuthURI.parse(uri))).toBe(uri);
+
+    // 类型层契约：漏 account 必须编译失败
+    expect(() =>
+      // @ts-expect-error account 必填
+      OTPAuthURI.build({ ...base }),
+    ).toThrow();
+  });
+
   it("errorCodes come from core and stay in sync", () => {
     // 平台不再手抄码表：取值集合由 @yansongda/otp-core 唯一提供
     expect(Object.keys(OtpErrorCode).length).toBe(22);
@@ -185,6 +244,7 @@ describe("platform barrel", () => {
         secret: "JBSWY3DPEHPK3PXP",
         algorithm: OtpAlgorithm.SHA1,
         digits: 6,
+        account: "alice",
       });
     } catch (error) {
       thrown = error;
@@ -208,6 +268,33 @@ describe("platform barrel", () => {
     expect(
       thrownCode(() => totp.verify("287082", { timestamp: 59000, window: 11 })),
     ).toBe("INVALID_WINDOW");
+  });
+
+  it("non-string inputs fail closed instead of throwing TypeError", () => {
+    // 小程序是 JS 调用方：secret / token / issuer 类型不对时必须是 OtpError + 可分类码，
+    // 不得漏「input.replace is not a function」这类原生 TypeError
+    expect(thrownCode(() => Secret.fromBase32(123 as unknown as string))).toBe(
+      "INVALID_SECRET_CONTAINER",
+    );
+    expect(
+      thrownCode(() =>
+        new TOTP({ secret: "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ" }).verify(
+          undefined as unknown as string,
+        ),
+      ),
+    ).toBe("INVALID_TOKEN");
+    // 孤立代理字符（如被 slice 截断的 emoji）→ INVALID_OTPAUTH_URI（不是 URIError）
+    expect(
+      thrownCode(() =>
+        OTPAuthURI.build({
+          type: OtpType.TOTP,
+          secret: "JBSWY3DPEHPK3PXP",
+          algorithm: OtpAlgorithm.SHA1,
+          digits: 6,
+          account: "👨‍👩‍👧".slice(0, 1),
+        }),
+      ),
+    ).toBe("INVALID_OTPAUTH_URI");
   });
 
   it("null options behave like undefined", () => {
