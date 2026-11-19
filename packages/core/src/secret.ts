@@ -8,6 +8,7 @@
 import { requireRandom } from "./crypto";
 import { otpFail } from "./errors";
 import { decode, decodeStrict, encode } from "./internal/base32";
+import { toByteView } from "./internal/bytes";
 import { isStrictOption, type ParseOptions } from "./options";
 
 export class Secret {
@@ -52,13 +53,9 @@ export class Secret {
   static fromBytes(
     bytes: Uint8Array | Uint8ClampedArray | ArrayBuffer,
   ): Secret {
-    // 8 位无符号视图可直接作为拷贝源；ArrayBuffer 需先包一层视图；其余容器一律拒绝
-    let view: Uint8Array | Uint8ClampedArray;
-    if (bytes instanceof Uint8Array || bytes instanceof Uint8ClampedArray) {
-      view = bytes;
-    } else if (bytes instanceof ArrayBuffer) {
-      view = new Uint8Array(bytes);
-    } else {
+    // 容器判定集中在 internal/bytes.ts：与 Secret.generate 的随机源校验同源，避免两处宽严不一致
+    const view = toByteView(bytes);
+    if (view === undefined) {
       otpFail("INVALID_SECRET_CONTAINER");
     }
     const copy = new Uint8Array(view);
@@ -80,7 +77,27 @@ export class Secret {
     if (!Number.isSafeInteger(bytes) || bytes < 1 || bytes > 4096) {
       otpFail("INVALID_SECRET_LENGTH");
     }
-    return new Secret(new Uint8Array(requireRandom().random(bytes)));
+    let generated: Uint8Array;
+    try {
+      generated = requireRandom().random(bytes);
+    } catch (error) {
+      // 随机源契约：失败必须抛 name === "OtpError" 的错误（core otpFail / 平台 OtpError）；
+      // 其余异常（原生 TypeError 等）视为实现缺陷，与 HmacProvider 同一收敛策略。
+      if (error instanceof Error && error.name === "OtpError") {
+        throw error;
+      }
+      otpFail("CRYPTO_FAILED");
+    }
+    // 先判容器再取 length：字符串 / array-like 的 length 可能「恰好合法」，
+    // 而 new Uint8Array(字符串) 会得到 0 字节（空密钥，HMAC 退化为全零密钥）；
+    // null / undefined 则连 .length 都取不到，会漏出 TypeError 而不是 OtpError。
+    // 容器规则与 fromBytes 同源（internal/bytes.ts）：Uint8ClampedArray / ArrayBuffer 放行——
+    // 否则自定义随机源换一种「8 位无符号视图」就从「能用」变成 CRYPTO_FAILED。
+    const view = toByteView(generated);
+    if (view === undefined || view.length !== bytes) {
+      otpFail("CRYPTO_FAILED");
+    }
+    return new Secret(new Uint8Array(view));
   }
 
   /** 字节视图：返回拷贝，外部改动不影响内部。 */

@@ -4,6 +4,8 @@
  */
 import { describe, expect, it } from "bun:test";
 import { OtpError } from "../../src/errors";
+import { algorithmSpec } from "../../src/internal/algorithm";
+import { OtpAlgorithm } from "../../src/options";
 import { hmac } from "../../src/pure-js/hmac";
 import { PureJsHmac } from "../../src/pure-js/pure-js-hmac";
 import { sha1 } from "../../src/pure-js/sha1";
@@ -57,8 +59,8 @@ describe("provider", () => {
     });
   }
 
-  it("provider_wrapsUnexpectedFailureAsCryptoFailed", () => {
-    // 非法算法值穿透（仅测试构造）：固定错误码，不泄漏底层错误
+  it("provider_unknownAlgorithm_throwsInvalidAlgorithm", () => {
+    // 非法算法值穿透（仅测试构造）：未知算法是「算法不被接受」，不是 crypto 层故障
     let thrown: unknown = null;
     try {
       provider.sign("MD5" as "SHA1", new Uint8Array(1), new Uint8Array(1));
@@ -66,6 +68,44 @@ describe("provider", () => {
       thrown = e;
     }
     expect(thrown instanceof OtpError).toBe(true);
-    expect((thrown as OtpError).code).toBe("CRYPTO_FAILED");
+    expect((thrown as OtpError).code).toBe("INVALID_ALGORITHM");
+  });
+
+  it("provider_prototypeKeyAlgorithm_throwsInvalidAlgorithm", () => {
+    // 算法查表一律用 switch，不用属性索引：`表[algorithm]` 会命中 Object.prototype 的继承键
+    // （"constructor" / "toString" 拿到函数而非 undefined），最终被 catch 误收敛为
+    // CRYPTO_FAILED，把「算法不被接受」错报成 crypto 故障。
+    for (const algorithm of ["constructor", "toString", "hasOwnProperty"]) {
+      let thrown: unknown = null;
+      try {
+        provider.sign(
+          algorithm as "SHA1",
+          new Uint8Array(1),
+          new Uint8Array(1),
+        );
+      } catch (e) {
+        thrown = e;
+      }
+      expect(thrown instanceof OtpError).toBe(true);
+      expect((thrown as OtpError).code).toBe("INVALID_ALGORITHM");
+    }
+  });
+
+  it("provider_everyAlgorithmMatchesSpecTable", () => {
+    // 算法事实单源（internal/algorithm.ts）：`OtpAlgorithm` 的每个成员都必须有事实条目、
+    // 有纯 JS 哈希映射，且事实表里的 digestLength 与哈希函数真实输出长度一致。
+    // 新增算法时漏改任一处都会在这里红，而不是线上才算错码或误报 INVALID_ALGORITHM。
+    for (const algorithm of Object.values(OtpAlgorithm)) {
+      const spec = algorithmSpec(algorithm);
+      if (spec === undefined) {
+        throw new Error(`internal/algorithm.ts 缺少算法事实：${algorithm}`);
+      }
+      const digest = provider.sign(
+        algorithm,
+        new Uint8Array(20),
+        new Uint8Array(8),
+      );
+      expect(digest.length).toBe(spec.digestLength);
+    }
   });
 });

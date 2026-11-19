@@ -98,10 +98,25 @@ ArkTS/ESM 的 `import` 是静态且传递的：公开类若在顶层从「含 `@
 
 - **不缓存 `Mac` / `SymKey`**：缓存可把单次签名从 6.6µs 降到 2.9µs，但 `SymKey.release()` 在 API 24 公开类型里不存在（只能等 GC），且复用 `Mac` 每次必须 `initSync`——省掉会**静默算错 digest**。收益不抵代价。
 - **不要用内联微基准决策**：本库模块间全部跨模块导入，跨模块解释器开销（~11–13µs/次）远大于函数体本身。曾经把 base32 解码改成单遍位缓冲：内联基准快 67%，真实调用路径反而慢 10%+，已回退。唯一有效的方法是 `bun run bench` / `bun run bench:ab`（同进程交错测量、min-of-7、17 个热路径场景 + 2 个 URI 冷路径场景）。
+- **provider 契约校验留在热路径没问题**：engine 每次 `sign` 的 try/catch + `instanceof` + 摘要长度比对，用零成本 stub provider 隔离测得 ~7ns/次（`generate` 35→44ns、`verify w=2` 274→304ns）；相对 pure-js SHA1 HMAC 3.1µs / ohos 平台签名 2.9–6.6µs 是 +0.2% 量级，`bench:ab` 17 个场景全部 same。不要再为它加缓存或把校验挪到注册期（注册期自检挡不住后续违约）。
 
 ### 3.4 同步 API
 
 全部走 `*Sync`（ohos：`convertKeySync`/`initSync`/`updateSync`/`doFinalSync`/`generateRandomSync`）。8 字节 HMAC 是微秒级计算，避免 Promise 传染与竞态。
+
+### 3.5 provider 契约（`HmacProvider` / `RandomSource`）
+
+平台实现（mp 的 pure-js、ohos 的 `CryptoSource`）与自定义 provider 必须同时满足：
+
+| 项 | 契约 | 违约结果 |
+| --- | --- | --- |
+| 失败表达 | 抛 `name === "OtpError"` 的错误（core `otpFail` / 平台 `OtpError`） | 其余任何值（`TypeError`、字符串、`null`…）→ `CRYPTO_FAILED`；`OtpError` 原样上抛（保留精确码） |
+| `sign` 返回值 | `Uint8Array`，长度 = 算法摘要长度（SHA1=20 / SHA256=32 / SHA512=64，见 `internal/digest.ts`） | 非法类型 / 长度不匹配 → `CRYPTO_FAILED`（engine 只认 `Uint8Array`，不复用 `Secret` 侧的宽容器判定） |
+| `random` 返回值 | 同步返回，长度 = 请求的 `bytes`；容器按 `internal/bytes.ts`（`Uint8Array` / `Uint8ClampedArray` / `ArrayBuffer`） | 类型 / 长度不符 → `CRYPTO_FAILED` |
+| 入参 | `key` / `message` **只读**：不得修改、`fill`、跨调用保留引用 | 无错误码可诊断（表现为「码不对」）：库每次公开调用传一份密钥临时副本，同一次调用的窗口扫描复用该副本 |
+| 错误收敛 | 收敛时不保留原因（无 `cause`、不打日志） | 要保留精确码必须自己抛 `OtpError` |
+
+已知限制：`sign` 的返回值判定用 `instanceof Uint8Array`，跨 realm（Worker / 独立 JS 上下文）返回的 typed array 会被判违约。
 
 ---
 
@@ -174,6 +189,7 @@ code     = (v mod 10^digits) 左补零至 digits 位          # §5.3 Step 3
 
 | RFC 要求 | 出处 | 实现点 |
 | --- | --- | --- |
+| HMAC 摘要长度 / 分块长度 | RFC 2104 §2、各 SHA 规范 | `internal/algorithm.ts` **单源**（digestLength 20/32/64、blockSize 64/64/128）；engine 按此校验 provider 返回值长度，pure-js 与 ohos 映射分别由单测与守卫对拍 |
 | secret ≥ 128bit，推荐 160bit | RFC 4226 §4 R6 | `Secret.bitLength` + 可选 `minSecretBits`（默认不强制） |
 | 最少 6 位，可能 7/8 位 | RFC 4226 §5.3 | `digits` 允许 6/7/8 |
 | 动态截断屏蔽最高位 | RFC 4226 §5.3 | `truncate.ts` 的 `& 0x7f` |

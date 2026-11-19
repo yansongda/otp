@@ -7,6 +7,7 @@
 import type { HmacProvider } from "../crypto";
 import { otpFail } from "../errors";
 import { MAX_VERIFY_WINDOW } from "../options";
+import { algorithmSpec } from "./algorithm";
 import { isSafeCounter, toBytes } from "./counter";
 import { format as formatDigits } from "./digits";
 import { constantTimeEquals } from "./time-step";
@@ -23,7 +24,38 @@ export function generate(
   params: EngineParams,
   counter: number,
 ): string {
-  const digest = provider.sign(params.algorithm, params.key, toBytes(counter));
+  const message = toBytes(counter);
+  let digest: Uint8Array;
+  try {
+    digest = provider.sign(params.algorithm, params.key, message);
+  } catch (error) {
+    // provider 契约：失败必须抛 name === "OtpError" 的错误（core otpFail / 平台 OtpError）。
+    // 已知错误原样上抛（保留 INVALID_ALGORITHM / CRYPTO_FAILED 等精确码）；
+    // 其他值（TypeError、字符串、null…）视为 provider 实现缺陷，统一收敛。
+    if (error instanceof Error && error.name === "OtpError") {
+      throw error;
+    }
+    otpFail("CRYPTO_FAILED");
+  }
+  if (!(digest instanceof Uint8Array)) {
+    // provider 违反返回值契约（非 Uint8Array）同样视为 crypto 层缺陷。
+    // 这里刻意只认 Uint8Array，不复用 Secret 侧的「8 位无符号视图」宽判（internal/bytes.ts）：
+    // 摘要的语义就是 Uint8Array，平台 provider 也都返回它，收紧能尽早暴露实现偏差。
+    // 已知限制：跨 realm（Worker / 独立 JS 上下文）返回的 typed array 会因 instanceof 失败被判违约。
+    otpFail("CRYPTO_FAILED");
+  }
+  const spec = algorithmSpec(params.algorithm);
+  if (spec === undefined) {
+    // 未知算法是「算法不被接受」而不是 crypto 层故障：与 pure-js / ohos provider 的
+    // INVALID_ALGORITHM 同一语义（公共 API 已在构造期与 URI parse 校验，这里是防御分支）。
+    otpFail("INVALID_ALGORITHM");
+  }
+  if (digest.length !== spec.digestLength) {
+    // 摘要长度必须与算法匹配（SHA1=20 / SHA256=32 / SHA512=64，见 internal/algorithm.ts）：
+    // 长度不对时截断会静默产出「看起来合法」的错误码（过短由 truncate 兜底，过长 / 算法不匹配
+    // 只能在这里拦），统一收敛。
+    otpFail("CRYPTO_FAILED");
+  }
   return formatDigits(truncateApply(digest), params.digits);
 }
 

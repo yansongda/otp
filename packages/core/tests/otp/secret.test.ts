@@ -3,6 +3,7 @@
  */
 import { afterEach, describe, expect, it } from "bun:test";
 import { registerRandom, reset } from "../../src/crypto";
+import { OtpError, OtpErrorCode } from "../../src/errors";
 import { decode } from "../../src/internal/base32";
 import { installPureJsHmac } from "../../src/pure-js/pure-js-hmac";
 import { Secret } from "../../src/secret";
@@ -173,6 +174,68 @@ describe("secret", () => {
     expectCode(() => Secret.generate(0), "INVALID_SECRET_LENGTH");
     expectCode(() => Secret.generate(4097), "INVALID_SECRET_LENGTH");
     expectCode(() => Secret.generate(1.5), "INVALID_SECRET_LENGTH");
+  });
+
+  it("generate_sourceWrongLength_normalizedToCryptoFailed", () => {
+    // 随机源违反长度契约：静默接受会让密钥强度与调用方预期不符
+    registerRandom({ random: (n: number) => new Uint8Array(n + 1) });
+    expectCode(() => Secret.generate(20), "CRYPTO_FAILED");
+  });
+
+  it("generate_sourceNonUint8Array_normalizedToCryptoFailed", () => {
+    // 字符串 / array-like 的 length 可能「恰好合法」，而 new Uint8Array(str) 会得到 0 字节
+    // （静默生成空密钥）；null 则连 .length 都取不到，会漏出 TypeError 而不是 OtpError。
+    registerRandom({
+      random: (n: number) => "x".repeat(n) as unknown as Uint8Array,
+    });
+    expectCode(() => Secret.generate(20), "CRYPTO_FAILED");
+
+    registerRandom({ random: () => null as unknown as Uint8Array });
+    expectCode(() => Secret.generate(20), "CRYPTO_FAILED");
+  });
+
+  it("generate_sourceByteViews_accepted", () => {
+    // 容器规则与 Secret.fromBytes 同源（internal/bytes.ts）：8 位无符号视图（Uint8ClampedArray）
+    // 与 ArrayBuffer 是合法随机源返回值，不得因为「不是严格 Uint8Array」被误判为 crypto 故障。
+    registerRandom({
+      random: (n: number) =>
+        new Uint8ClampedArray(n).fill(7) as unknown as Uint8Array,
+    });
+    const clamped = Secret.generate(20);
+    expect(clamped.byteLength).toBe(20);
+    expect(clamped.bytes[0]).toBe(7);
+
+    registerRandom({
+      random: (n: number) => new ArrayBuffer(n) as unknown as Uint8Array,
+    });
+    expect(Secret.generate(20).byteLength).toBe(20);
+  });
+
+  it("generate_sourceThrows_normalized", () => {
+    // 随机源契约：失败必须抛 name === "OtpError" 的错误；其余异常收敛为 CRYPTO_FAILED
+    registerRandom({
+      random: () => {
+        throw new TypeError("native rng exploded");
+      },
+    });
+    expectCode(() => Secret.generate(20), "CRYPTO_FAILED");
+
+    const providerError = new OtpError(
+      OtpErrorCode.CRYPTO_FAILED,
+      "CRYPTO_FAILED",
+    );
+    registerRandom({
+      random: () => {
+        throw providerError;
+      },
+    });
+    let thrown: unknown = null;
+    try {
+      Secret.generate(20);
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBe(providerError);
   });
 
   it("toJSON_redactsSecret", () => {

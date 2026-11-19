@@ -28,6 +28,7 @@ const LIB_SRC = 'library/src/main/ets';
 const BARREL = 'library/Index.ets';
 const ERROR_FILE = `${LIB_SRC}/OtpError.ets`;
 const CORE_ERRORS = `${LIB_SRC}/core/errors.ts`;
+const CORE_ALGORITHM = `${LIB_SRC}/core/internal/algorithm.ts`;
 const KIT_SOURCE = `${LIB_SRC}/internal/CryptoSource.ets`;
 
 /** 构建产物与依赖目录不参与扫描。 */
@@ -242,6 +243,27 @@ check('asOtpErrorCode 覆盖全部错误码', () => {
   const missing = names.filter((n) => !cases.has(n));
   if (missing.length > 0) throw new Error(`缺少 case：${missing.join(', ')}`);
   return `${cases.size} 个 case`;
+});
+
+check('CryptoSource 算法映射与 core 算法事实表逐项对拍', () => {
+  // toMacAlgName 是平台手写映射（.ets 不能由 sync-core 生成）：core 加了算法而这里没跟上，
+  // 只会表现为运行期 INVALID_ALGORITHM；default 一旦改成 return 'SHA1' 更是静默降级。
+  const coreAlgs = new Set(
+    [...readText(CORE_ALGORITHM).matchAll(/case ["']([A-Z0-9]+)["']:\s*return/g)].map((m) => m[1]),
+  );
+  const fn = /function toMacAlgName\(algorithm: string\): string \{([\s\S]*?)\n\}/.exec(readText(KIT_SOURCE));
+  if (fn === null) throw new Error('未找到 toMacAlgName 定义');
+  const body = fn[1];
+  const platformAlgs = new Set([...body.matchAll(/case '([A-Z0-9]+)':/g)].map((m) => m[1]));
+
+  const missing = [...coreAlgs].filter((a) => !platformAlgs.has(a));
+  const extra = [...platformAlgs].filter((a) => !coreAlgs.has(a));
+  if (missing.length > 0) throw new Error(`平台映射缺少算法：${missing.join(', ')}`);
+  if (extra.length > 0) throw new Error(`平台映射多出 core 没有的算法：${extra.join(', ')}`);
+  if (!/default:[\s\S]*?otpFail\('INVALID_ALGORITHM'\)/.test(body)) {
+    throw new Error("toMacAlgName 的 default 分支必须抛 INVALID_ALGORITHM（不得静默降级 SHA1）");
+  }
+  return `${coreAlgs.size} 个算法完全一致，未知算法 fail-closed`;
 });
 
 check('OtpError 设置 name = \'OtpError\'', () => {

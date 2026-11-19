@@ -2,7 +2,9 @@
  * TOTP 公开类测试：RFC 6238 Appendix B 全量向量 + 时间偏移闭环 + 构造期校验 + URI 往返。
  */
 import { describe, expect, it } from "bun:test";
+import type { HmacProvider } from "../../src/crypto";
 import { TOTP } from "../../src/index";
+import { PureJsHmac } from "../../src/pure-js/pure-js-hmac";
 import { expectCode } from "./helpers";
 import {
   RFC6238_SHA1,
@@ -511,5 +513,21 @@ describe("totp", () => {
 
     // 入参本身非法时仍优先报 INVALID_TIMESTAMP（不被偏移掩盖）
     expectCode(() => t.generate(-1), "INVALID_TIMESTAMP");
+  });
+
+  it("mutatingProvider_cannotCorruptLaterCalls", () => {
+    // provider 契约（crypto.ts）：key / message 只读。库每次公开调用给一份临时副本，
+    // 不在实例里缓存可被 provider 改写的密钥。
+    const pure = new PureJsHmac();
+    const mutating: HmacProvider = {
+      sign(algorithm, key, message) {
+        const digest = pure.sign(algorithm, key, message);
+        key.fill(0);
+        return digest;
+      },
+    };
+    const t = new TOTP({ secret: SEEDS.SHA1_BASE32, digits: 6 }, mutating);
+    expect(t.generate(59000)).toBe("287082");
+    expect(t.generate(59000)).toBe("287082");
   });
 });

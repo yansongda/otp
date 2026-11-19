@@ -6,32 +6,45 @@
  */
 import { type HmacProvider, registerHmac } from "../crypto";
 import { otpFail } from "../errors";
-import type { AlgorithmName } from "../options";
+import { algorithmSpec } from "../internal/algorithm";
 import { hmac } from "./hmac";
 import { sha1 } from "./sha1";
 import { sha256 } from "./sha256";
 import { sha512 } from "./sha512";
 
-interface HashSpec {
-  readonly hash: (message: Uint8Array) => Uint8Array;
-  readonly blockSize: number;
-}
+type HashFunction = (message: Uint8Array) => Uint8Array;
 
-const HASH_SPECS = {
-  SHA1: { hash: sha1, blockSize: 64 },
-  SHA256: { hash: sha256, blockSize: 64 },
-  SHA512: { hash: sha512, blockSize: 128 },
-} satisfies Record<AlgorithmName, HashSpec>;
+/**
+ * 名字 → 哈希函数：这是 pure-js 的**实现细节**（core 的算法事实表只存数值，不存实现），
+ * 因此这里只映射函数本身，`blockSize` / 摘要长度一律从 `internal/algorithm.ts` 取，
+ * 不再重复一份数值。查表用 switch、不用属性索引：`表[algorithm]` 会命中 Object.prototype 的
+ * 继承键（`"constructor"` / `"toString"` 拿到函数而非 undefined），把「算法不被接受」
+ * 错报成 crypto 故障。
+ */
+function hashOf(algorithm: string): HashFunction | undefined {
+  switch (algorithm) {
+    case "SHA1":
+      return sha1;
+    case "SHA256":
+      return sha256;
+    case "SHA512":
+      return sha512;
+    default:
+      return undefined;
+  }
+}
 
 /** 纯 JS HMAC 实现（同步链路）。 */
 export class PureJsHmac implements HmacProvider {
   sign(algorithm: string, key: Uint8Array, message: Uint8Array): Uint8Array {
-    const spec: HashSpec | undefined = HASH_SPECS[algorithm as AlgorithmName];
-    if (spec === undefined) {
-      return otpFail("CRYPTO_FAILED");
+    const spec = algorithmSpec(algorithm);
+    const hash = hashOf(algorithm);
+    if (spec === undefined || hash === undefined) {
+      // 未知算法是「算法不被接受」，不是 crypto 层故障：用独立错误码
+      return otpFail("INVALID_ALGORITHM");
     }
     try {
-      return hmac(spec.hash, spec.blockSize, key, message);
+      return hmac(hash, spec.blockSize, key, message);
     } catch {
       // 固定文案：不透传底层错误、不打日志、不含 key/message
       return otpFail("CRYPTO_FAILED");

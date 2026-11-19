@@ -45,6 +45,10 @@
 - `OTPAuthURI.parse` 的 `issuer=` 空 query 值按「未提供」处理，不再抹掉 label 里的合法 issuer
 - `strict` 模式解单字符 secret（如 `"A"`）：`INVALID_BASE32_PADDING` → `SECRET_TOO_SHORT`
   （与宽松模式同码）
+- provider 错误契约收紧：provider 失败必须抛 `name === "OtpError"` 的错误，engine 只把**未知**
+  错误（非 `Error`、缺 `OtpError.name`、返回值非 `Uint8Array`）收敛为 `CRYPTO_FAILED`；已知错误码
+  原样上抛，保留 `INVALID_ALGORITHM` 等精确码（此前任意 provider 异常原样透传，调用方拿不到
+  `OtpError`）
 
 ### Added
 
@@ -60,6 +64,8 @@
 
 - 三端 `OtpError.name` 契约统一为 `OtpError`（provider 错误契约：core 的 engine 靠它区分
   「已知错误原样上抛」与「provider 实现缺陷」）；**本包此前已是该值，行为不变**，本次新增的是守卫
+- `HmacProvider` / `RandomSource` 的接口注释写明 provider 契约：`key` / `message` 只读，不得修改
+  或跨调用保留引用（库每次公开调用传一份密钥副本）；摘要长度必须与 `algorithm` 匹配
 - 错误抛出统一走 core 的 `otpFail` → 平台工厂：core 与平台不再有两条错误构造路径
 - 原型链修复改为**只在原型退化为 `Error.prototype` 时**执行（此前无条件
   `Object.setPrototypeOf` 会把 `OtpError` 子类实例的原型改回基类：`instanceof` 子类失效、
@@ -93,6 +99,17 @@
   （此前只在 query `issuer` 与前缀相等时才切，导致规范的 `issuer%3Aaccount` 形态丢 issuer），
   并剥离分隔符后的空格 padding（`*"%20"`，如规范示例 `Big%20Corporation%3A%20alice%40bigco.com`）
 - 错误模型改造本身对 npm 用户无破坏性变更（仅新增 `OtpError.codeString`）；本版本的其它破坏性变更见上方 Breaking changes
+- provider 摘要长度必须与算法匹配（SHA1=20 / SHA256=32 / SHA512=64）：不匹配统一
+  `CRYPTO_FAILED`（此前 SHA256/512 返回 20 字节摘要会被静默截断）；未知算法属「算法不被接受」，
+  统一 `INVALID_ALGORITHM`（此前与摘要故障混用同一码）
+- 随机源返回值校验：长度必须等于请求的 `bytes`；容器规则与 `Secret.fromBytes` **同源**
+  （`internal/bytes.ts`）——`Uint8Array` / `Uint8ClampedArray` / `ArrayBuffer` 放行，
+  字符串 / array-like / `null` / 其它 TypedArray 一律 `CRYPTO_FAILED`
+  （此前字符串可静默产出 0 字节空密钥，`null` 漏 `TypeError`）
+- 纯 JS provider 的算法查表改用 switch：`Object.prototype` 的继承键（如 `"constructor"`、
+  `"toString"`）会被误当成算法命中，把「算法不被接受」错报成 `CRYPTO_FAILED`
+- 算法事实（名称集合 / 摘要长度 / HMAC 分块长度）收敛到 core 的 `internal/algorithm.ts` 单源：
+  pure-js provider 只保留「算法名 → 哈希函数」映射（**无行为变化**，纯内部收敛）
 
 ### Removed
 
