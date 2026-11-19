@@ -1,4 +1,4 @@
-// AUTO-GENERATED from packages/core/src/internal/truncate.ts (core@6ab4943). DO NOT EDIT. Run: bun run sync:core
+// AUTO-GENERATED from packages/core/src/internal/truncate.ts (core@6f08177). DO NOT EDIT. Run: bun run sync:core
 /**
  * RFC 4226 §5.3 动态截断（纯函数，零平台依赖）。
  * 只做截断（屏蔽最高位，得 31 位非负整数）；取模只在 digits.format 完成。
