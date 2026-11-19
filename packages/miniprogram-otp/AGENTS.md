@@ -1,7 +1,7 @@
 # AGENTS.md —— miniprogram-otp 工程上下文
 
 > 面向所有在该仓库工作的编码 agent / 协作者。**动手前先读本文件**。
-> 设计基线：公开 API / 错误模型与 `packages/ohos-otp/library` v1.1.0 对齐；实现来自 `packages/core`（唯一源码）。
+> 设计基线：公开 API / 错误模型与 `packages/ohos-otp/library` 对齐（两者消费同一个 `packages/core`）；实现来自 `packages/core`（唯一源码）。
 
 ## 1. 项目定位
 
@@ -13,12 +13,12 @@
 
 ## 2. 分层与不变量（**改动必须遵守**）
 
-| 层            | 位置                                                                                           | 允许依赖                                                      |
-| ------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| 共享实现      | `../core/src/**`（唯一源码，本包只消费）                                                       | 零平台能力                                                    |
-| 平台类型层    | `src/types.ts`（const 对象 + 字面量联合 + 严格 DTO）、`src/errors.ts`（公开 OtpError / 18 码） | 无                                                            |
-| 平台 provider | `src/index.ts` 导入时注册 `installPureJsHmac()` + `setErrorFactory()`                          | `@yansongda/otp-core/pure-js`（paths + alias 解析，非包依赖） |
-| 出口          | `src/index.ts`（公开符号 + 构造签名类型桥）                                                    | 以上                                                          |
+| 层            | 位置                                                                                                     | 允许依赖                                                      |
+| ------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| 共享实现      | `../core/src/**`（唯一源码，本包只消费）                                                                 | 零平台能力                                                    |
+| 平台类型层    | `src/types.ts`（const 对象 + 字面量联合 + 严格 DTO）、`src/errors.ts`（公开 OtpError；码表从 core 复用） | 无                                                            |
+| 平台 provider | `src/index.ts` 导入时注册 `installPureJsHmac()` + `setErrorFactory()`                                    | `@yansongda/otp-core/pure-js`（paths + alias 解析，非包依赖） |
+| 出口          | `src/index.ts`（公开符号 + 构造签名类型桥）                                                              | 以上                                                          |
 
 1. **`src/index.ts` 是唯一公开入口**：导入时幂等调用 `installPureJsHmac()` 与 `setErrorFactory()`；core 内部模块不得从 barrel 深导出。
 2. **平台层零平台调用**（core 已是零平台）：本包不得出现 `wx.*`、`console.*`、`node:` 内置模块；平台随机数由使用方通过 `wx.getRandomValues` + `Secret.fromBytes` 提供。
@@ -26,13 +26,15 @@
 4. **secret 绝不外泄**：错误消息固定文案；`Secret` 刻意不实现 `toString()`；`toJSON()` 返回 `[REDACTED]`。
 5. **`verify` 恒定时间**：窗口内扫完所有候选后才返回首个命中 delta，禁止早退优化。
 6. **取模只在 `internal/digits.ts` 发生一次**；`truncate` 只做 `& 0x7f`（31 位非负）。
-7. **错误码冻结**：`OtpErrorCode` 恰为 18 个；v1 起仅允许新增，不得改已有字符串值。
-8. **DTO 冻结**：`HmacOptions` / `TotpOptions` / `HotpOptions` / `VerifyOptions` / `OtpAuthParams` 字段名与可选性仅允许新增可选字段。
+7. **错误码唯一来源是 core**：`src/errors.ts` 只保留平台 `OtpError`，`OtpErrorCode` 必须从 `@yansongda/otp-core` 复用（守卫脚本禁止再声明码表）；码集合现为 22 个，v1 起仅允许新增，不得改已有字符串值。新增码必须同步 core 码表 / 守卫基线 / 四份 README / CHANGELOG。
+8. **DTO 冻结**：`HmacOptions` / `TotpOptions` / `HotpOptions` / `VerifyOptions` / `OtpAuthParams` 字段名与可选性仅允许新增可选字段；`HOTP.verify` / `TOTP.verify` 由 core 分别收窄为 `HotpVerifyOptions` / `TotpVerifyOptions`（平台 type-only 转发，守卫脚本禁止重复声明）。
+9. **参数口径**：`timestamp` / `period` / `t0` / `clockOffsetMs` / `minSecretBits` 必须是安全整数（`minSecretBits` 非法时 fail-closed 抛 `INVALID_MIN_SECRET_BITS`）；`window` 上限 `MAX_VERIFY_WINDOW = 10`（barrel 导出）；TOTP 显式 `timestamp` 合法但叠加偏移后为负或超出安全整数 → `INVALID_CLOCK_OFFSET`；`Secret` 字符串/字节容器类型不对 → `INVALID_SECRET_CONTAINER`（`fromBase32` 非字符串、`fromBytes` 非 `Uint8Array` / `Uint8ClampedArray` / `ArrayBuffer`）；`token` 非字符串 → `INVALID_TOKEN`；`uri` 非字符串或 `build` 的 `issuer`·`account` 非字符串 / 无法百分号编码 → `INVALID_OTPAUTH_URI`（不得漏原生 `TypeError` / `URIError`）；`OTPAuthURI` 的 `digits` / `period` / `counter` 只认十进制整数。
+10. **provider 错误契约**：provider 失败必须抛 `name === "OtpError"` 的错误（core `otpFail` / 平台 `OtpError`）；core 的 engine 只兜未知错误，平台错误类的 `name` 不得删改。provider 对 `key` / `message` 只能读，不得修改或跨调用保留引用（库每次公开调用传入一份密钥副本，不把可写密钥跨调用复用）。engine 把未知错误收敛为 `CRYPTO_FAILED` 时**不保留原因**（无 `cause`、不打日志，避免泄漏密钥材料）；provider 想保留精确码必须自己抛 `name === "OtpError"` 的错误。
 
 其他有意差异（相对 OHOS）：
 
 - `OtpAlgorithm` 用 `const` 对象 + 联合类型，不用 `enum`；`"SHA1"` 与 `OtpAlgorithm.SHA1` 都可赋值。
-- `OtpError` 额外设置 `name` 与 `Object.setPrototypeOf`，保证微信 ES5 降级后 `instanceof` 可靠。
+- `OtpError` 设置 `name`，且**仅在原型退化为 `Error.prototype` 时**（微信 ES5 降级）执行 `Object.setPrototypeOf`：无条件重设会把子类实例的原型改回基类（`instanceof` 子类失效、原型方法丢失）。注意该修复只覆盖原生 class 语义；ES5 + 自定义子类仍需调用方自行修正原型链。
 - HMAC 为纯 JS，不使用系统 crypto。
 - 默认不注册随机源；`Secret.generate()` 在微信端抛 `CRYPTO_NOT_INITIALIZED`。
 
@@ -58,8 +60,8 @@ Bun 版本固定于 `.bun-version`（当前 `1.4.4`）。主 CI 通过 `bun-vers
 
 ## 4. 测试策略
 
-- **算法测试在 `packages/core`（242 条）**：RFC 4226 / 6238 / 4648 向量、哈希/HMAC 向量、错误码、strict base32、URI、时钟校准与随机注入。向量唯一来源 `packages/core/tests/otp/vectors.ts`，**逐字复制自 OHOS `RfcVectors.ets` 与 FIPS/RFC 官方向量，禁止自行推导或补算**。
-- 本包只保留 `tests/platform.test.ts`（9 条）：注册链路、错误工厂、类型桥、公开 API 契约。新增平台逻辑必须补测；测试数量不得下降（`scripts/ci/check-invariants.mjs` 基线 9/1）。
+- **算法测试在 `packages/core`（315 条）**：RFC 4226 / 6238 / 4648 向量、哈希/HMAC 向量、错误码、strict base32、URI、时钟校准与随机注入。向量唯一来源 `packages/core/tests/otp/vectors.ts`，**逐字复制自 OHOS `RfcVectors.ets` 与 FIPS/RFC 官方向量，禁止自行推导或补算**。
+- 本包只保留 `tests/platform.test.ts`（19 条）：注册链路、错误工厂、类型桥、公开 API 契约。新增平台逻辑必须补测；测试数量不得下降（`scripts/ci/check-invariants.mjs` 基线 19/1）。
 - 算法逻辑变更只改 `packages/core` + 其测试，**禁止在本包复制实现**。
 - 微信真机 / 开发者工具“构建 npm”冒烟仍是人工门槛，CI 无法覆盖。
 

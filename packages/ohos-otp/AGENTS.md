@@ -8,7 +8,7 @@
 - **实现全部来自 `packages/core`（唯一源码）**，经 `bun run sync:core` 生成为 `library/src/main/ets/core/**`；本包只保留薄壳、平台类型层与 crypto 实现。
 - `entry/` = 消费方 smoke demo（仅依赖 barrel，**不参与** HAR 打包）。
 - 兼容性：`compatibleSdkVersion 6.0.0(20)`（API 12–19 工程无法消费，README 已声明）。
-- 现状：本地单测 266 全绿 / 覆盖率 lines 90.92%；设备端 `ohosTest` 37/37；RFC 向量 10/10 + 18/18；`ohpm prepublish` 通过。已发布至 OHPM（当前版本以 `library/oh-package.json5` 为准）。
+- 现状：本地单测 300 全绿；设备端 `ohosTest` 38/38；RFC 向量 10/10 + 18/18；`ohpm prepublish` 通过。已发布至 OHPM（当前版本以 `library/oh-package.json5` 为准）。覆盖率门槛以 `.github/workflows/ohos.yml` 的 `COVERAGE_MIN_LINES` 为准。
 
 ## 2. 分层与不变量（**改动必须遵守**）
 
@@ -29,8 +29,9 @@
 7. **secret 绝不外泄**：库内零 `console.*`/`hilog`；`OtpError` 消息为固定文案；`Secret` 刻意不实现 `toString()`，脱敏靠 `toJSON()` → `'[REDACTED]'`。
 8. **`verify` 恒定时间**：窗口内**扫完所有候选**后才返回首个命中 delta，禁止加早退优化。
 9. **`library/example/` 随 HAR 发布，不得删除/改名**：hvigor 对 bytecode HAR 的 release 白名单目录名就是 `example`（`RELEASE_HAR_WHITE_LIST_DIR_NAME`），该目录会被原样打进包内 `package/example/`；OHPM「支持文档 / example」的 20 分完全依赖它。里面只放文档（README），不放不参与编译与 lint 的源码。缺失由 `scripts/ci/check-invariants.mjs` 与 CI 的 HAR 内容校验拦截。
+10. **provider 错误契约**：`CryptoSource` 失败必须经 core 的 `otpFail` 走平台工厂（`name === 'OtpError'`），engine 只把**未知**错误收敛为 `CRYPTO_FAILED`；未知算法必须 `INVALID_ALGORITHM`（绝不静默降级 SHA1），算法集合由守卫与 core `internal/algorithm.ts` 逐项对拍。
 
-其他冻结契约：`OtpOptions` 字段名/可选性冻结（v1 起仅允许**新增可选字段**）；`OtpErrorCode` 的 v1 17 个取值冻结（v1.1.0 仅**新增** `INVALID_BASE32_PADDING`，现共 18 个）；全同步 API（`*Sync` 链路）；零运行时依赖。
+其他冻结契约：`OtpOptions` 字段名/可选性冻结（v1 起仅允许**新增可选字段**）；`OtpErrorCode` 的 v1 17 个取值冻结（现共 22 个，新增码必须与 core 码表、守卫基线与四份 README 同步）；全同步 API（`*Sync` 链路）；零运行时依赖。
 
 ## 3. 命令（实测可跑）
 
@@ -45,7 +46,7 @@ HDC=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony/toolchains/
 
 # 本地单测 + 覆盖率（PC；改算法逻辑后必跑）
 $HB --no-daemon -c modelVersion=6.1.1 test --mode module -p module=library@default -p testType=local -p coverage=true
-#   → Tests run: 266, Pass: 266；覆盖率 lines ≈ 90.92%
+#   → Tests run: 300, Pass: 300（数量由 library/src/test 的 it( 决定；覆盖率门槛见 CI 的 COVERAGE_MIN_LINES）
 
 # 库产物（release）
 $HB --no-daemon -c modelVersion=6.1.1 assembleHar --mode module -p module=library@default -p product=default -p buildMode=release
