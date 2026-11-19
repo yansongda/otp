@@ -110,7 +110,7 @@ try {
 |                     | `issuer?` / `account?: string`（构造期可选；`toURI()` 必填）                         | 空                        |
 | `HotpOptions`       | `counter?: number`                                                                   | `0`                       |
 |                     | `issuer?` / `account?: string`（构造期可选；`toURI()` 必填）                         | 空                        |
-| `VerifyOptions`     | 历史合并形态（兼容保留）；优先用按类收窄的 `HotpVerifyOptions` / `TotpVerifyOptions` | —                         |
+| `VerifyOptions`     | `HotpVerifyOptions` / `TotpVerifyOptions` 的超集（同时接受两者），优先用按类选项     | —                         |
 | `HotpVerifyOptions` | `counter?: number`、`window?: number`（[0, 10] 步）                                  | `window: 0`               |
 | `TotpVerifyOptions` | `timestamp?: number`（epoch ms 安全整数）、`window?: number`（[0, 10] 步）           | `Date.now()`、`window: 0` |
 | `MAX_VERIFY_WINDOW` | 漂移窗口上限（步，双向）                                                             | `10`                      |
