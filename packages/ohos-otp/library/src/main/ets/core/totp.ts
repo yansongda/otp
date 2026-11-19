@@ -178,7 +178,9 @@ export class TOTP {
       digits: this._digits,
       period: this._period,
       issuer: this._issuer,
-      account: this._account,
+      // 构造期 account 可选（算码不需要），但 URI 的 label 必填：缺失收敛成 ""，让
+      // build 的同一处校验抛 INVALID_OTPAUTH_URI（错误码只有这一个来源）
+      account: this._account === undefined ? "" : this._account,
     });
   }
 

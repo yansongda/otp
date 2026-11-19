@@ -14,13 +14,15 @@
  *             INVALID_MIN_SECRET_BITS → SECRET_TOO_WEAK → INVALID_PERIOD →
  *             INVALID_T0 → INVALID_CLOCK_OFFSET
  *   URI parse：INVALID_OTPAUTH_URI（入参非字符串 / 前缀非法）→ UNSUPPORTED_OTPAUTH_TYPE →
- *             secret 解析 → INVALID_ALGORITHM → INVALID_DIGITS →
- *             INVALID_PERIOD | INVALID_COUNTER
+ *             INVALID_OTPAUTH_URI（已知 query 参数重复）→ secret 解析 → INVALID_ALGORITHM →
+ *             INVALID_DIGITS → INVALID_PERIOD | INVALID_COUNTER →
+ *             INVALID_OTPAUTH_URI（label：account 缺失或为空、account 含冒号、
+ *             或 label 段无法百分号编码）
  *   URI build：UNSUPPORTED_OTPAUTH_TYPE → INVALID_SECRET_CONTAINER（secret 非字符串）→
  *             secret 解析 → INVALID_ALGORITHM → INVALID_DIGITS →
- *             INVALID_OTPAUTH_URI（issuer/account 非字符串、account 缺失或为空、
- *             issuer/account 含冒号、issuer 非空时 account 以空格开头，
- *             或无法百分号编码）→
+ *             INVALID_OTPAUTH_URI（account 缺失 / 为空 / 含冒号；issuer·account 非字符串
+ *             或无法百分号编码。issuer 含冒号、account 以空格开头**不报错**：改为省略
+ *             label 前缀、只写 issuer= 参数）→
  *             INVALID_PERIOD | INVALID_COUNTER
  *   verify：INVALID_TIMESTAMP（仅 TOTP 显式 timestamp）→ INVALID_CLOCK_OFFSET（TOTP
  *           叠加 clockOffsetMs 后越界）→ INVALID_COUNTER → INVALID_WINDOW → INVALID_TOKEN
@@ -66,9 +68,8 @@ export const OtpErrorCode = {
   INVALID_TOKEN: "INVALID_TOKEN",
   CRYPTO_FAILED: "CRYPTO_FAILED",
   CRYPTO_NOT_INITIALIZED: "CRYPTO_NOT_INITIALIZED",
-  // URI 非字符串 / 不以 otpauth:// 开头 / build 的 account 缺失或为空（label 必填）/ build 的
-  // issuer·account 非字符串、含冒号（Key URI Format 禁止）、issuer 非空时 account 以空格开头
-  // （分隔符后的空格是 ABNF 的 padding），或含无法百分号编码的字符
+  // URI 非字符串 / 不以 otpauth:// 开头 / 已知 query 参数重复 / label 段非法（account 缺失或
+  // 为空、含冒号 —— Key URI Format 明文禁止）/ issuer·account 非字符串或无法百分号编码
   INVALID_OTPAUTH_URI: "INVALID_OTPAUTH_URI",
   UNSUPPORTED_OTPAUTH_TYPE: "UNSUPPORTED_OTPAUTH_TYPE",
   NOT_IMPLEMENTED: "NOT_IMPLEMENTED",

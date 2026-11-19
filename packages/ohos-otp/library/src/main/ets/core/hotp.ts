@@ -87,7 +87,8 @@ export class HOTP {
       digits: this._digits,
       counter: this._counter,
       issuer: this._issuer,
-      account: this._account,
+      // 同 TOTP：构造期 account 可选，URI 的 label 必填 —— 缺失时由 build 统一抛码
+      account: this._account === undefined ? "" : this._account,
     });
   }
 

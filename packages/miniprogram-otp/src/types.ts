@@ -70,6 +70,7 @@ export interface OtpAuthParams {
   period?: number;
   counter?: number;
   issuer?: string;
-  account?: string;
+  /** 必填：Key URI Format 的 label 唯一来源，且不得含冒号（core 与 .ets 边界同口径）。 */
+  account: string;
   label?: string;
 }
