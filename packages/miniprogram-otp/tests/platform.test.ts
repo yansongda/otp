@@ -14,6 +14,7 @@ import {
   Secret,
   TOTP,
 } from "../src/index";
+import type { OtpAuthParams } from "../src/types";
 
 /** 期望抛出指定错误码（断言 code 比消息匹配更精确）。 */
 function thrownCode(fn: () => unknown): string {
@@ -102,49 +103,62 @@ describe("platform barrel", () => {
     expect(params.period).toBe(60);
     expect(params.issuer).toBe("ACME");
   });
-  it("OTPAuthURI label derives from account only", () => {
-    // label = issuer:account：account 必填（build 侧 fail-closed），issuer 可空。
+  it("OTPAuthURI label contract matches core", () => {
+    // label 的唯一来源是 account：缺失 / 为空 / 含冒号 → parse 与 build 都 fail-closed
     const base = {
       type: OtpType.TOTP,
       secret: "JBSWY3DPEHPK3PXP",
       algorithm: OtpAlgorithm.SHA1,
       digits: 6,
     };
-    for (const extra of [{}, { issuer: "ACME" }, { account: "" }]) {
-      expect(thrownCode(() => OTPAuthURI.build({ ...base, ...extra }))).toBe(
-        "INVALID_OTPAUTH_URI",
-      );
+    // 造「运行时会漏字段」的入参（TS 类型已强制 account 必填，JS 调用方仍可能漏）
+    const asParams = (raw: Record<string, unknown>): OtpAuthParams =>
+      raw as unknown as OtpAuthParams;
+    for (const extra of [
+      {},
+      { issuer: "ACME" },
+      { account: "" },
+      { issuer: "ACME", account: "" },
+    ]) {
+      expect(
+        thrownCode(() => OTPAuthURI.build(asParams({ ...base, ...extra }))),
+      ).toBe("INVALID_OTPAUTH_URI");
     }
-    // parse 侧保持宽松：无 label 的旧 URI 仍给得出 issuer，account 缺席
-    const parsedIssuerOnly = OTPAuthURI.parse(
-      "otpauth://totp/?secret=JBSWY3DPEHPK3PXP&issuer=ACME",
-    );
-    expect(parsedIssuerOnly.issuer).toBe("ACME");
-    expect(parsedIssuerOnly.account).toBeUndefined();
+    // parse 同口径：空 label、account 含冒号（规范禁止，任何解析器都会切开）
+    expect(
+      thrownCode(() =>
+        OTPAuthURI.parse("otpauth://totp/?secret=JBSWY3DPEHPK3PXP&issuer=ACME"),
+      ),
+    ).toBe("INVALID_OTPAUTH_URI");
+    expect(
+      thrownCode(() =>
+        OTPAuthURI.parse("otpauth://totp/ACME:a%3Ab?secret=JBSWY3DPEHPK3PXP"),
+      ),
+    ).toBe("INVALID_OTPAUTH_URI");
 
-    // label 的分隔符按 Key URI Format 的 ABNF：`:` 或 `%3A`（与 query issuer 无关）
-    const parsedEncodedSeparator = OTPAuthURI.parse(
+    // 分隔符按 Key URI Format 的 ABNF：`:` 或 `%3A`（与 query 里有没有 issuer 无关）
+    const encodedSeparator = OTPAuthURI.parse(
       "otpauth://totp/ACME%3Aalice?secret=JBSWY3DPEHPK3PXP",
     );
-    expect(parsedEncodedSeparator.issuer).toBe("ACME");
-    expect(parsedEncodedSeparator.account).toBe("alice");
-    // 原生冒号先出现时，account 里编码的 %3A 原样保留（只切首个分隔符）
-    const parsedColonAccount = OTPAuthURI.parse(
-      "otpauth://totp/ACME:a%3Ab?secret=JBSWY3DPEHPK3PXP",
+    expect(encodedSeparator.issuer).toBe("ACME");
+    expect(encodedSeparator.account).toBe("alice");
+
+    // issuer **参数**允许冒号（RFC 3986 pchar），label 前缀不允许 → 省略前缀，往返稳定
+    const uri = OTPAuthURI.build({
+      ...base,
+      issuer: "AC:ME",
+      account: "alice",
+    });
+    expect(uri).toBe(
+      "otpauth://totp/alice?secret=JBSWY3DPEHPK3PXP&issuer=AC%3AME&algorithm=SHA1",
     );
-    expect(parsedColonAccount.issuer).toBe("ACME");
-    expect(parsedColonAccount.account).toBe("a:b");
-    // 含冒号的 issuer/account 无法被规范序列化：build fail-closed
-    expect(
-      thrownCode(() =>
-        OTPAuthURI.build({ ...base, issuer: "ACME", account: "a:b" }),
-      ),
-    ).toBe("INVALID_OTPAUTH_URI");
-    expect(
-      thrownCode(() =>
-        OTPAuthURI.build({ ...base, issuer: "AC:ME", account: "alice" }),
-      ),
-    ).toBe("INVALID_OTPAUTH_URI");
+    expect(OTPAuthURI.build(OTPAuthURI.parse(uri))).toBe(uri);
+
+    // 类型层契约：漏 account 必须编译失败
+    expect(() =>
+      // @ts-expect-error account 必填
+      OTPAuthURI.build({ ...base }),
+    ).toThrow();
   });
 
   it("errorCodes come from core and stay in sync", () => {
@@ -230,6 +244,7 @@ describe("platform barrel", () => {
         secret: "JBSWY3DPEHPK3PXP",
         algorithm: OtpAlgorithm.SHA1,
         digits: 6,
+        account: "alice",
       });
     } catch (error) {
       thrown = error;

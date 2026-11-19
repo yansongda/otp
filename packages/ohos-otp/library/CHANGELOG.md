@@ -15,11 +15,16 @@
 - `OTPAuthURI.parse` 的 `digits` / `period` / `counter` 只认纯十进制整数；`OTPAuthURI.build`
   对非法参数改为抛错
 - `OTPAuthURI` label 语义按 Key URI Format 的 ABNF 收敛：分隔符是「首个 `:` 或 `%3A`」，
-  与 query 里有没有 `issuer` 无关；含冒号的 `issuer` / `account` 改为抛 `INVALID_OTPAUTH_URI`
-  （ABNF 明文禁止，含冒号的段会被任何规范解析器当分隔符切开），`issuer` 非空时 `account`
-  也不得以空格开头（分隔符后的空格是 padding）
+  与 query 里有没有 `issuer` 无关；分隔符后的 `%20`（以及原始空格）按 padding 剥离
+- `parse` 与 `build` 的 label 契约统一为 fail-closed：`account` 缺失 / 为空 / 含冒号（明文
+  "Neither issuer nor account name may themselves contain a colon"）、label 段不可百分号编码、
+  已知 query 参数重复出现 → `INVALID_OTPAUTH_URI`（`build(parse(uri))` 恒可序列化）
 - `OTPAuthURI.build` / `toURI()` 的 `account` 改为**必填**（缺失或空串抛 `INVALID_OTPAUTH_URI`）：
-  label 必填且只能由 `account` 派生，`issuer` 仍可省略；`parse` 侧保持宽松
+  label 必填且只能由 `account` 派生，`issuer` 仍可省略
+- `OTPAuthURI.build` / `toURI()`：`issuer` 含冒号或 `account` 以空格开头**不再报错**，改为省略
+  label 前缀、只写 `issuer=` 参数
+- `OtpAuthParams.account` 由可选改为**必填**（类型级；运行期仍校验空串）
+- 分隔符后的**原始空格**也按 padding 剥离（规范只写 `%20`，此处为宽容超集）
 - `HOTP.verify` 不再接受 `timestamp`、`TOTP.verify` 不再接受 `counter`（对象字面量会编译失败）
 - `OtpError.name` 由 `'Error'` 改为 `'OtpError'`（provider 错误契约，三端一致）
 - 非字符串入参不再漏原生 `TypeError`：`secret` → `INVALID_SECRET_CONTAINER`、`token` →

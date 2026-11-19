@@ -20,13 +20,19 @@
   `OTPAuthURI.build` 对非法参数改为抛错
 - `OTPAuthURI` label 语义按 Key URI Format 的 ABNF 收敛：分隔符是「原始串中首个 `:` 或
   `%3A`（大小写不敏感）」，与 query 里有没有 `issuer` 无关；`issuer` 参数仍优先于 label 前缀，
-  但不再影响切分。含冒号的 `issuer` / `account` 不再支持：`build` / `toURI()` 抛
-  `INVALID_OTPAUTH_URI`（ABNF 明文："Neither issuer nor account name may themselves contain
-  a colon"，含冒号的段会被任何规范解析器当分隔符切开）；`issuer` 非空时 `account` 也不得
-  以空格开头（分隔符后的空格是 ABNF 的 padding）
+  但不再影响切分；分隔符后的 `%20`（以及原始空格）按 padding 剥离
+- `OTPAuthURI.parse` 与 `build` 的 label 契约统一为 fail-closed（此前 parse 放宽，导致「解析
+  出来的参数要等到 `toURI()` 才抛错」）：`account` 缺失 / 为空 / 含冒号（明文 "Neither issuer
+  nor account name may themselves contain a colon"）、label 段不可百分号编码（孤立代理字符）、
+  已知 query 参数（secret / issuer / algorithm / digits / period / counter）重复出现 →
+  `INVALID_OTPAUTH_URI`。因此 `build(parse(uri))` 恒可序列化
 - `OTPAuthURI.build` / `toURI()` 的 `account` 改为**必填**（缺失或空串抛 `INVALID_OTPAUTH_URI`）：
-  Key URI Format 要求 label 必填，而 label 只能由 `account` 派生；`issuer` 仍可省略。
-  `parse` 侧保持宽松：无 label 的旧 URI 仍能解析（`account` 缺席），但重新序列化需先补 `account`
+  Key URI Format 要求 label 必填，而 label 只能由 `account` 派生；`issuer` 仍可省略
+- `OTPAuthURI.build` / `toURI()`：`issuer` 含冒号或 `account` 以空格开头**不再报错**，改为省略
+  label 前缀、只写 `issuer=` 参数（`issuer` 参数是 pchar，允许冒号；label 前缀不允许）
+- `OtpAuthParams.account` 由可选改为**必填**（类型级；JS / JSON 调用方仍由运行期校验兜底）
+- 分隔符后的**原始空格**也按 padding 剥离：`ACME: alice` 的 `account` 从 `" alice"` 变为
+  `"alice"`（规范只写 `%20`，此处为宽容超集，已在 README 标注）
 - `HOTP.verify` 不再接受 `timestamp`、`TOTP.verify` 不再接受 `counter`（对象字面量会编译失败）
 - `verify` 校验顺序改为「配置类先于输入类」：坏 token 与坏 `counter` / `window` 同时出现时
   返回 `INVALID_COUNTER` / `INVALID_WINDOW`（此前 `INVALID_TOKEN`）

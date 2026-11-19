@@ -201,18 +201,22 @@ describe("totp", () => {
       );
     }
   });
-  it("toURI_rejectsColonInLabelParts", () => {
-    // Key URI Format 的 ABNF 禁止 issuer/account 含冒号：含冒号的段会被任何规范解析器
-    // 当 label 分隔符切开，能解析但无法被规范序列化
-    for (const extra of [
-      { account: "a:b" },
-      { issuer: "AC:ME", account: "alice" },
-    ]) {
-      expectCode(
-        () => new TOTP({ secret: SEEDS.SHA1_BASE32, ...extra }).toURI(),
-        "INVALID_OTPAUTH_URI",
-      );
-    }
+  it("toURI_colonHandling", () => {
+    // account 含冒号 → label 段不可表示，只能 fail-closed；
+    // issuer 含冒号 → 省略 label 前缀、只写 issuer= 参数（issuer 参数是 pchar，允许冒号）
+    expectCode(
+      () => new TOTP({ secret: SEEDS.SHA1_BASE32, account: "a:b" }).toURI(),
+      "INVALID_OTPAUTH_URI",
+    );
+    const uri = new TOTP({
+      secret: SEEDS.SHA1_BASE32,
+      issuer: "AC:ME",
+      account: "alice",
+    }).toURI();
+    expect(uri.slice(0, uri.indexOf("?"))).toBe("otpauth://totp/alice");
+    expect(uri).toContain("issuer=AC%3AME");
+    const back = TOTP.fromURI(uri);
+    expect(back.toURI()).toBe(uri);
   });
 
   it("fromURI_roundtrip_generate_consistent", () => {
