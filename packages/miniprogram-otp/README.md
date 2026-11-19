@@ -176,10 +176,6 @@ The label is the only source of the account name. Normative text is Google's Key
 - **Known deviation (lenient superset)**: raw spaces after the separator are stripped as padding
   too. The ABNF only mentions `%20`, and a raw space is not even a legal URI character — some
   issuers emit it anyway, so it is tolerated. Pre-clean the label if you need strictness.
-- **Upgrading from 1.x**: `1.x` produced `otpauth://totp/?secret=…` whenever `account` was unset.
-  Such URIs (and QR codes already printed from them) are now rejected with `INVALID_OTPAUTH_URI`;
-  migrate persisted values once by rebuilding from the stored `secret` and supplying
-  `account` / `issuer` — `new TOTP({ secret, issuer, account }).toURI()`.
 
 ## Error codes
 

@@ -173,9 +173,6 @@ provisional，CRI #13829，**不是 RFC**）：
   `issuer=` 参数、不写 label 前缀。
 - **已知偏离（宽容超集）**：分隔符后的**原始空格**也按 padding 剥离。ABNF 只写了 `%20`，
   而原始空格本身不是合法 URI 字符 —— 真实签发方确实会这么写，故容忍。需要严格请自行预清洗。
-- **从 1.x 升级**：`1.x` 在无 `account` 时产出 `otpauth://totp/?secret=…`。这类 URI（以及已经印
-  出去的二维码）现在会被 `INVALID_OTPAUTH_URI` 拒收；存量数据需一次性迁移 —— 用存下来的
-  `secret` 重建并补 `account` / `issuer`：`new TOTP({ secret, issuer, account }).toURI()`。
 
 ## 错误码
 
