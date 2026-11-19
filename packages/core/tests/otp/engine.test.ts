@@ -3,6 +3,7 @@
  * 期望值全部来自 RFC 4226 / 6238 向量。
  */
 import { describe, expect, it } from "bun:test";
+import type { HmacProvider } from "../../src/crypto";
 import { decode } from "../../src/internal/base32";
 import { generate, verify } from "../../src/internal/engine";
 import { PureJsHmac } from "../../src/pure-js/pure-js-hmac";
@@ -13,6 +14,37 @@ const provider = new PureJsHmac();
 const key = decode(SEEDS.SHA1_BASE32);
 const params6 = { algorithm: "SHA1", digits: 6, key } as const;
 const params7 = { algorithm: "SHA1", digits: 7, key } as const;
+
+const MATCH_DIGEST = new Uint8Array(20).fill(0x2a);
+
+/**
+ * 按 counter 决定摘要的 stub provider：列出的 counter 产同一个 token（命中），
+ * 其余 counter 按自身值产**互不相同**的摘要（不命中）。
+ * 用于构造「多个候选同时命中」——真实密钥下两个 counter 撞码的概率只有 ~10^-digits，
+ * 单测里造不出来，但 tie-break 语义必须有可执行的证据。
+ */
+function stubProvider(matchCounters: ReadonlyArray<number>): HmacProvider {
+  return {
+    sign(
+      _algorithm: string,
+      _key: Uint8Array,
+      message: Uint8Array,
+    ): Uint8Array {
+      // verify 传入的 message 是 8 字节大端 counter
+      const counter =
+        ((message[4] << 24) |
+          (message[5] << 16) |
+          (message[6] << 8) |
+          message[7]) >>>
+        0;
+      if (matchCounters.indexOf(counter) !== -1) {
+        return MATCH_DIGEST;
+      }
+      // 非命中：摘要随 counter 变化，保证「窗口外生成的 token」不会误命中
+      return new Uint8Array(20).fill(counter & 0xff);
+    },
+  };
+}
 
 describe("engine", () => {
   for (const v of RFC4226_SHA1_6DIGIT) {
@@ -48,9 +80,45 @@ describe("engine", () => {
     expect(verify(provider, params6, "755224", 0, 1)).toBe(0);
   });
 
-  it("verify_sameTokenInMultipleCandidates_returnsFirstDelta", () => {
-    // 构造重复命中：window 覆盖 counter=1 与 1 的镜像不现实；改为确认首个命中即返回
-    expect(verify(provider, params6, "287082", 1, 0)).toBe(0);
+  it("verify_window_multipleMatches_returnsClosestDelta", () => {
+    // window 内 5 个候选同时命中：必须返回 |delta| 最小的 0。
+    // 旧的「扫描首个命中」策略会返回 -2，调用方据此重置 counter 就会往回退
+    // （HOTP 的 `counter + delta + 1` 会变成 base-1，等于重新放行两个旧码）。
+    const base = 1000;
+    const everything = stubProvider([
+      base - 2,
+      base - 1,
+      base,
+      base + 1,
+      base + 2,
+    ]);
+    const token = generate(everything, params6, base);
+    expect(verify(everything, params6, token, base, 2)).toBe(0);
+  });
+
+  it("verify_window_sameDistancePrefersNegative", () => {
+    // 只有 -1 与 +1 命中（|delta| 相同）：固定取负方向（先看过期一侧），
+    // 不依赖扫描实现细节，保证「同输入同结果」
+    const base = 1000;
+    const pair = stubProvider([base - 1, base + 1]);
+    const token = generate(pair, params6, base + 1);
+    expect(verify(pair, params6, token, base, 1)).toBe(-1);
+  });
+
+  it("verify_window_forwardOnlyMatch", () => {
+    const base = 1000;
+    const forward = stubProvider([base + 2]);
+    const token = generate(forward, params6, base + 2);
+    expect(verify(forward, params6, token, base, 2)).toBe(2);
+  });
+
+  it("verify_window_unmatchedToken_returnsNull", () => {
+    const base = 1000;
+    const pair = stubProvider([base - 1, base + 1]);
+    // 用窗口外的 counter 生成 token：stub 对非命中 counter 按自身值产出不同摘要，
+    // 因此窗口内所有候选的码都与它不同 → null
+    const outside = generate(pair, params6, base + 10);
+    expect(verify(pair, params6, outside, base, 2)).toBeNull();
   });
 
   it("verify_invalidToken_nonNumeric_throws", () => {
