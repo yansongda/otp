@@ -190,6 +190,20 @@ check(`测试数量不减少（本地 ≥ ${BASELINE.localTestCases}，设备 �
   return `本地 ${local} / 设备 ${device}`;
 });
 
+check('ohos.yml 的本地单测阈值与 BASELINE 同源', () => {
+  // workflow 里 `pass < N` 与本文件 BASELINE.localTestCases 必须相等：两处各写一个数，
+  // 守卫要求 300 而 workflow 只卡 240 时，删掉最多 60 条用例仍能全绿（闸门形同虚设）。
+  const matched = /pass\s*<\s*(\d+)/.exec(readText('../../.github/workflows/ohos.yml'));
+  if (!matched) throw new Error('ohos.yml 缺少 `pass < N` 断言');
+  const threshold = Number(matched[1]);
+  if (threshold !== BASELINE.localTestCases) {
+    throw new Error(
+      `ohos.yml 的 pass < ${threshold} 与 BASELINE.localTestCases = ${BASELINE.localTestCases} 不一致`,
+    );
+  }
+  return `pass < ${threshold} 与 BASELINE 一致`;
+});
+
 /** 从 `NAME: "VALUE"` / `NAME = 'VALUE'` 形式的定义块里抽取 name→value。 */
 function codePairs(body, pattern) {
   const pairs = new Map();

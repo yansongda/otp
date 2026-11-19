@@ -3,7 +3,10 @@
  *
  * 默认实现的算法名经参数传入而非字面量，避免平台 lint 对 HMAC 用法产生误报。
  */
-export type HashFunction = (message: Uint8Array) => Uint8Array;
+import type { HashFunction } from "../crypto";
+
+/** 类型定义在 crypto.ts（解耦层）单一维护，这里只做转发，不再抄一份。 */
+export type { HashFunction };
 
 export function hmac(
   hash: HashFunction,

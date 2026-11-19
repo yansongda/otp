@@ -41,6 +41,7 @@ Pi 只自动加载本文件（cwd 及其祖先的 context file）；子包 AGENT
 bun install
 bun run sync:core
 bun run sync:core:check
+bun run guard
 bun run lint
 bun run typecheck
 bun run test

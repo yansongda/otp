@@ -111,7 +111,7 @@ ArkTS/ESM 的 `import` 是静态且传递的：公开类若在顶层从「含 `@
 | 项 | 契约 | 违约结果 |
 | --- | --- | --- |
 | 失败表达 | 抛 `name === "OtpError"` 的错误（core `otpFail` / 平台 `OtpError`） | 其余任何值（`TypeError`、字符串、`null`…）→ `CRYPTO_FAILED`；`OtpError` 原样上抛（保留精确码） |
-| `sign` 返回值 | `Uint8Array`，长度 = 算法摘要长度（SHA1=20 / SHA256=32 / SHA512=64，见 `internal/digest.ts`） | 非法类型 / 长度不匹配 → `CRYPTO_FAILED`（engine 只认 `Uint8Array`，不复用 `Secret` 侧的宽容器判定） |
+| `sign` 返回值 | `Uint8Array`，长度 = 算法摘要长度（SHA1=20 / SHA256=32 / SHA512=64，见 `internal/algorithm.ts`） | 非法类型 / 长度不匹配 → `CRYPTO_FAILED`（engine 只认 `Uint8Array`，不复用 `Secret` 侧的宽容器判定） |
 | `random` 返回值 | 同步返回，长度 = 请求的 `bytes`；容器按 `internal/bytes.ts`（`Uint8Array` / `Uint8ClampedArray` / `ArrayBuffer`） | 类型 / 长度不符 → `CRYPTO_FAILED` |
 | 入参 | `key` / `message` **只读**：不得修改、`fill`、跨调用保留引用 | 无错误码可诊断（表现为「码不对」）：库每次公开调用传一份密钥临时副本，同一次调用的窗口扫描复用该副本 |
 | 错误收敛 | 收敛时不保留原因（无 `cause`、不打日志） | 要保留精确码必须自己抛 `OtpError` |
@@ -304,9 +304,9 @@ UNSUPPORTED_OTPAUTH_TYPE NOT_IMPLEMENTED
 | --- | --- | --- |
 | core 全量 | `bun run --filter '@yansongda/otp-core' test` | 全绿（含 RFC 向量、URI 边界、往返不变量、`@ts-expect-error` 类型契约） |
 | mp 平台契约 | `bun run --filter '@yansongda/miniprogram-otp' test` | 全绿（1 文件） |
-| 一键检查 | `bun run check` | `sync:core:check` + lint + typecheck + 上面两项 |
-| mp 守卫 | `node packages/miniprogram-otp/scripts/ci/check-invariants.mjs` | 22/22 |
-| ohos 守卫 | `node packages/ohos-otp/scripts/ci/check-invariants.mjs` | 14/14 |
+| 一键检查 | `bun run check` | `sync:core:check` + lint + typecheck + `bun run guard`（两个包的不变量守卫）+ 上面两项 |
+| mp 守卫 | `node packages/miniprogram-otp/scripts/ci/check-invariants.mjs` | 全绿（22 项） |
+| ohos 守卫 | `node packages/ohos-otp/scripts/ci/check-invariants.mjs` | 全绿（16 项） |
 | ohos 本地单测 | `hvigorw test --mode module -p module=library@default -p testType=local` | 全绿（kit-free 全链路 + fixture） |
 | ohos 设备用例 | `ohosTest`（真实 cryptoFramework + barrel 链路） | 全绿 |
 | 基准 | `bun run bench` / `bun run bench:ab` | 17 热路径场景 + `OTPAuthURI.parse/build` 冷路径场景 |

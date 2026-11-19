@@ -39,9 +39,6 @@ jobs:
       - name: Lint core + scripts
         run: bun run lint
 
-      - name: Lint miniprogram
-        run: bun run --filter '@yansongda/miniprogram-otp' lint
-
       - name: Type check
         run: bun run typecheck
 

@@ -151,7 +151,6 @@ export const OtpType = {
 export type OtpType = (typeof OtpType)[keyof typeof OtpType];
 
 export const ALLOWED_DIGITS = [6, 7, 8] as const;
-export type DigitCount = (typeof ALLOWED_DIGITS)[number];
 
 /**
  * 默认值唯一来源（ArkTS 不支持 `as const` 对象字面量，故用独立常量）。

@@ -4,15 +4,13 @@
  * ohos 有 cryptoFramework，不 import 本文件；sync-core 会把 pure-js/ 排除在副本之外，
  * 避免这部分代码被 hvigor 全量编译进 HAR。
  */
-import { type HmacProvider, registerHmac } from "../crypto";
+import { type HashFunction, type HmacProvider, registerHmac } from "../crypto";
 import { otpFail } from "../errors";
 import { algorithmSpec } from "../internal/algorithm";
 import { hmac } from "./hmac";
 import { sha1 } from "./sha1";
 import { sha256 } from "./sha256";
 import { sha512 } from "./sha512";
-
-type HashFunction = (message: Uint8Array) => Uint8Array;
 
 /**
  * 名字 → 哈希函数：这是 pure-js 的**实现细节**（core 的算法事实表只存数值，不存实现），

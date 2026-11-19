@@ -16,8 +16,20 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const CORE_SRC = join(ROOT, "packages/core/src");
-/** ohos 不需要纯 JS 兜底 crypto；且 hvigor 会编译模块内全部 .ts，必须排除以免进 HAR。 */
-const EXCLUDED = ["pure-js", "pure-js.ts"];
+/**
+ * 不进副本的条目（相对 `packages/core/src`）：
+ * - `pure-js` / `pure-js.ts`：ohos 不需要纯 JS 兜底 crypto，而 hvigor 会编译模块内全部 .ts，
+ *   留一份就是双份实现进 HAR；
+ * - `index.ts`：core 的 barrel。副本里没人 import 它，
+ *   但深导入会得到一个未注册 provider / 错误工厂的 core（静默降级），故不随副本发布。
+ * 同一份清单也用于 git 溯源：只有这些被排除之外的改动才算「副本内容变了」。
+ */
+const EXCLUDED = ["pure-js", "pure-js.ts", "index.ts"];
+/** git pathspec：`packages/core/src` + 逐项 exclude（只改 pure-js 不该把副本头打上 -dirty）。 */
+const COPY_PATHSPEC = [
+  "packages/core/src",
+  ...EXCLUDED.map((entry) => `:(exclude)packages/core/src/${entry}`),
+];
 const TARGET = join(ROOT, "packages/ohos-otp/library/src/main/ets/core");
 /**
  * 副本头：`core@<commit>` 是「最后一次改动 packages/core/src 的 commit」，用于溯源。
@@ -26,7 +38,7 @@ const TARGET = join(ROOT, "packages/ohos-otp/library/src/main/ets/core");
 const HEADER =
   "// AUTO-GENERATED from packages/core/src/{rel} (core@{commit}). DO NOT EDIT. Run: bun run sync:core\n";
 
-/** 取最后一次改动 core 源码的 commit；工作区有未提交的 core 改动时加 `-dirty` 标记。 */
+/** 取最后一次改动「会进副本的 core 源码」的 commit；工作区有未提交的这类改动时加 `-dirty` 标记。 */
 function resolveCoreCommit() {
   const git = (...args) =>
     execFileSync("git", args, {
@@ -37,13 +49,13 @@ function resolveCoreCommit() {
   let commit = "unknown";
   try {
     commit =
-      git("log", "-1", "--format=%h", "--", "packages/core/src") ||
+      git("log", "-1", "--format=%h", "--", ...COPY_PATHSPEC) ||
       git("rev-parse", "--short", "HEAD");
   } catch {
     // 无 git / shallow 时不阻断同步
   }
   try {
-    if (git("status", "--porcelain", "--", "packages/core/src")) {
+    if (git("status", "--porcelain", "--", ...COPY_PATHSPEC)) {
       commit = `${commit}-dirty`;
     }
   } catch {

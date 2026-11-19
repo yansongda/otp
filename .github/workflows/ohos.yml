@@ -251,6 +251,7 @@ jobs:
           test -s "$result" || { echo "::error::未生成 $result"; exit 1; }
 
           # 下限与 scripts/ci/check-invariants.mjs 的 BASELINE.localTestCases 同步维护
+          # （两者不一致会被守卫脚本本身拦下：pass < N 必须等于 BASELINE）
           SUMMARY="$(tail -n 1 "$result")" node -e '
             const line = process.env.SUMMARY;
             const matched = /^Tests run: (\d+), Failure: (\d+), Error: (\d+), Pass: (\d+), Ignore: (\d+)$/.exec(line);
@@ -263,7 +264,7 @@ jobs:
               process.env.GITHUB_STEP_SUMMARY,
               `### 单测\n\n\`Tests run: ${run}, Failure: ${failure}, Error: ${error}, Pass: ${pass}, Ignore: ${ignore}\`\n`,
             );
-            if (failure !== 0 || error !== 0 || pass < 240) {
+            if (failure !== 0 || error !== 0 || pass < 300) {
               console.error(`本地单测未达预期：Failure=${failure}, Error=${error}, Pass=${pass}`);
               process.exit(1);
             }

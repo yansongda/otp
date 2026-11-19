@@ -60,7 +60,7 @@ Bun 版本固定于 `.bun-version`（当前 `1.4.4`）。主 CI 通过 `bun-vers
 
 ## 4. 测试策略
 
-- **算法测试在 `packages/core`（315 条）**：RFC 4226 / 6238 / 4648 向量、哈希/HMAC 向量、错误码、strict base32、URI、时钟校准与随机注入。向量唯一来源 `packages/core/tests/otp/vectors.ts`，**逐字复制自 OHOS `RfcVectors.ets` 与 FIPS/RFC 官方向量，禁止自行推导或补算**。
+- **算法测试在 `packages/core`（条数以 `bun test` 实测为准，不在此写死）**：RFC 4226 / 6238 / 4648 向量、哈希/HMAC 向量、错误码、strict base32、URI、时钟校准与随机注入。向量唯一来源 `packages/core/tests/otp/vectors.ts`，**逐字复制自 OHOS `RfcVectors.ets` 与 FIPS/RFC 官方向量，禁止自行推导或补算**。
 - 本包只保留 `tests/platform.test.ts`（19 条）：注册链路、错误工厂、类型桥、公开 API 契约。新增平台逻辑必须补测；测试数量不得下降（`scripts/ci/check-invariants.mjs` 基线 19/1）。
 - 算法逻辑变更只改 `packages/core` + 其测试，**禁止在本包复制实现**。
 - 微信真机 / 开发者工具“构建 npm”冒烟仍是人工门槛，CI 无法覆盖。
