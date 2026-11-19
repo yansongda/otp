@@ -107,9 +107,9 @@ try {
 | `TotpOptions`       | `period?: number` (seconds)                                                                                   | `30`                      |
 |                     | `t0?: number` (seconds)                                                                                       | `0`                       |
 |                     | `clockOffsetMs?: number` (safe-integer ms)                                                                    | `0`                       |
-|                     | `issuer?` / `account?: string` (only used by `toURI()`; `account` is required)                                | empty                     |
+|                     | `issuer?` / `account?: string` (optional here; `toURI()` requires `account`)                                  | empty                     |
 | `HotpOptions`       | `counter?: number`                                                                                            | `0`                       |
-|                     | `issuer?` / `account?: string` (only used by `toURI()`; `account` is required)                                | empty                     |
+|                     | `issuer?` / `account?: string` (optional here; `toURI()` requires `account`)                                  | empty                     |
 | `VerifyOptions`     | Compatibility superset of the per-class options below; pass `HotpVerifyOptions` / `TotpVerifyOptions` instead | —                         |
 | `HotpVerifyOptions` | `counter?: number`, `window?: number` (steps `[0, 10]`)                                                       | `window: 0`               |
 | `TotpVerifyOptions` | `timestamp?: number` (epoch ms safe integer), `window?: number` (steps `[0, 10]`)                             | `Date.now()`, `window: 0` |
@@ -176,6 +176,10 @@ The label is the only source of the account name. Normative text is Google's Key
 - **Known deviation (lenient superset)**: raw spaces after the separator are stripped as padding
   too. The ABNF only mentions `%20`, and a raw space is not even a legal URI character — some
   issuers emit it anyway, so it is tolerated. Pre-clean the label if you need strictness.
+- **Upgrading from 1.x**: `1.x` produced `otpauth://totp/?secret=…` whenever `account` was unset.
+  Such URIs (and QR codes already printed from them) are now rejected with `INVALID_OTPAUTH_URI`;
+  migrate persisted values once by rebuilding from the stored `secret` and supplying
+  `account` / `issuer` — `new TOTP({ secret, issuer, account }).toURI()`.
 
 ## Error codes
 

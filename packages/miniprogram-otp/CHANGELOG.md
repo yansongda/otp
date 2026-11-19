@@ -33,6 +33,10 @@
 - `OtpAuthParams.account` 由可选改为**必填**（类型级；JS / JSON 调用方仍由运行期校验兜底）
 - 分隔符后的**原始空格**也按 padding 剥离：`ACME: alice` 的 `account` 从 `" alice"` 变为
   `"alice"`（规范只写 `%20`，此处为宽容超集，已在 README 标注）
+- **存量数据迁移（一次性）**：1.x 在无 `account` 时产出的 `otpauth://totp/?secret=…`（以及已经
+  印出去的二维码）现在会被 `parse` / `TOTP.fromURI` / `HOTP.fromURI` 以 `INVALID_OTPAUTH_URI`
+  拒收。用存下来的 `secret` 重建并补 `account` / `issuer`：
+  `new TOTP({ secret, issuer, account }).toURI()`（或 `OTPAuthURI.build(params)`）
 - `HOTP.verify` 不再接受 `timestamp`、`TOTP.verify` 不再接受 `counter`（对象字面量会编译失败）
 - `verify` 校验顺序改为「配置类先于输入类」：坏 token 与坏 `counter` / `window` 同时出现时
   返回 `INVALID_COUNTER` / `INVALID_WINDOW`（此前 `INVALID_TOKEN`）

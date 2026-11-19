@@ -6,7 +6,7 @@
 > **非 RFC 声明**：`otpauth://` scheme 没有任何 RFC；权威文本是 Google 的
 > [Key URI Format](https://github.com/google/google-authenticator/wiki/Key-Uri-Format)（IANA 仅把该 scheme
 > 注册为 provisional，CRI Scheme Number 13829，注册内容只是指向该 wiki），外加 IETF 个人稿
-> `draft-andesco-otpauth-uri-00`（2026-02，非 RFC）。RFC 4226/6238 只定义 HOTP/TOTP 算法本身。
+> `draft-andesco-otpauth-uri-01`（2026-10-30，非 RFC）。RFC 4226/6238 只定义 HOTP/TOTP 算法本身。
 
 ---
 
@@ -33,7 +33,7 @@ otp/                                  monorepo（bun workspaces）
 │   ├── src/{errors,crypto,options,secret,hotp,totp,otpauth-uri}.ts
 │   ├── src/internal/{base32,counter,digits,engine,resolve,time-step,truncate}.ts
 │   ├── src/pure-js.ts + src/pure-js/{pure-js-hmac,hmac,sha1,sha256,sha512}.ts   仅 mp 引用
-│   └── tests/                        协议/边界/URI 全套（318 用例）
+│   └── tests/                        协议/边界/URI 全套
 ├── packages/miniprogram-otp/         发 npm：@yansongda/miniprogram-otp
 │   ├── src/index.ts                  barrel：注册纯 JS HMAC + 错误工厂 + 类型桥
 │   ├── src/{types,errors}.ts         平台类型层 / 平台 OtpError（字面量联合码）
@@ -206,12 +206,13 @@ progress  = (((s - t0) % period) + period) % period / period   # [0, 1)
 ### 6.1 label 语义（parse 与 build 同口径）
 
 规范文本：Google Key URI Format，`label = accountname / issuer (":" / "%3A") *"%20" accountname`，
-明文「Neither issuer nor account name may themselves contain a colon」。`draft-andesco-otpauth-uri-00`
-把 consumer 规则写死为「先按**原始串**首个 `:` / `%3A` 切分，再逐段百分号解码」。
+明文「Neither issuer nor account name may themselves contain a colon」。`draft-andesco-otpauth-uri-01`
+把 consumer 规则写死为（§3.1）「先按**原始串**首个 `:` / `%3A` 切分，再逐段百分号解码」。
 
 - **切分**：在原始串上定位首个 `:` 或 `%3A`（十六进制大小写不敏感）为分隔符；其后紧邻的空格与
   `%20` 都是 padding（`*"%20"`）。无分隔符时整段就是 account。判定与 query 里有没有 `issuer` 无关；
-  `issuer` 参数仍作为取值优先（草案：issuer 参数是账号匹配的权威来源，前缀只用于展示）。
+  `issuer` 参数仍作为取值优先（草案 §4：issuer 参数是账号匹配的权威来源，前缀只用于展示；
+  consumer MUST NOT 仅因两个值不同就拒收）。
 - **两侧 fail-closed**（保证不变量 `build(parse(uri))` 恒不抛错）：
 
   | 条件 | 错误码 |
@@ -235,12 +236,12 @@ progress  = (((s - t0) % period) + period) % period / period   # [0, 1)
 | --- | --- | --- |
 | `type` | — | 非 `totp`/`hotp` → `UNSUPPORTED_OTPAUTH_TYPE` |
 | `secret` | — | 缺失/空 → `EMPTY_SECRET`；非法字符 → `INVALID_BASE32_CHAR`；不足 1 字节 → `SECRET_TOO_SHORT`；`{strict:true}` 非规范尾 → `INVALID_BASE32_PADDING` |
-| `issuer` | 空 | 与 label 前缀不一致时**以 query 为准**（草案要求不得仅因不一致拒收）；空值按「未提供」处理 |
+| `issuer` | 空 | 与 label 前缀不一致时**以 query 为准**（草案 §4：MUST NOT 仅因不一致拒收）；空值按「未提供」处理 |
 | `algorithm` | `SHA1` | 大小写不敏感映射；非三值 → `INVALID_ALGORITHM` |
-| `digits` | `6` | 只认纯十进制；非 6/7/8 → `INVALID_DIGITS` |
+| `digits` | `6` | 只认纯十进制；非 6/7/8 → `INVALID_DIGITS`（6/7/8 取自草案 §3.1 的 `digits` 产生式；Google wiki 只列 6/8，取宽容超集） |
 | `period` | `30`（仅 totp） | 只认纯十进制正整数 → `INVALID_PERIOD` |
 | `counter` | `0`（仅 hotp，规范要求必填） | 只认纯十进制非负安全整数 → `INVALID_COUNTER` |
-| 未知参数 | — | **忽略**（草案：SHOULD ignore）；重复的未知参数同样忽略 |
+| 未知参数 | — | **忽略**（草案 §3.4.7：SHOULD ignore）；重复的未知参数同样忽略 |
 
 `digits` / `period` / `counter` 刻意不用 `Number()`：`Number("0x7") === 7`、`Number("1e3") === 1000`，会把扫码导入边界变成宽松解析。
 
@@ -285,14 +286,16 @@ UNSUPPORTED_OTPAUTH_TYPE NOT_IMPLEMENTED
 
 | 项 | 命令 | 当前结果 |
 | --- | --- | --- |
-| core 全量 | `bun run --filter '@yansongda/otp-core' test` | **318** 用例（含 RFC 向量、URI 边界、往返不变量、`@ts-expect-error` 类型契约） |
-| mp 平台契约 | `bun run --filter '@yansongda/miniprogram-otp' test` | **19** 用例（1 文件） |
+| core 全量 | `bun run --filter '@yansongda/otp-core' test` | 全绿（含 RFC 向量、URI 边界、往返不变量、`@ts-expect-error` 类型契约） |
+| mp 平台契约 | `bun run --filter '@yansongda/miniprogram-otp' test` | 全绿（1 文件） |
 | 一键检查 | `bun run check` | `sync:core:check` + lint + typecheck + 上面两项 |
 | mp 守卫 | `node packages/miniprogram-otp/scripts/ci/check-invariants.mjs` | 22/22 |
 | ohos 守卫 | `node packages/ohos-otp/scripts/ci/check-invariants.mjs` | 14/14 |
-| ohos 本地单测 | `hvigorw test --mode module -p module=library@default -p testType=local` | **299** 用例（kit-free 全链路 + fixture） |
-| ohos 设备用例 | `ohosTest`（真实 cryptoFramework + barrel 链路） | **37** 用例 |
+| ohos 本地单测 | `hvigorw test --mode module -p module=library@default -p testType=local` | 全绿（kit-free 全链路 + fixture） |
+| ohos 设备用例 | `ohosTest`（真实 cryptoFramework + barrel 链路） | 全绿 |
 | 基准 | `bun run bench` / `bun run bench:ab` | 17 热路径场景 + `OTPAuthURI.parse/build` 冷路径场景 |
+
+> 用例条数刻意不写进文档（易腐坏）：以各命令的实测输出为准；ohos 守卫的 BASELINE 负责「数量不减少」。
 
 **ohos 覆盖边界（实测结论）**：Local Test 运行在 PC 本地 Simulator，**可以 import 并可构造** cryptoFramework 对象，但 `doFinalSync()` 返回空 DataBlob（`len=0`）——本地 crypto 计算不可用。因此 `src/test` 只覆盖 kit-free 全链路（注入 `HmacFixture`/`RandomFixture`，模块图内**不存在** `CryptoSource.ets`），真实 crypto 由 `src/ohosTest` 设备用例兜底。
 
@@ -376,4 +379,4 @@ UNSUPPORTED_OTPAUTH_TYPE NOT_IMPLEMENTED
 - RFC 4226（HOTP）、RFC 6238（TOTP）、RFC 4648（Base32/Base64）、RFC 3986（URI）、RFC 5234（ABNF）、RFC 2119/8174（需求用词）
 - Google Authenticator [Key URI Format](https://github.com/google/google-authenticator/wiki/Key-Uri-Format)（`otpauth://` 的事实标准）
 - IANA URI Schemes：`otpauth`（Provisional，CRI #13829，2020-05-14 注册，Reference 指向上面的 wiki）
-- `draft-andesco-otpauth-uri-00`（2026-02，IETF 个人稿，非 RFC）：补全 label/issuer ABNF，明确 consumer 必须先按原始串切分再解码、解码后段内含冒号必须拒收、issuer 参数是匹配权威
+- `draft-andesco-otpauth-uri-01`（2026-10-30，IETF 个人稿，非 RFC）：补全 label/issuer ABNF，明确 consumer 必须先按原始串切分再解码（§3.1）、解码后段内含冒号必须拒收（§3.1）、已知参数至多一次（§3.4）、issuer 参数是匹配权威且不得仅因与前缀不同而拒收（§4）

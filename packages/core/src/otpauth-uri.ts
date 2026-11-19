@@ -1,7 +1,8 @@
 /**
  * OTPAuthURI：otpauth:// URI 解析与生成（零平台依赖）。
- * 遵循 Google Authenticator Key URI Format（IANA Provisional #13829）；
- * query 手写拆分，不依赖平台 URL 查询解析 API。
+ * 遵循 Google Authenticator Key URI Format（IANA Provisional #13829）与 IETF 个人稿
+ * draft-andesco-otpauth-uri-01（§3.1 label 解析顺序 / §3.3 label 产生式 / §3.4 参数唯一性 /
+ * §4 issuer 参数权威性）；query 手写拆分，不依赖平台 URL 查询解析 API。
  */
 import { otpFail } from "./errors";
 import { decode, decodeStrict, encode } from "./internal/base32";
@@ -51,17 +52,32 @@ function encodePart(raw: string): string {
  *   label = accountname / issuer (":" / "%3A") *"%20" accountname
  *
  * 判定是「原始串中首个 `:` 或 `%3A`（十六进制大小写不敏感）」，与 ABNF 的书写顺序一致，
- * 也与主流实现（如 hectorm/otpauth 的 `split(/(?::|%3A) *(.+)/i)`）一致。
- * 刻意不依赖 query 里有没有 issuer、也不比较前缀与 issuer 是否相等：规范要求两者相等，
- * 不相等属于签发方的数据问题，不应改变分隔符的判定（否则同一 label 会有两种解释）。
- * 手工扫描而非 `toLowerCase().indexOf("%3a")`：`İ`、`ẞ` 这类小写后长度会变的字符会让
- * 下标与原始串错位。返回分隔符起点下标；没有分隔符返回 -1（宽度由 `:` / `%3A` 再判：1 或 3）。
- *
- * 实现用原生 `indexOf` 找候选（逐字符 JS 循环在纯文本 label 上是 parse 的主要成本）：
- * `:` 一次原生扫描；`%3A` 先找 `%3` 候选、再判第三个字符是 `a`/`A`，因此也不会被
- * 上面那类「小写后长度变化」的字符影响。
+ * 也与主流实现（如 hectorm/otpauth 的 `split(/(?::|%3A) *(.+)/i)`）一致；草案 §3.1 把这条
+ * consumer 规则写死为「先按原始串首个分隔符切分，再逐段百分号解码」。
+ * 刻意不依赖 query 里有没有 issuer、也不比较前缀与 issuer 是否相等：草案 §4 规定 consumer
+ * MUST NOT「仅因两个值不同就拒收」，issuer 量以 query 为准（见 parse）；不一致属于签发方的
+ * 数据问题，不应改变分隔符的判定（否则同一 label 会有两种解释）。
+ * 返回分隔符起点下标；没有分隔符返回 -1（宽度由 `:` / `%3A` 再判：1 或 3）。
  */
-function findPercent3A(input: string): number {
+function findLabelSeparator(input: string): number {
+  const colon = input.indexOf(":");
+  const pct = indexOfPercentEncodedColon(input);
+  if (colon === -1) {
+    return pct;
+  }
+  if (pct === -1 || colon < pct) {
+    return colon;
+  }
+  return pct;
+}
+
+/**
+ * 原始串里首个 `%3A`（十六进制大小写不敏感）的下标，没有则 -1。
+ * 不用 `input.toLowerCase().indexOf("%3a")`：`İ`、`ẞ` 这类小写后长度会变的字符会让下标与
+ * 原始串错位；也不用逐字符 `charAt` 循环（逐字符 JS 循环在纯文本 label 上是 parse 的主要
+ * 成本）——先找 `%3` 候选、再判第三个字符是 `a`/`A`，纯文本 label 上只需几次原生扫描。
+ */
+function indexOfPercentEncodedColon(input: string): number {
   let i = input.indexOf("%3");
   while (i !== -1) {
     if (i + 2 < input.length) {
@@ -73,18 +89,6 @@ function findPercent3A(input: string): number {
     i = input.indexOf("%3", i + 1);
   }
   return -1;
-}
-
-function findLabelSeparator(input: string): number {
-  const colon = input.indexOf(":");
-  const pct = findPercent3A(input);
-  if (colon === -1) {
-    return pct;
-  }
-  if (pct === -1 || colon < pct) {
-    return colon;
-  }
-  return pct;
 }
 
 /**
@@ -142,9 +146,9 @@ function hasLoneSurrogate(raw: string): boolean {
 }
 
 /**
- * 已知 query 参数（Key URI Format / draft-andesco-otpauth-uri-00 的 parameter 产生式）。
- * 已知参数重复出现 → 整条 URI 拒绝（草案："A consumer MUST reject the URI if any known
- * parameter appears more than once"）；未知参数重复仍忽略（草案：SHOULD ignore）。
+ * 已知 query 参数（Key URI Format / draft-andesco-otpauth-uri-01 §3.1 的 parameter 产生式）。
+ * 已知参数重复出现 → 整条 URI 拒绝（草案 §3.4："A consumer MUST reject the URI if any known
+ * parameter appears more than once"）；未知参数重复仍忽略（草案 §3.4.7：SHOULD ignore）。
  */
 const KNOWN_QUERY_KEYS = new Set<string>([
   "secret",
@@ -180,9 +184,10 @@ export class OTPAuthURI {
    * query 手写拆分 → label 在**原始串**上定位 ABNF 分隔符后逐段百分号解码（失败回退原串）→
    * digits / period / counter 只接受纯十进制整数（拒绝 0x / 科学计数 / 小数）→
    * secret 规范化为大写无填充 base32；未知参数忽略，query 的 issuer 优先于 label 前缀。
-   * label 按 Key URI Format 的 ABNF 解析：`label = accountname / issuer (":" / "%3A")
-   * *"%20" accountname` —— 原始串中首个 `:` 或 `%3A`（十六进制大小写不敏感）即分隔符，
-   * 其后空格是 padding；没有分隔符时整段就是 account。
+   * label 按 Key URI Format 的 ABNF 解析（草案 §3.1/§3.3 同规则）：
+   * `label = accountname / issuer (":" / "%3A") *"%20" accountname` —— 原始串中首个 `:` 或
+   * `%3A`（十六进制大小写不敏感）即分隔符，其后空格是 padding；没有分隔符时整段就是 account。
+   * query 的 `issuer` 与 label 前缀不一致时以 query 为准（草案 §4：MUST NOT 仅因不同而拒收）。
    * label 段与 build 对称（fail-closed）：account 缺失 / 为空、account 含冒号、或 label 段
    * 不可百分号编码（孤立代理字符）→ INVALID_OTPAUTH_URI；已知 query 参数重复亦拒绝。
    * 因此 parse 的返回值**一定能被 build 序列化**（`build(parse(uri))` 恒不抛错）。
@@ -196,9 +201,10 @@ export class OTPAuthURI {
       otpFail("INVALID_OTPAUTH_URI");
     }
 
-    // ① scheme 大小写不敏感
+    // ① scheme 大小写不敏感。只小写前 prefix.length 个字符：整串 toLowerCase() 在大 URI
+    // 上是一次与内容等长的额外分配，而判定只需要前缀（substring 短串时返回整串，自然不匹配）。
     const prefix = "otpauth://";
-    if (uri.toLowerCase().indexOf(prefix) !== 0) {
+    if (uri.substring(0, prefix.length).toLowerCase() !== prefix) {
       otpFail("INVALID_OTPAUTH_URI");
     }
     const rest = uri.substring(prefix.length);
@@ -329,7 +335,7 @@ export class OTPAuthURI {
 
     // ⑤ label 段契约：与 build 对称，保证「parse 成功 ⇒ 参数一定可被 build 序列化」。
     // 放在既有校验之后，任何原本抛某码的输入都不换码（见 errors.ts 的优先级表）。
-    // account 必填：Key URI Format 的 label 必填、ABNF 无空分支（草案 account = 1*）；
+    // account 必填：Key URI Format 的 label 必填、ABNF 无空分支（草案 §3.1 account = 1*）；
     // 段内不得含冒号：规范明文 + 草案 consumer MUST reject；且必须可百分号编码。
     if (account === "") {
       otpFail("INVALID_OTPAUTH_URI");

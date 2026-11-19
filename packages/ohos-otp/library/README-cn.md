@@ -87,9 +87,9 @@ try {
 | `TotpOptions`       | `period?: number`（秒）                                                              | `30`                      |
 |                     | `t0?: number`（秒）                                                                  | `0`                       |
 |                     | `clockOffsetMs?: number`                                                             | `0`                       |
-|                     | `issuer?` / `account?: string`（仅 `toURI()` 使用；`account` 必填）                  | 空                        |
+|                     | `issuer?` / `account?: string`（构造期可选；`toURI()` 必填）                         | 空                        |
 | `HotpOptions`       | `counter?: number`                                                                   | `0`                       |
-|                     | `issuer?` / `account?: string`（仅 `toURI()` 使用；`account` 必填）                  | 空                        |
+|                     | `issuer?` / `account?: string`（构造期可选；`toURI()` 必填）                         | 空                        |
 | `VerifyOptions`     | 历史合并形态（兼容保留）；优先用按类收窄的 `HotpVerifyOptions` / `TotpVerifyOptions` | —                         |
 | `HotpVerifyOptions` | `counter?: number`、`window?: number`（[0, 10] 步）                                  | `window: 0`               |
 | `TotpVerifyOptions` | `timestamp?: number`（epoch ms 安全整数）、`window?: number`（[0, 10] 步）           | `Date.now()`、`window: 0` |
@@ -156,6 +156,9 @@ provisional，CRI #13829，**不是 RFC**）：
   `issuer=` 参数、不写 label 前缀。
 - **已知偏离（宽容超集）**：分隔符后的**原始空格**也按 padding 剥离。ABNF 只写了 `%20`，
   而原始空格本身不是合法 URI 字符 —— 真实签发方确实会这么写，故容忍。需要严格请自行预清洗。
+- **从 1.x 升级**：`1.x` 在无 `account` 时产出 `otpauth://totp/?secret=…`。这类 URI（以及已经印
+  出去的二维码）现在会被 `INVALID_OTPAUTH_URI` 拒收；存量数据需一次性迁移 —— 用存下来的
+  `secret` 重建并补 `account` / `issuer`：`new TOTP({ secret, issuer, account }).toURI()`。
 
 ## RFC 符合性
 

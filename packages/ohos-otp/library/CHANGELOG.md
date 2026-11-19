@@ -25,6 +25,10 @@
   label 前缀、只写 `issuer=` 参数
 - `OtpAuthParams.account` 由可选改为**必填**（类型级；运行期仍校验空串）
 - 分隔符后的**原始空格**也按 padding 剥离（规范只写 `%20`，此处为宽容超集）
+- **存量数据迁移（一次性）**：1.x 在无 `account` 时产出的 `otpauth://totp/?secret=…`（以及已经
+  印出去的二维码）现在会被 `parse` / `TOTP.fromURI` / `HOTP.fromURI` 以 `INVALID_OTPAUTH_URI`
+  拒收。用存下来的 `secret` 重建并补 `account` / `issuer`：
+  `new TOTP({ secret, issuer, account }).toURI()`（或 `OTPAuthURI.build(params)`）
 - `HOTP.verify` 不再接受 `timestamp`、`TOTP.verify` 不再接受 `counter`（对象字面量会编译失败）
 - `OtpError.name` 由 `'Error'` 改为 `'OtpError'`（provider 错误契约，三端一致）
 - 非字符串入参不再漏原生 `TypeError`：`secret` → `INVALID_SECRET_CONTAINER`、`token` →

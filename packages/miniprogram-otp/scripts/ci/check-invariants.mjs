@@ -279,15 +279,17 @@ check("原型修复只在原型退化时执行（core / mp 条件一致）", () 
   return "core / mp 两处条件一致（格式无关）";
 });
 
-check("OTPAuthURI 类型桥不使用 as unknown as", () => {
-  // 整体断言会吞掉 core build/parse 的签名漂移；只允许对 parse 返回值做一次投影
+check("barrel 不使用 as unknown as 整体断言", () => {
+  // 整体断言会吞掉 core 的签名漂移：barrel 只允许窄化的 `as`（如 parse 返回值投影、
+  // 错误码字符串 → 平台字面量联合），不允许「先擦成 unknown 再断言成别的形状」。
+  // 不限定变量名/换行，避免换个写法就绕过。
   const text = stripComments(readText(BARREL));
-  if (/CoreOTPAuthURI\s+as\s+unknown\s+as/.test(text)) {
+  if (/as\s+unknown\s+as/.test(text)) {
     throw new Error(
-      "src/index.ts 用 as unknown as 整体断言 OTPAuthURI；请改为显式 wrapper",
+      "src/index.ts 出现 as unknown as 整体断言；请改为显式 wrapper 或窄化断言",
     );
   }
-  return "显式 wrapper（parse 仅返回值投影）";
+  return "无 as unknown as（仅窄化断言）";
 });
 
 check("零运行时依赖", () => {

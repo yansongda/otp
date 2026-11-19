@@ -41,9 +41,11 @@ export enum OtpErrorCode {
   INVALID_TOKEN = 'INVALID_TOKEN',
   CRYPTO_FAILED = 'CRYPTO_FAILED',
   CRYPTO_NOT_INITIALIZED = 'CRYPTO_NOT_INITIALIZED',
-  // URI 非字符串 / 不以 otpauth:// 开头 / build 的 account 缺失或为空（label 必填）/ build 的
-  // issuer·account 非字符串、含冒号（Key URI Format 禁止）、issuer 非空时 account 以空格开头
-  // （分隔符后的空格是 ABNF 的 padding），或含无法百分号编码的字符
+  // URI 非字符串 / 不以 otpauth:// 开头 / 已知 query 参数重复 / label 段非法（parse 与 build
+  // 同口径：account 缺失或为空、account 含冒号 —— Key URI Format 明文禁止）/ issuer·account
+  // 非字符串或含无法百分号编码的字符。
+  // 注意：issuer 含冒号、account 以空格开头**不**报错 —— build 改为省略 label 前缀、只写
+  // issuer= 参数（issuer 参数是 pchar，允许冒号；分隔符后的空格按 ABNF 只是 padding）。
   INVALID_OTPAUTH_URI = 'INVALID_OTPAUTH_URI',
   UNSUPPORTED_OTPAUTH_TYPE = 'UNSUPPORTED_OTPAUTH_TYPE',
   NOT_IMPLEMENTED = 'NOT_IMPLEMENTED'

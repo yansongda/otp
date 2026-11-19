@@ -408,6 +408,46 @@ export default function otpAuthUriTest() {
       assertParamsEqual(back, p);
     });
 
+    it('roundtrip_labelContractInvariant', 0, () => {
+      // 不变量：parse 成功 ⇒ build 不抛 ⇒ 再 parse 得到同一组 label 字段，且二次序列化逐字稳定。
+      // 语料与 core 的 parse_buildRoundTripInvariant 同源（固定语料，无随机）。
+      const accepted: string[] = [
+        'otpauth://totp/ACME:alice?secret=JBSWY3DPEHPK3PXP',
+        'otpauth://totp/ACME%3Aalice?secret=JBSWY3DPEHPK3PXP',
+        'otpauth://totp/ACME%3a%20alice?secret=JBSWY3DPEHPK3PXP',
+        'otpauth://totp/Big%20Corporation%3A%20alice%40bigco.com?secret=JBSWY3DPEHPK3PXP&issuer=Big%20Corporation',
+        'otpauth://totp/alice?secret=JBSWY3DPEHPK3PXP&issuer=AC%3AME',
+        'otpauth://totp/alice?secret=JBSWY3DPEHPK3PXP&issuer=',
+        'otpauth://totp/%20alice?secret=JBSWY3DPEHPK3PXP&issuer=ACME',
+        'otpauth://totp/%20alice?secret=JBSWY3DPEHPK3PXP',
+        'otpauth://totp/ACME%253Aalice?secret=JBSWY3DPEHPK3PXP',
+        'otpauth://hotp/ACME:alice?secret=JBSWY3DPEHPK3PXP&counter=42',
+        'otpauth://hotp/alice?secret=JBSWY3DPEHPK3PXP&counter=0&digits=8',
+        'otpauth://totp/alice?secret=JBSWY3DPEHPK3PXP&algorithm=sha256&digits=8&period=60',
+        'OTPAUTH://TOTP/Alice%20Smith?SECRET=JBSWY3DPEHPK3PXP'
+      ];
+      for (let i = 0; i < accepted.length; i++) {
+        const p: OtpAuthParams = OTPAuthURI.parse(accepted[i]);
+        const rebuilt: string = OTPAuthURI.build(p);
+        const again: OtpAuthParams = OTPAuthURI.parse(rebuilt);
+        expect(again.type).assertEqual(p.type);
+        expect(again.account).assertEqual(p.account);
+        expect(again.digits).assertEqual(p.digits);
+        // 可选字段用哨兵归一，避免向 hypium 传 undefined
+        const issuerIn: string = p.issuer === undefined ? '' : p.issuer;
+        const issuerOut: string = again.issuer === undefined ? '' : again.issuer;
+        expect(issuerOut).assertEqual(issuerIn);
+        const periodIn: number = p.period === undefined ? -1 : p.period;
+        const periodOut: number = again.period === undefined ? -1 : again.period;
+        expect(periodOut).assertEqual(periodIn);
+        const counterIn: number = p.counter === undefined ? -1 : p.counter;
+        const counterOut: number = again.counter === undefined ? -1 : again.counter;
+        expect(counterOut).assertEqual(counterIn);
+        // 二次序列化必须逐字稳定（幂等）
+        expect(OTPAuthURI.build(again)).assertEqual(rebuilt);
+      }
+    });
+
     it('build_loneSurrogateLabel_throws', 0, () => {
       // 孤立代理字符（如被截断的 emoji）会让 encodeURIComponent 抛原生 URIError；
       // 公开契约是一切失败均抛 OtpError，必须收敛为 INVALID_OTPAUTH_URI

@@ -593,7 +593,7 @@ describe("otpauth-uri", () => {
   });
 
   it("parse_colonInAccount_failsClosed", () => {
-    // label 段不得含冒号（规范明文 + draft-andesco-otpauth-uri-00 的 consumer MUST reject）：
+    // label 段不得含冒号（规范明文 + draft-andesco-otpauth-uri-01 §3.1 的 consumer MUST reject）：
     // 「首个分隔符」切分之后，残余冒号必然落在 account 里 —— 这种 URI 无法被规范序列化，
     // parse 与 build 必须同口径拒绝（否则 parse 出来的参数 toURI() 才炸）
     for (const uri of [
@@ -677,6 +677,28 @@ describe("otpauth-uri", () => {
         "INVALID_OTPAUTH_URI",
       );
     }
+  });
+
+  it("parse_schemePrefixBoundaries", () => {
+    // scheme 只小写前 prefix.length 个字符（整串 toLowerCase 在大 URI 上是一次额外分配）：
+    // 短串、近似前缀、错位出现都得拒；大小写混合的真前缀照常接受
+    for (const bad of [
+      "",
+      "otpauth:/",
+      "https://totp/alice?secret=JBSWY3DPEHPK3PXP",
+      " otpauth://totp/alice?secret=JBSWY3DPEHPK3PXP",
+      "xotpauth://totp/alice?secret=JBSWY3DPEHPK3PXP",
+    ]) {
+      expectCode(() => OTPAuthURI.parse(bad), "INVALID_OTPAUTH_URI");
+    }
+    // 只有 scheme 通过、type 缺失 → 沿用既有码（UNSUPPORTED_OTPAUTH_TYPE）
+    expectCode(
+      () => OTPAuthURI.parse("otpauth://"),
+      "UNSUPPORTED_OTPAUTH_TYPE",
+    );
+    expect(
+      OTPAuthURI.parse("OtPaUtH://TOTP/alice?secret=JBSWY3DPEHPK3PXP").account,
+    ).toBe("alice");
   });
 
   it("parse_nullOptions_behavesLikeUndefined", () => {
