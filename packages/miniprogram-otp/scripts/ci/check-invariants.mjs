@@ -18,7 +18,7 @@ const CORE_ERRORS = "../core/src/errors.ts";
 const SECRET = "../core/src/secret.ts";
 
 const BASELINE = {
-  // 算法测试已迁至 packages/core（304 条）；本包只保留平台层契约测试
+  // 算法测试已迁至 packages/core（334 条）；本包只保留平台层契约测试
   testDeclarations: 19,
   testFiles: 1,
   errorCodeMembers: 22,

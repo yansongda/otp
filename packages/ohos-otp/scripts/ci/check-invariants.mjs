@@ -19,8 +19,8 @@ import { fileURLToPath } from 'node:url';
 const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 
 const BASELINE = {
-  localTestCases: 289, // library/src/test 的 it( 数量（PC Local Test）
-  deviceTestCases: 37, // library/src/ohosTest 的 it( 数量（真实 crypto，需设备）
+  localTestCases: 300, // library/src/test 的 it( 数量（PC Local Test）
+  deviceTestCases: 38, // library/src/ohosTest 的 it( 数量（真实 crypto，需设备）
   errorCodeMembers: 22, // OtpErrorCode 成员数：取值冻结，仅允许显式新增（现含 INVALID_SECRET_CONTAINER / INVALID_MIN_SECRET_BITS / INVALID_CLOCK_OFFSET / INVALID_SECRET_LENGTH）
 };
 
@@ -280,6 +280,24 @@ check('core 副本 OtpError 设置 name = \'OtpError\'', () => {
     throw new Error("core/errors.ts 未设置 this.name = 'OtpError'");
   }
   return 'core 副本 name 契约一致';
+});
+
+check('生成副本头不含 -dirty 标记', () => {
+  // sync-core 在 core 工作区有未提交改动时会把头写成 core@<commit>-dirty；
+  // `--check` 有意忽略 commit 字段（溯源信息不影响正文判定），因此这类误提交只能在这里拦。
+  const dirty = [];
+  for (const file of listFiles(join(REPO_ROOT, `${LIB_SRC}/core`))) {
+    if (!file.endsWith('.ts')) continue;
+    if (/\(core@[^)]*-dirty\)/.test(readFileSync(file, 'utf8'))) {
+      dirty.push(toPosix(relative(REPO_ROOT, file)));
+    }
+  }
+  if (dirty.length > 0) {
+    throw new Error(
+      `${dirty.join(', ')} 的生成头含 -dirty；请先提交 core 改动再重新运行 bun run sync:core`,
+    );
+  }
+  return '全部为已提交状态的 core@commit';
 });
 
 check('版本号与 CHANGELOG 一致', () => {
