@@ -305,8 +305,8 @@ UNSUPPORTED_OTPAUTH_TYPE NOT_IMPLEMENTED
 | core 全量 | `bun run --filter '@yansongda/otp-core' test` | 全绿（含 RFC 向量、URI 边界、往返不变量、`@ts-expect-error` 类型契约） |
 | mp 平台契约 | `bun run --filter '@yansongda/miniprogram-otp' test` | 全绿（1 文件） |
 | 一键检查 | `bun run check` | `sync:core:check` + lint + typecheck + `bun run guard`（两个包的不变量守卫）+ 上面两项 |
-| mp 守卫 | `node packages/miniprogram-otp/scripts/ci/check-invariants.mjs` | 全绿（22 项） |
-| ohos 守卫 | `node packages/ohos-otp/scripts/ci/check-invariants.mjs` | 全绿（16 项） |
+| mp 守卫 | `node packages/miniprogram-otp/scripts/ci/check-invariants.mjs` | 全绿（项数以脚本输出为准） |
+| ohos 守卫 | `node packages/ohos-otp/scripts/ci/check-invariants.mjs` | 全绿（项数以脚本输出为准） |
 | ohos 本地单测 | `hvigorw test --mode module -p module=library@default -p testType=local` | 全绿（kit-free 全链路 + fixture） |
 | ohos 设备用例 | `ohosTest`（真实 cryptoFramework + barrel 链路） | 全绿 |
 | 基准 | `bun run bench` / `bun run bench:ab` | 17 热路径场景 + `OTPAuthURI.parse/build` 冷路径场景 |
