@@ -4,17 +4,19 @@
  * 取模是本库唯一发生点；补零用模板字符串，规避平台字符串补位 API 的可用性差异。
  */
 import { otpFail } from "../errors";
-import { ALGORITHMS, type AlgorithmName } from "../options";
+import type { AlgorithmName } from "../options";
+import { algorithmSpec } from "./algorithm";
 
 export function isValidDigits(digits: number): boolean {
   return digits === 6 || digits === 7 || digits === 8;
 }
 
 // 构造期防非法算法值穿透到 provider（URI parse 已同规则校验）。
+// 判定与 engine / provider 同源：算法事实只在 internal/algorithm.ts 维护一份。
 export function isValidAlgorithm(
   algorithm: string,
 ): algorithm is AlgorithmName {
-  return (ALGORITHMS as readonly string[]).includes(algorithm);
+  return algorithmSpec(algorithm) !== undefined;
 }
 
 /** 10^n 表（只覆盖 6/7/8；避免每次 format 重算幂与字符串补零的额外转换）。 */

@@ -80,10 +80,15 @@
 - `OTPAuthURI.build` / `toURI()` 不再漏原生 `URIError`：孤立代理字符收敛为 `INVALID_OTPAUTH_URI`
 - label 分隔符按 ABNF（`:` / `%3A`）无条件识别，并剥离分隔符后的空格 padding（`*"%20"`）；
   此前依赖 query `issuer` 与前缀相等，规范的 `issuer%3Aaccount` 形态会丢 issuer
-- provider 摘要长度必须与算法匹配（SHA1=20 / SHA256=32 / SHA512=64），不匹配统一 `CRYPTO_FAILED`
-- 随机源返回值非 `Uint8Array` / 长度不符 / 抛出非 `OtpError` 一律收敛为 `CRYPTO_FAILED`
+- provider 摘要长度必须与算法匹配（SHA1=20 / SHA256=32 / SHA512=64），不匹配统一 `CRYPTO_FAILED`；
+  未知算法属「算法不被接受」，统一 `INVALID_ALGORITHM`（此前与摘要故障混用同一码）
+- 随机源返回值校验：长度必须等于请求的 `bytes`；容器规则与 `Secret.fromBytes` **同源**
+  （`core/internal/bytes.ts`）——`Uint8Array` / `Uint8ClampedArray` / `ArrayBuffer` 放行，
+  其余容器或抛出非 `OtpError` 一律收敛为 `CRYPTO_FAILED`
 - ohos `CryptoSource`：未知算法不再静默降级 SHA1，改抛 `INVALID_ALGORITHM`（与 pure-js provider
   对齐）；`toMacAlgName` 移到 `try` 外，避免被自身 catch 二次包裹
+- 算法事实（名称集合 / 摘要长度 / HMAC 分块长度）收敛到 core 的 `internal/algorithm.ts` 单源，
+  `toMacAlgName` 的算法集合由守卫脚本与 core 逐项对拍（**无行为变化**，纯内部收敛）
 
 ## 1.1.1 - 2026-11-12
 

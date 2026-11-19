@@ -4,7 +4,8 @@
  *
  * 跨 .ets 边界的签名只用基础类型（ArkTS 不支持字面量类型 / as const），
  * 平台层各自提供更严格的类型（TS 字面量联合 / ArkTS enum）。
- * 内部类型（ALGORITHMS / AlgorithmName 等）只在 .ts 内使用，不进入 barrel。
+ * 内部类型（AlgorithmName 等）只在 .ts 内使用，不进入 barrel；
+ * 算法的数值事实（摘要长度 / 分块长度）见 internal/algorithm.ts，本文件只保留公开 DTO 与默认值。
  */
 
 /** HMAC 通用选项（HOTP / TOTP 共用字段）。 */
@@ -149,12 +150,6 @@ export const OtpType = {
   HOTP: "hotp",
 } as const;
 export type OtpType = (typeof OtpType)[keyof typeof OtpType];
-
-export const ALGORITHMS = [
-  OtpAlgorithm.SHA1,
-  OtpAlgorithm.SHA256,
-  OtpAlgorithm.SHA512,
-] as const;
 
 export const ALLOWED_DIGITS = [6, 7, 8] as const;
 export type DigitCount = (typeof ALLOWED_DIGITS)[number];

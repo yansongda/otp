@@ -100,11 +100,16 @@
   并剥离分隔符后的空格 padding（`*"%20"`，如规范示例 `Big%20Corporation%3A%20alice%40bigco.com`）
 - 错误模型改造本身对 npm 用户无破坏性变更（仅新增 `OtpError.codeString`）；本版本的其它破坏性变更见上方 Breaking changes
 - provider 摘要长度必须与算法匹配（SHA1=20 / SHA256=32 / SHA512=64）：不匹配统一
-  `CRYPTO_FAILED`（此前 SHA256/512 返回 20 字节摘要会被静默截断）
-- 随机源返回值类型与长度校验：非 `Uint8Array`（字符串 / array-like / `null`）或长度不符
-  一律 `CRYPTO_FAILED`（此前字符串可静默产出 0 字节空密钥，`null` 漏 `TypeError`）
-- 纯 JS provider 的算法查表改用 switch：`HASH_SPECS["constructor"]` 会命中 `Object.prototype`
-  继承键，把「算法不被接受」错报成 `CRYPTO_FAILED`
+  `CRYPTO_FAILED`（此前 SHA256/512 返回 20 字节摘要会被静默截断）；未知算法属「算法不被接受」，
+  统一 `INVALID_ALGORITHM`（此前与摘要故障混用同一码）
+- 随机源返回值校验：长度必须等于请求的 `bytes`；容器规则与 `Secret.fromBytes` **同源**
+  （`internal/bytes.ts`）——`Uint8Array` / `Uint8ClampedArray` / `ArrayBuffer` 放行，
+  字符串 / array-like / `null` / 其它 TypedArray 一律 `CRYPTO_FAILED`
+  （此前字符串可静默产出 0 字节空密钥，`null` 漏 `TypeError`）
+- 纯 JS provider 的算法查表改用 switch：`Object.prototype` 的继承键（如 `"constructor"`、
+  `"toString"`）会被误当成算法命中，把「算法不被接受」错报成 `CRYPTO_FAILED`
+- 算法事实（名称集合 / 摘要长度 / HMAC 分块长度）收敛到 core 的 `internal/algorithm.ts` 单源：
+  pure-js provider 只保留「算法名 → 哈希函数」映射（**无行为变化**，纯内部收敛）
 
 ### Removed
 

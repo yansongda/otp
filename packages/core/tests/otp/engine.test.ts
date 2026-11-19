@@ -185,6 +185,20 @@ describe("engine", () => {
     expectCode(() => generate(wrongSha256, params256, 0), "CRYPTO_FAILED");
   });
 
+  it("generate_unknownAlgorithm_throwsInvalidAlgorithm", () => {
+    // 未知算法是「算法不被接受」，与 pure-js / ohos provider 同码（不是 CRYPTO_FAILED）；
+    // 即使 provider 返回长度看似合法的摘要，也必须先拒绝算法
+    const anyDigest = {
+      sign(): Uint8Array {
+        return new Uint8Array(20);
+      },
+    };
+    expectCode(
+      () => generate(anyDigest, { algorithm: "MD5", digits: 6, key }, 0),
+      "INVALID_ALGORITHM",
+    );
+  });
+
   it("verify_nonStringToken_throwsInvalidToken", () => {
     // JS 调用方可能传 null / 数字：先判容器再取 length，不得漏原生 TypeError；
     // 归为 INVALID_TOKEN（token 格式非法），与「非纯数字 / 长度不符」同码

@@ -4,6 +4,8 @@
  */
 import { describe, expect, it } from "bun:test";
 import { OtpError } from "../../src/errors";
+import { algorithmSpec } from "../../src/internal/algorithm";
+import { OtpAlgorithm } from "../../src/options";
 import { hmac } from "../../src/pure-js/hmac";
 import { PureJsHmac } from "../../src/pure-js/pure-js-hmac";
 import { sha1 } from "../../src/pure-js/sha1";
@@ -70,8 +72,9 @@ describe("provider", () => {
   });
 
   it("provider_prototypeKeyAlgorithm_throwsInvalidAlgorithm", () => {
-    // `HASH_SPECS[algorithm]` 会命中 Object.prototype 的继承键："constructor" / "toString"
-    // 会拿到函数而非 undefined，最终被 catch 误收敛为 CRYPTO_FAILED。查表必须用自有属性。
+    // 算法查表一律用 switch，不用属性索引：`表[algorithm]` 会命中 Object.prototype 的继承键
+    // （"constructor" / "toString" 拿到函数而非 undefined），最终被 catch 误收敛为
+    // CRYPTO_FAILED，把「算法不被接受」错报成 crypto 故障。
     for (const algorithm of ["constructor", "toString", "hasOwnProperty"]) {
       let thrown: unknown = null;
       try {
@@ -85,6 +88,24 @@ describe("provider", () => {
       }
       expect(thrown instanceof OtpError).toBe(true);
       expect((thrown as OtpError).code).toBe("INVALID_ALGORITHM");
+    }
+  });
+
+  it("provider_everyAlgorithmMatchesSpecTable", () => {
+    // 算法事实单源（internal/algorithm.ts）：`OtpAlgorithm` 的每个成员都必须有事实条目、
+    // 有纯 JS 哈希映射，且事实表里的 digestLength 与哈希函数真实输出长度一致。
+    // 新增算法时漏改任一处都会在这里红，而不是线上才算错码或误报 INVALID_ALGORITHM。
+    for (const algorithm of Object.values(OtpAlgorithm)) {
+      const spec = algorithmSpec(algorithm);
+      if (spec === undefined) {
+        throw new Error(`internal/algorithm.ts 缺少算法事实：${algorithm}`);
+      }
+      const digest = provider.sign(
+        algorithm,
+        new Uint8Array(20),
+        new Uint8Array(8),
+      );
+      expect(digest.length).toBe(spec.digestLength);
     }
   });
 });
