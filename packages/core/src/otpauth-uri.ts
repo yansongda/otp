@@ -146,7 +146,7 @@ function hasLoneSurrogate(raw: string): boolean {
  * 已知参数重复出现 → 整条 URI 拒绝（草案："A consumer MUST reject the URI if any known
  * parameter appears more than once"）；未知参数重复仍忽略（草案：SHOULD ignore）。
  */
-const KNOWN_QUERY_KEYS = new Set([
+const KNOWN_QUERY_KEYS = new Set<string>([
   "secret",
   "issuer",
   "algorithm",
@@ -409,19 +409,19 @@ export class OTPAuthURI {
     if (!isValidDigits(params.digits)) {
       otpFail("INVALID_DIGITS");
     }
-    // 运行时（JS 调用方 / JSON 反序列化）可能缺字段或传非字符串：用 unknown 接收后再判容器
-    // ——既不改运行时契约（INVALID_OTPAUTH_URI，绝不把 null 写成 "null"），也不让 TS 把
-    // 「必填字段不可能缺失」当成无意义比较报错。
-    const issuerParam: unknown = params.issuer;
-    const accountParam: unknown = params.account;
-    if (
-      (issuerParam !== undefined && typeof issuerParam !== "string") ||
-      typeof accountParam !== "string"
-    ) {
+    // 运行时（JS 调用方 / JSON 反序列化）可能缺字段或传非字符串：按 typeof 判容器后再取用，
+    // 既不改运行时契约（INVALID_OTPAUTH_URI，绝不把 null 写成 "null"）。
+    // 刻意不用 `unknown` 中转：生成副本要过 ArkTS 编译，ArkTS 不对 `unknown` 做收窄。
+    const issuerRaw = params.issuer;
+    if (issuerRaw !== undefined && typeof issuerRaw !== "string") {
       otpFail("INVALID_OTPAUTH_URI");
     }
-    const issuer = issuerParam === undefined ? "" : issuerParam;
-    const account = accountParam;
+    const accountRaw = params.account;
+    if (typeof accountRaw !== "string") {
+      otpFail("INVALID_OTPAUTH_URI");
+    }
+    const issuer: string = issuerRaw === undefined ? "" : issuerRaw;
+    const account: string = accountRaw;
 
     // account 必填：Key URI Format 的 label 必填，而 label 只能由 account 派生。
     // 也不允许拿 issuer 顶替——无原始冒号的 label 会被 parse 读成 account，

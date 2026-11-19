@@ -233,7 +233,7 @@ export default function otpAuthUriTest() {
 
     it('build_invalidSecretChar_throws', 0, () => {
       // secret 含 base32 字母表外字符 → 与 parse 同样抛 INVALID_BASE32_CHAR
-      const p: OtpAuthParams = { type: OtpType.TOTP, secret: 'JBSW!@#', algorithm: OtpAlgorithm.SHA1, digits: 6 };
+      const p: OtpAuthParams = { type: OtpType.TOTP, secret: 'JBSW!@#', algorithm: OtpAlgorithm.SHA1, digits: 6, account: 'alice' };
       expectThrowsCode(() => { OTPAuthURI.build(p); }, OtpErrorCode.INVALID_BASE32_CHAR);
     });
 
