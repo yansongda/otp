@@ -157,4 +157,42 @@ describe("base32", () => {
     expect(encoded.indexOf("=")).toBe(-1);
     expect(encoded.length).toBe(32);
   });
+
+  it("decode_toleratesAllJsWhitespace", () => {
+    // 归一化的空白口径就是 JS 的 `\s`（含 NBSP / 全角空格 / BOM），
+    // 位拼接层不重复判空白：解成单遍查表后，这条用例防止空白集合被悄悄收窄。
+    const whitespace = [
+      " ",
+      "\t",
+      "\n",
+      "\r",
+      "\v",
+      "\f",
+      "\u00a0",
+      "\u1680",
+      "\u2028",
+      "\u3000",
+      "\ufeff",
+    ];
+    for (const ch of whitespace) {
+      const bytes = decode(`GEZDG${ch}NBVGY3TQOJQGEZDGNBVGY3TQOJQ`);
+      expect(bytes.length).toBe(20);
+    }
+  });
+
+  it("encodeDecodeRoundTrip_allByteLengths", () => {
+    // 覆盖「每 5 字节一组」的末组所有余量（末组 1~5 字节）与跨组边界
+    for (let length = 1; length <= 70; length++) {
+      const bytes = new Uint8Array(length);
+      for (let i = 0; i < length; i++) {
+        bytes[i] = (i * 37 + length) & 0xff;
+      }
+      const text = encode(bytes);
+      expect(text.length).toBe(Math.ceil((length * 8) / 5));
+      expect(bytesEqual(decode(text), bytes)).toBe(true);
+      expect(bytesEqual(decodeStrict(text), bytes)).toBe(true);
+      // 宽松模式的归一化（大小写 / 空白 / 尾部填充）不影响结果
+      expect(bytesEqual(decode(`${text.toLowerCase()}\n==`), bytes)).toBe(true);
+    }
+  });
 });
