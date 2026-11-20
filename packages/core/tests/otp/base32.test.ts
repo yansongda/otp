@@ -74,9 +74,22 @@ describe("base32", () => {
     expectCode(() => decode("A"), "SECRET_TOO_SHORT");
   });
 
+  it("decodeSingleInvalidCharTooShortBeforeCharError", () => {
+    // 当前实现的显式契约（旧实现报 INVALID_BASE32_CHAR）：单遍解码先算长度，
+    // 归一化后恰 1 字符时 SECRET_TOO_SHORT 先于 INVALID_BASE32_CHAR。
+    // 本用例冻结该行为，并连带验证「同一输入在宽松/严格两种模式下同码」。
+    // 含尾部 '=' 的例子（"\t-=" 归一化后只剩 "-"）防止 normalize 与长度判定脱节。
+    for (const input of ["1", "0", "!", "@", "\u212a", "\t-="]) {
+      expectCode(() => decode(input), "SECRET_TOO_SHORT");
+      expectCode(() => decodeStrict(input), "SECRET_TOO_SHORT");
+    }
+  });
+
   it("decodeIllegalChars", () => {
     expectCode(() => decode("AB1"), "INVALID_BASE32_CHAR");
     expectCode(() => decode("ab0"), "INVALID_BASE32_CHAR");
+    // 长度 ≥ 2 时字符错误仍先于长度/尾长校验（只有归一化后恰 1 字符才是 SECRET_TOO_SHORT）
+    expectCode(() => decode("1A"), "INVALID_BASE32_CHAR");
   });
 
   it("decodeStrict_rfc4648VectorsRoundTrip", () => {
