@@ -56,7 +56,7 @@ otp/                                  monorepo（bun workspaces）
 | --- | --- |
 | core 是唯一实现 | 算法/门面/URI/错误码只改 core；平台包内复制实现视为缺陷 |
 | 错误跨层靠工厂 | core 只 `otpFail(code)`；平台 barrel 调 `setErrorFactory`，公开 `OtpError` 由平台拥有 |
-| ohos 副本禁止手改 | `bun run sync:core` 生成 15 个文件；CI 跑 `sync:core:check`，drift 即失败 |
+| ohos 副本禁止手改 | `bun run sync:core` 从 core 生成；副本头写内容摘要 `core-sha256:<hash>`（不写 git commit：squash 合并后 commit 会成不可达对象），可反查来源；CI 跑 `sync:core:check`，drift 即失败 |
 | pure-js 不进 ohos 编译图 | ohos 只 import `core/src/index`（barrel 刻意不导出 `./pure-js`） |
 | ohos 唯一 `@kit` 导入点 | `internal/CryptoSource.ets`；`guard.yml` + 守卫脚本扫描 |
 | 跨边界签名只用基础类型 | ArkTS 不支持字面量类型 / `as const`：core 的 `type`/`algorithm` 是 `string`，平台层才收窄成 enum |
@@ -112,7 +112,7 @@ ArkTS/ESM 的 `import` 是静态且传递的：公开类若在顶层从「含 `@
 | 项 | 契约 | 违约结果 |
 | --- | --- | --- |
 | 失败表达 | 抛 `name === "OtpError"` 的错误（core `otpFail` / 平台 `OtpError`） | 其余任何值（`TypeError`、字符串、`null`…）→ `CRYPTO_FAILED`；`OtpError` 原样上抛（保留精确码） |
-| `sign` 返回值 | `Uint8Array`，长度 = 算法摘要长度（SHA1=20 / SHA256=32 / SHA512=64，见 `internal/digest.ts`） | 非法类型 / 长度不匹配 → `CRYPTO_FAILED`（engine 只认 `Uint8Array`，不复用 `Secret` 侧的宽容器判定） |
+| `sign` 返回值 | `Uint8Array`，长度 = 算法摘要长度（SHA1=20 / SHA256=32 / SHA512=64，见 `internal/algorithm.ts`） | 非法类型 / 长度不匹配 → `CRYPTO_FAILED`（engine 只认 `Uint8Array`，不复用 `Secret` 侧的宽容器判定） |
 | `random` 返回值 | 同步返回，长度 = 请求的 `bytes`；容器按 `internal/bytes.ts`（`Uint8Array` / `Uint8ClampedArray` / `ArrayBuffer`） | 类型 / 长度不符 → `CRYPTO_FAILED` |
 | 入参 | `key` / `message` **只读**：不得修改、`fill`、跨调用保留引用 | 无错误码可诊断（表现为「码不对」）：库每次公开调用传一份密钥临时副本，同一次调用的窗口扫描复用该副本 |
 | 错误收敛 | 收敛时不保留原因（无 `cause`、不打日志） | 要保留精确码必须自己抛 `OtpError` |
@@ -316,9 +316,9 @@ UNSUPPORTED_OTPAUTH_TYPE NOT_IMPLEMENTED
 | --- | --- | --- |
 | core 全量 | `bun run --filter '@yansongda/otp-core' test` | 全绿（含 RFC 向量、URI 边界、往返不变量、`@ts-expect-error` 类型契约） |
 | mp 平台契约 | `bun run --filter '@yansongda/miniprogram-otp' test` | 全绿（1 文件） |
-| 一键检查 | `bun run check` | `sync:core:check` + lint + typecheck + 上面两项 |
-| mp 守卫 | `node packages/miniprogram-otp/scripts/ci/check-invariants.mjs` | 22/22 |
-| ohos 守卫 | `node packages/ohos-otp/scripts/ci/check-invariants.mjs` | 16/16 |
+| 一键检查 | `bun run check` | `sync:core:check` + lint + typecheck + `bun run guard`（两个包的不变量守卫）+ 上面两项 |
+| mp 守卫 | `node packages/miniprogram-otp/scripts/ci/check-invariants.mjs` | 全绿（项数以脚本输出为准） |
+| ohos 守卫 | `node packages/ohos-otp/scripts/ci/check-invariants.mjs` | 全绿（项数以脚本输出为准） |
 | ohos 本地单测 | `hvigorw test --mode module -p module=library@default -p testType=local` | 全绿（kit-free 全链路 + fixture） |
 | ohos 设备用例 | `ohosTest`（真实 cryptoFramework + barrel 链路） | 全绿 |
 | 基准 | `bun run bench` / `bun run bench:ab` | 15 热路径场景 + `OTPAuthURI.parse/build` 冷路径场景 |

@@ -60,7 +60,7 @@ npm pack --dry-run        # 仅检查发布内容
 
 > Bun 1.4.4 尚未提供内置 linter；`bun lint` 当前等价于执行 package.json 的 `lint` 脚本（Biome）。`bun fmt` 是 Bun 内置格式化器，可用于 README/JSON，但 CI 的代码格式判定以 Biome 为准。
 
-Bun 版本固定于 `.bun-version`（当前 `1.4.4`）。主 CI 通过 `bun-version-file` 读取该文件；另有非阻塞的 `compat-latest` 任务跟随 `latest`，用于提前发现新版本问题。升级 Bun 必须单独提交：改 `.bun-version` 并跑全量 CI，不要在主 CI 直接使用 `latest`。
+Bun 版本固定于**仓库根** `.bun-version`（当前 `1.4.4`；包内无独立版本文件，`bun install` 在包内也会解到工作区根）。主 CI 通过 `bun-version-file` 读取该文件；另有非阻塞的 `compat-latest` 任务跟随 `latest`，用于提前发现新版本问题。升级 Bun 必须单独提交：改 `.bun-version` 并跑全量 CI，不要在主 CI 直接使用 `latest`。
 
 ## 4. 测试策略
 

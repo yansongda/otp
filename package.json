@@ -9,13 +9,14 @@
   "scripts": {
     "sync:core": "bun scripts/sync-core.mjs",
     "sync:core:check": "bun scripts/sync-core.mjs --check",
+    "guard": "node packages/miniprogram-otp/scripts/ci/check-invariants.mjs && node packages/ohos-otp/scripts/ci/check-invariants.mjs",
     "bench": "bun scripts/bench/index.mjs",
     "bench:ab": "bun scripts/bench/index.mjs --ab main",
     "lint": "biome check",
     "lint:fix": "biome check --fix",
     "typecheck": "bun run --filter '@yansongda/otp-core' typecheck && bun run --filter '@yansongda/miniprogram-otp' typecheck",
     "test": "bun run --filter '@yansongda/otp-core' test && bun run --filter '@yansongda/miniprogram-otp' test",
-    "check": "bun run sync:core:check && bun run lint && bun run typecheck && bun run test"
+    "check": "bun run sync:core:check && bun run lint && bun run typecheck && bun run guard && bun run test"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.6",

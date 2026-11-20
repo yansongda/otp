@@ -2,8 +2,10 @@
  * HMAC（RFC 2104）通用实现：哈希函数与块大小由调用方注入（纯函数，无平台依赖）。
  *
  * 默认实现的算法名经参数传入而非字面量，避免平台 lint 对 HMAC 用法产生误报。
+ *
+ * 类型 `HashFunction` 单源在 `crypto.ts`（解耦层），本文件只 import，不另抄一份。
  */
-export type HashFunction = (message: Uint8Array) => Uint8Array;
+import type { HashFunction } from "../crypto";
 
 export function hmac(
   hash: HashFunction,

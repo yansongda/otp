@@ -13,13 +13,14 @@
  * 写进本文件，使「删测试」成为一个显式、可评审的动作，而不是顺手删掉。
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 
 const BASELINE = {
-  localTestCases: 300, // library/src/test 的 it( 数量（PC Local Test）
+  localTestCases: 301, // library/src/test 的 it( 数量（PC Local Test）
   deviceTestCases: 38, // library/src/ohosTest 的 it( 数量（真实 crypto，需设备）
   errorCodeMembers: 22, // OtpErrorCode 成员数：取值冻结，仅允许显式新增（现含 INVALID_SECRET_CONTAINER / INVALID_MIN_SECRET_BITS / INVALID_CLOCK_OFFSET / INVALID_SECRET_LENGTH）
 };
@@ -190,6 +191,23 @@ check(`测试数量不减少（本地 ≥ ${BASELINE.localTestCases}，设备 �
   return `本地 ${local} / 设备 ${device}`;
 });
 
+check('ohos.yml 的本地单测阈值与 BASELINE 同源', () => {
+  // workflow 里 `pass < N` 与本文件 BASELINE.localTestCases 必须相等：两处各写一个数，
+  // 守卫要求 301 而 workflow 只卡 240 时，删掉用例仍能全绿（闸门形同虚设）。
+  // 正矢锁定整行：避免将来出现第二个 `pass < N`（如设备用例）时抓到错的数字。
+  const found = [...readText('../../.github/workflows/ohos.yml').matchAll(/error !== 0 \|\| pass < (\d+)\)/g)];
+  if (found.length !== 1) {
+    throw new Error(`ohos.yml 应恰有 1 处 \`error !== 0 || pass < N\` 断言，实际 ${found.length} 处`);
+  }
+  const threshold = Number(found[0][1]);
+  if (threshold !== BASELINE.localTestCases) {
+    throw new Error(
+      `ohos.yml 的 pass < ${threshold} 与 BASELINE.localTestCases = ${BASELINE.localTestCases} 不一致`,
+    );
+  }
+  return `pass < ${threshold} 与 BASELINE 一致`;
+});
+
 /** 从 `NAME: "VALUE"` / `NAME = 'VALUE'` 形式的定义块里抽取 name→value。 */
 function codePairs(body, pattern) {
   const pairs = new Map();
@@ -282,22 +300,32 @@ check('core 副本 OtpError 设置 name = \'OtpError\'', () => {
   return 'core 副本 name 契约一致';
 });
 
-check('生成副本头不含 -dirty 标记', () => {
-  // sync-core 在 core 工作区有未提交改动时会把头写成 core@<commit>-dirty；
-  // `--check` 有意忽略 commit 字段（溯源信息不影响正文判定），因此这类误提交只能在这里拦。
-  const dirty = [];
+check('core 副本头摘要与正文一致', () => {
+  // 副本头是 `core-sha256:<12hex>` = 正文 SHA-256 前 12 位（不是 git commit：squash 合并后
+  // commit 会变成不可达对象，见 scripts/sync-core.mjs）。这里独立重算一遍：手改正文或头都会被发现，
+  // 且不依赖 sync-core 实现（与 sync:core:check 互为交叉验证）。
+  const bad = [];
   for (const file of listFiles(join(REPO_ROOT, `${LIB_SRC}/core`))) {
     if (!file.endsWith('.ts')) continue;
-    if (/\(core@[^)]*-dirty\)/.test(readFileSync(file, 'utf8'))) {
-      dirty.push(toPosix(relative(REPO_ROOT, file)));
+    const rel = toPosix(relative(REPO_ROOT, file));
+    const text = readFileSync(file, 'utf8');
+    const cut = text.indexOf('\n');
+    if (cut < 0) {
+      bad.push(`${rel}（无生成头）`);
+      continue;
     }
+    const matched = /\(core-sha256:([0-9a-f]{12})\)/.exec(text.slice(0, cut));
+    if (!matched) {
+      bad.push(`${rel}（头缺 core-sha256）`);
+      continue;
+    }
+    const body = createHash('sha256').update(text.slice(cut + 1)).digest('hex').slice(0, 12);
+    if (body !== matched[1]) bad.push(`${rel}（摘要 ${matched[1]} 与正文 ${body} 不符）`);
   }
-  if (dirty.length > 0) {
-    throw new Error(
-      `${dirty.join(', ')} 的生成头含 -dirty；请先提交 core 改动再重新运行 bun run sync:core`,
-    );
+  if (bad.length > 0) {
+    throw new Error(`${bad.join('、')}；请运行 bun run sync:core 重新生成（副本禁止手改）`);
   }
-  return '全部为已提交状态的 core@commit';
+  return '全部副本头摘要与正文一致';
 });
 
 check('版本号与 CHANGELOG 一致', () => {

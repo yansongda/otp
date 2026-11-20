@@ -110,10 +110,11 @@ scripts/sync-core.mjs         # core -> ohos library 生成副本（CI 校验漂
 
 ```bash
 bun install
-bun run check            # sync check + lint + typecheck + tests
-bun run test             # core（242）+ miniprogram（9）
+bun run check            # sync check + lint + typecheck + guards + tests
+bun run test             # core 与 miniprogram 两套用例
 bun run sync:core        # 重新生成 ohos 的 core 副本
 bun run sync:core:check  # 副本漂移则失败
+bun run guard            # 两个包的不变量守卫（不需要 SDK）
 ```
 
 鸿蒙构建与设备测试需要 DevEco Studio；精确命令见 [`packages/ohos-otp/AGENTS.md`](packages/ohos-otp/AGENTS.md)。

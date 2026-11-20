@@ -111,10 +111,11 @@ scripts/bench/                # zero-dependency hot-path benchmarks (not in CI)
 
 ```bash
 bun install
-bun run check            # sync check + lint + typecheck + tests
-bun run test             # core (242) + miniprogram (9)
+bun run check            # sync check + lint + typecheck + guards + tests
+bun run test             # core + miniprogram suites
 bun run sync:core        # regenerate ohos core copy
 bun run sync:core:check  # fail if the generated copy drifted
+bun run guard            # repo invariants for both packages (no SDK needed)
 bun run bench            # hot-path perf baseline (JSC only, relative comparison)
 bun run bench:ab         # A/B current tree vs main via a temp git worktree
 ```

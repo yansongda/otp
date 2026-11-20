@@ -1,4 +1,4 @@
-// AUTO-GENERATED from packages/core/src/internal/counter.ts (core@07d0740). DO NOT EDIT. Run: bun run sync:core
+// AUTO-GENERATED from packages/core/src/internal/counter.ts (core-sha256:2cf05d32bfc3). DO NOT EDIT. Run: bun run sync:core
 /**
  * 计数器 → 8 字节大端字节数组（纯函数，零平台依赖）。
  *
