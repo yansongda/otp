@@ -82,6 +82,10 @@
   （含无法百分号编码的孤立代理字符）
 - 可选 `options` 传 `null` 等价于未传（`JSON.parse("null")` 的常见形态），不再漏
   `TypeError`；`OTPAuthURI.build` 的 `params` 传非对象 → `INVALID_OTPAUTH_URI`
+- 纯 JS 热路径提速（行为不变）：SHA-512 去掉 `[hi, lo]` 元组分配后 `hmac sha512` 约 5x、
+  base32 解码改「128 项查表 + 单遍位缓冲」且 `Secret.fromBase32` 约 3x；`bun run bench:ab` 同机 A/B 无 regress
+- 发布物（`dist/index.js`）在构建期剥离注释：66.2KB → 37.4KB（gzip 23.4KB → 10.0KB），
+  运行时行为不变（`.d.ts` 仍保留 JSDoc 供 IDE 提示）；新增 `bun run check:size` 体积守卫防止回升
 
 ### Fixed
 

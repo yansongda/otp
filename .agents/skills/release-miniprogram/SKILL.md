@@ -32,7 +32,7 @@ Agent 负责：分析真实 diff、写 CHANGELOG、跑 `release:check`、建 rel
 | 发布 CI         | `.github/workflows/release-miniprogram.yml`：push tag `miniprogram-v*` → tag/version 校验 → `release:check` → 版本已存在则跳过 → OIDC `npm publish` |
 | 发布鉴权        | GitHub OIDC Trusted Publishing（`id-token: write`）；仓库不保存 `NPM_TOKEN`；首次发布除外                                                           |
 | 发布前守卫      | release-miniprogram.yml 运行 `bun run release:check`；本地手动发布仍由 `prepublishOnly` → `release:check` 兜底                                      |
-| `release:check` | invariants + lint + typecheck + test + build + dist smoke + `npm pack --dry-run`                                                                    |
+| `release:check` | invariants + lint + typecheck + test + build + bundle size guard + dist smoke + `npm pack --dry-run`                                                |
 | GitHub Release  | 手动 `gh release create`；notes 由真实 diff 清单生成，不用 `--generate-notes`                                                                       |
 | tag 命名        | `miniprogram-vX.Y.Z`，必须与 `package.json` 的 `version` 逐字符一致                                                                                 |
 | dist-tag        | 稳定版 `latest`；版本含 `-` 时用 `next`                                                                                                             |
@@ -210,6 +210,7 @@ bun run lint
 bun run typecheck
 bun test
 bun run build
+bun run check:size
 bun run smoke:dist
 npm pack --dry-run
 ```
