@@ -29,6 +29,13 @@ jobs:
         with:
           bun-version-file: .bun-version
 
+      # check:size 的 gzip 口径用 Node 内置 zlib：钉住主版本，避免 runner 换 Node 后
+      # 同一份 bundle 压出不同字节而误报（未压缩口径不受影响）。
+      - name: Setup Node (check:size gzip 口径)
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+
       - name: Install dependencies
         run: bun install --frozen-lockfile
 

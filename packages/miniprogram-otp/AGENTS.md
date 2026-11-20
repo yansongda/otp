@@ -47,7 +47,7 @@ bun run lint:fix          # biome check --fix
 bun run typecheck         # tsc --noEmit
 bun test                  # 平台契约测试（tests/）
 bun run test:coverage     # Bun 覆盖率
-bun run build             # tsdown -> dist（单文件 CJS + 单文件 d.ts）
+bun run build             # tsdown -> dist（单文件 CJS + 单文件 d.ts；JS 侧剥注释，d.ts 保留 JSDoc）
 bun run check:invariants  # 仓库不变量守卫（零依赖 node 脚本）
 bun run check:size        # 发布物体积守卫（dist 未压缩 / gzip 上限）
 bun run smoke:dist        # require dist 并验证 RFC 向量
@@ -74,7 +74,7 @@ Bun 版本固定于 `.bun-version`（当前 `1.4.4`）。主 CI 通过 `bun-vers
 - 不使用 WeChat 不支持的 API：`padStart`、`URLSearchParams`、BigInt、Node 内置模块。
 - 不新增 `console.*` / 埋点；需要观测时用 CI 指标（测试数量、覆盖率、pack 文件清单）。
 - 发布物为 `dist/`，不提交构建产物；`dist/` 在 `.gitignore` 中。
-- **发布物体积有守卫**：`bun run check:size`（CI 在 `build` 后执行，`release:check` 也含）。上限写在 `scripts/ci/check-size.mjs` 的 `LIMITS`（未压缩 + gzip 两个口径）；上调必须在 PR 说明理由，下调直接改。为什么需要：小程序主包 2MB，体积回归没有其它信号——性能重构（如 SHA-512 内联展开）会让 bundle 变大。
+- **发布物体积有守卫**：`bun run check:size`（CI 在 `build` 后执行，`release:check` 也含）。上限写在 `scripts/ci/check-size.mjs` 的 `LIMITS`（未压缩 + gzip 两个口径），同时校验 `dist/` 里没有预期外的文件；上调必须在 PR 说明理由，下调直接改。为什么需要：小程序主包 2MB，体积回归没有其它信号。注意 JS 发布物已在构建期剥注释（`tsdown.config.mts` 的 `outputOptions.comments = false`，注释一度占 44%）——所以守卫量的是真实代码体积；若发现体积突增，先看是不是新增了实际逻辑，而不是注释或格式。
 
 ## 6. 发布与仓库边界
 
