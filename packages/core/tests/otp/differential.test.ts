@@ -27,13 +27,10 @@ function patternBytes(length: number, seed: number): Uint8Array {
   return out;
 }
 
-/** 覆盖每个 padding 边界：块尾 0..9 字节、跨块、多块。 */
+/** 覆盖每个 padding 边界：0..259 含 SHA-512 的 111/112 与 239/240 块尾边界，再加跨多块。
+ *  用连续区间而非手写枚举，避免重复项（重名用例会被静默跑两遍）。 */
 const LENGTHS = [
-  ...Array.from({ length: 130 }, (_, i) => i),
-  ...Array.from({ length: 130 }, (_, i) => 130 + i),
-  255,
-  256,
-  257,
+  ...Array.from({ length: 260 }, (_, i) => i),
   511,
   512,
   513,

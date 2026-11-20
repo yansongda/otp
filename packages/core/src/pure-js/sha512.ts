@@ -8,8 +8,8 @@
  *
  * 为什么全部用标量局部变量、不写 `rotr64/add64/xor3` 这类返回 `[hi, lo]` 的辅助函数：
  * 64 位运算每次要两个半字，元组返回等于每轮多分配 8~10 个两元素数组
- * （80 轮 × 每轮数次 ≈ 每次哈希上千次分配）。实测同一算法改标量后
- * 单次哈希 36.6µs → 5.2µs（约 7x），HMAC-SHA512 122µs → 14.6µs（约 8.4x）。
+ * （80 轮 × 每轮数次 ≈ 每次哈希上千次分配）。改标量后 `hmac sha512` 场景约 5x、纯哈希（单块）更高
+ * （`bun run bench:ab` 同机 A/B；绝对耗时随机器浮动，不写进源码）。
  * 代价是可读性：旋转/进位一律内联，靠注释标出对应的 RFC 6234 公式。
  *
  * 进位约定：所有加法都按模 2^64 计算。低半字逐项相加时记下每次回绕
@@ -208,11 +208,11 @@ export function sha512(message: Uint8Array): Uint8Array {
       const t2h = (sum0h + majh + t2c) >>> 0;
 
       // e = d + T1；a = T1 + T2（两个新值先算完，再做整体移位）
-      const newel = (dl + t1l) >>> 0;
-      const ec = newel < dl ? 1 : 0;
+      const newEl = (dl + t1l) >>> 0;
+      const ec = newEl < dl ? 1 : 0;
       const newEh = (dh + t1h + ec) >>> 0;
-      const newal = (t1l + t2l) >>> 0;
-      const ac = newal < t1l ? 1 : 0;
+      const newAl = (t1l + t2l) >>> 0;
+      const ac = newAl < t1l ? 1 : 0;
       const newAh = (t1h + t2h + ac) >>> 0;
 
       hh = gh;
@@ -222,7 +222,7 @@ export function sha512(message: Uint8Array): Uint8Array {
       fh = eh;
       fl = el;
       eh = newEh;
-      el = newel;
+      el = newEl;
       dh = ch;
       dl = cl;
       ch = bh;
@@ -230,7 +230,7 @@ export function sha512(message: Uint8Array): Uint8Array {
       bh = ah;
       bl = al;
       ah = newAh;
-      al = newal;
+      al = newAl;
     }
 
     // 累加回 h/l（RFC 6234 §6.3.3 的 64 位模加）
