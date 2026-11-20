@@ -1,4 +1,4 @@
-// AUTO-GENERATED from packages/core/src/internal/algorithm.ts (core@e4aa1f8). DO NOT EDIT. Run: bun run sync:core
+// AUTO-GENERATED from packages/core/src/internal/algorithm.ts (core@07d0740). DO NOT EDIT. Run: bun run sync:core
 /**
  * 算法事实唯一来源（零平台依赖）：名称集合与 RFC 2104 的数值事实（摘要长度 / 分块长度）。
  *

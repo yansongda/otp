@@ -29,6 +29,13 @@ jobs:
         with:
           bun-version-file: .bun-version
 
+      # check:size 的 gzip 口径用 Node 内置 zlib：钉住主版本，避免 runner 换 Node 后
+      # 同一份 bundle 压出不同字节而误报（未压缩口径不受影响）。
+      - name: Setup Node (check:size gzip 口径)
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
@@ -50,6 +57,10 @@ jobs:
 
       - name: Build miniprogram (tsdown bundle)
         run: bun run --filter '@yansongda/miniprogram-otp' build
+
+      # 发布物体积没有别的信号：超过 LIMITS 直接失败（上调必须在 PR 说明理由）
+      - name: Bundle size guard
+        run: bun run --filter '@yansongda/miniprogram-otp' check:size
 
       - name: Dist smoke test
         run: bun run --filter '@yansongda/miniprogram-otp' smoke:dist

@@ -24,8 +24,11 @@
 2. **平台层零平台调用**（core 已是零平台）：本包不得出现 `wx.*`、`console.*`、`node:` 内置模块；平台随机数由使用方通过 `wx.getRandomValues` + `Secret.fromBytes` 提供。
 3. **禁止 BigInt**：SHA-512 使用 hi/lo 半字，老设备兼容。
 4. **secret 绝不外泄**：错误消息固定文案；`Secret` 刻意不实现 `toString()`；`toJSON()` 返回 `[REDACTED]`。
-5. **`verify` 恒定时间**：窗口内扫完所有候选后才返回首个命中 delta，禁止早退优化。
+5. **`verify` 恒定时间**：窗口内扫完所有候选（每个候选都算、都比）后才返回结果；多重命中时取 **|delta| 最小**（同距离取**正方向**，永不把 counter 往回退），禁止加早退优化。`sign` 调用数只由 window 决定（`1 + 2w`），由 `engine.test.ts::verify_signCalls_matchWindowSize` 盯住。
 6. **取模只在 `internal/digits.ts` 发生一次**；`truncate` 只做 `& 0x7f`（31 位非负）。
+   位数集合（6/7/8）的**运行期唯一来源**是 `options.ts` 的 `ALLOWED_DIGITS`：`isValidDigits` 由它驱动、
+   `digits.ts` 的 `10^n` 表必须覆盖它的每个成员（`digits.test.ts::allowedDigits_singleSource` 对拍），
+   禁止在别处再写一份运行期字面量（类型层的最强类型声明不受此限）。
 7. **错误码唯一来源是 core**：`src/errors.ts` 只保留平台 `OtpError`，`OtpErrorCode` 必须从 `@yansongda/otp-core` 复用（守卫脚本禁止再声明码表）；码集合现为 22 个，v1 起仅允许新增，不得改已有字符串值。新增码必须同步 core 码表 / 守卫基线 / 四份 README / CHANGELOG。
 8. **DTO 冻结**：`HmacOptions` / `TotpOptions` / `HotpOptions` / `VerifyOptions` / `OtpAuthParams` 字段名与可选性仅允许新增可选字段；`HOTP.verify` / `TOTP.verify` 由 core 分别收窄为 `HotpVerifyOptions` / `TotpVerifyOptions`（平台 type-only 转发，守卫脚本禁止重复声明）。
 9. **参数口径**：`timestamp` / `period` / `t0` / `clockOffsetMs` / `minSecretBits` 必须是安全整数（`minSecretBits` 非法时 fail-closed 抛 `INVALID_MIN_SECRET_BITS`）；`window` 上限 `MAX_VERIFY_WINDOW = 10`（barrel 导出）；TOTP 显式 `timestamp` 合法但叠加偏移后为负或超出安全整数 → `INVALID_CLOCK_OFFSET`；`Secret` 字符串/字节容器类型不对 → `INVALID_SECRET_CONTAINER`（`fromBase32` 非字符串、`fromBytes` 非 `Uint8Array` / `Uint8ClampedArray` / `ArrayBuffer`）；`token` 非字符串 → `INVALID_TOKEN`；`uri` 非字符串或 `build` 的 `issuer`·`account` 非字符串 / 无法百分号编码 → `INVALID_OTPAUTH_URI`（不得漏原生 `TypeError` / `URIError`）；`OTPAuthURI` 的 `digits` / `period` / `counter` 只认十进制整数。
@@ -47,8 +50,9 @@ bun run lint:fix          # biome check --fix
 bun run typecheck         # tsc --noEmit
 bun test                  # 平台契约测试（tests/）
 bun run test:coverage     # Bun 覆盖率
-bun run build             # tsdown -> dist（单文件 CJS + 单文件 d.ts）
+bun run build             # tsdown -> dist（单文件 CJS + 单文件 d.ts；JS 侧剥注释，d.ts 保留 JSDoc）
 bun run check:invariants  # 仓库不变量守卫（零依赖 node 脚本）
+bun run check:size        # 发布物体积守卫（dist 未压缩 / gzip 上限）
 bun run smoke:dist        # require dist 并验证 RFC 向量
 bun run release:check     # 发版前全量检查（含 npm pack --dry-run）
 npm pack --dry-run        # 仅检查发布内容
@@ -60,7 +64,7 @@ Bun 版本固定于 `.bun-version`（当前 `1.4.4`）。主 CI 通过 `bun-vers
 
 ## 4. 测试策略
 
-- **算法测试在 `packages/core`（条数以 `bun test` 实测为准，不在此写死）**：RFC 4226 / 6238 / 4648 向量、哈希/HMAC 向量、错误码、strict base32、URI、时钟校准与随机注入。向量唯一来源 `packages/core/tests/otp/vectors.ts`，**逐字复制自 OHOS `RfcVectors.ets` 与 FIPS/RFC 官方向量，禁止自行推导或补算**。
+- **算法测试在 `packages/core`**（条数以 `bun test` 输出为准，不写死在文档里）：RFC 4226 / 6238 / 4648 向量、哈希/HMAC 向量（含与 `node:crypto` 的差分对拍）、错误码、strict base32、URI、时钟校准与随机注入。向量唯一来源 `packages/core/tests/otp/vectors.ts`，**逐字复制自 OHOS `RfcVectors.ets` 与 FIPS/RFC 官方向量，禁止自行推导或补算**。
 - 本包只保留 `tests/platform.test.ts`（19 条）：注册链路、错误工厂、类型桥、公开 API 契约。新增平台逻辑必须补测；测试数量不得下降（`scripts/ci/check-invariants.mjs` 基线 19/1）。
 - 算法逻辑变更只改 `packages/core` + 其测试，**禁止在本包复制实现**。
 - 微信真机 / 开发者工具“构建 npm”冒烟仍是人工门槛，CI 无法覆盖。
@@ -73,6 +77,7 @@ Bun 版本固定于 `.bun-version`（当前 `1.4.4`）。主 CI 通过 `bun-vers
 - 不使用 WeChat 不支持的 API：`padStart`、`URLSearchParams`、BigInt、Node 内置模块。
 - 不新增 `console.*` / 埋点；需要观测时用 CI 指标（测试数量、覆盖率、pack 文件清单）。
 - 发布物为 `dist/`，不提交构建产物；`dist/` 在 `.gitignore` 中。
+- **发布物体积有守卫**：`bun run check:size`（CI 在 `build` 后执行，`release:check` 也含）。上限写在 `scripts/ci/check-size.mjs` 的 `LIMITS`（未压缩 + gzip 两个口径），同时校验 `dist/` 里没有预期外的文件；上调必须在 PR 说明理由，下调直接改。为什么需要：小程序主包 2MB，体积回归没有其它信号。注意 JS 发布物已在构建期剥注释（`tsdown.config.mts` 的 `outputOptions.comments = false`，注释一度占 44%）——所以守卫量的是真实代码体积；若发现体积突增，先看是不是新增了实际逻辑，而不是注释或格式。
 
 ## 6. 发布与仓库边界
 

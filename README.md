@@ -82,7 +82,7 @@ totp.verify(token, { window: 1 });
 
 | Topic           | Behavior                                                                                                 |
 | --------------- | -------------------------------------------------------------------------------------------------------- |
-| Verification    | Constant-time comparison; the full window is scanned before the first match is returned                  |
+| Verification    | Constant-time comparison; the full window is always scanned, and the closest matching step wins          |
 | Clock drift     | `verify()` returns the matched offset in steps; `syncClockOffset(delta)` records it permanently          |
 | Error model     | `OtpError.code` is one of 22 frozen string codes; messages are fixed and never contain secrets or tokens |
 | Secret handling | `Secret` has no `toString()`; `JSON.stringify(secret)` yields `"[REDACTED]"`                             |

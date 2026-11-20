@@ -23,7 +23,14 @@ export function step(epochMs: number, t0: number, period: number): number {
   return Math.floor((Math.floor(epochMs / 1000) - t0) / period);
 }
 
-/** 距本时间步结束的剩余秒数 [1, period]；按 epoch 秒取模（含 t0 偏移与负值归一化），不依赖本地时区。 */
+/**
+ * 距本时间步结束的剩余秒数 [1, period]；按 epoch 秒取模（含 t0 偏移与负值归一化），不依赖本地时区。
+ *
+ * 注意（与 generate / verify 的口径差异）：本函数只做取模，不要求时间步非负。
+ * 当 t0 晚于 epochMs（时间步 < 0）时仍会给出 [1, period] 内的值，
+ * 而 `generate` / `verify` 对同一时刻抛 INVALID_COUNTER。
+ * 把 t0 设到未来属配置错误，需要拒绝时请调用方自行判定（本函数服务于进度条类 UI）。
+ */
 export function remainingSec(
   epochMs: number,
   t0: number,
@@ -34,7 +41,10 @@ export function remainingSec(
   return period - ((((s - t0) % period) + period) % period);
 }
 
-/** 本时间步内已走过的比例 [0, 1)。 */
+/**
+ * 本时间步内已走过的比例 [0, 1)。
+ * 与 remainingSec 同理：时间步为负（t0 在未来）时仍返回归一化后的值，不抛 INVALID_COUNTER。
+ */
 export function progress(epochMs: number, t0: number, period: number): number {
   assertValidInputs(epochMs, t0, period);
   const s = Math.floor(epochMs / 1000);

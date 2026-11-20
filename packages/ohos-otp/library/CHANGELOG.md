@@ -64,6 +64,10 @@
 - `{ strict }` 改为 fail-closed：非 boolean（`1` / `"true"`）按 strict 处理
 - 可选 `options` 传 `null` 等价于未传；`OTPAuthURI.build` 的 `params` 传非对象 → `INVALID_OTPAUTH_URI`
 - `syncClockOffset` 的 delta 非安全整数 / 累加溢出 → `INVALID_CLOCK_OFFSET`
+- `verify` 多重命中时的 tie-break 显式化（行为变更，仅影响多个候选同时命中：概率 ~`window/10^digits`）：
+  窗口按 `|delta|` 递增扫描，返回**最接近基准步**的偏移（同距离取正方向，永不把 counter 往回退）；
+  此前按扫描顺序返回最负偏移，HOTP 用 `counter = base + delta + 1` 重置时会把计数器往回退、
+  等于重新放行更早的验证码。单命中 / 未命中行为不变，HMAC 次数仍为 `1 + 2w`（不早退）
 
 #### Fixed
 

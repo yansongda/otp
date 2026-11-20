@@ -32,6 +32,15 @@ describe("time-step", () => {
     expect(remainingSec(1000, 5, 30)).toBe(4);
   });
 
+  it("remaining_futureT0_returnsValueWhileStepIsNegative", () => {
+    // t0 设在未来（配置错误）：时间步为负（generate / verify 会抛 INVALID_COUNTER），
+    // 但 remaining / progress 只做取模，仍给出 [1, period] / [0, 1) 内的值。
+    // 这是刻意保留的口径（这两个函数只服务进度条 UI），锁住行为以免无声变化。
+    expect(step(1000, 31000, 30)).toBeLessThan(0);
+    expect(remainingSec(1000, 31000, 30)).toBe(9);
+    expect(progress(1000, 31000, 30)).toBeCloseTo(0.7, 10);
+  });
+
   it("progress_reference", () => {
     expect(progress(15000, 0, 30)).toBe(0.5);
     expect(progress(1000, 0, 30)).toBeCloseTo(1 / 30, 10);

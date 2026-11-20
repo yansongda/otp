@@ -1,4 +1,4 @@
-// AUTO-GENERATED from packages/core/src/options.ts (core@e4aa1f8). DO NOT EDIT. Run: bun run sync:core
+// AUTO-GENERATED from packages/core/src/options.ts (core@07d0740). DO NOT EDIT. Run: bun run sync:core
 /**
  * 对外 DTO 与内部常量。
  *
@@ -151,6 +151,10 @@ export const OtpType = {
 } as const;
 export type OtpType = (typeof OtpType)[keyof typeof OtpType];
 
+/** 运行期允许的位数集合（RFC 4226 §5.3）。`internal/digits.ts::isValidDigits` 由它驱动，
+ * 10^n 表必须覆盖每个成员（`tests/otp/digits.test.ts::allowedDigits_singleSource` 对拍）。
+ * 不导出 `DigitCount` 这类字面量联合：平台类型层各自维护最强的类型（TS 字面量联合 / ArkTS enum），
+ * 若在这里再加一份就只是无人引用的死代码。 */
 export const ALLOWED_DIGITS = [6, 7, 8] as const;
 
 /**

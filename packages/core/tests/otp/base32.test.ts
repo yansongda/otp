@@ -74,9 +74,25 @@ describe("base32", () => {
     expectCode(() => decode("A"), "SECRET_TOO_SHORT");
   });
 
+  it("decodeSingleInvalidChar_charErrorFirst", () => {
+    // 错误码归因（⚠ 别改成「长度先判」）：归一化后恰 1 字符时仍然先报字符错误，
+    // 因为「你打错了一个字符」比「secret 太短」对排障更有用。改造前的实现就是这个顺序，
+    // 单遍位缓冲也能保持它（SECRET_TOO_SHORT 放循环之后判定，见 decodeNormalized）。
+    // 含尾部 '=' 的例子（"\t-=" 归一化后只剩 "-"）防止 normalize 与长度判定脱节。
+    for (const input of ["1", "0", "!", "@", "\u212a", "\t-="]) {
+      expectCode(() => decode(input), "INVALID_BASE32_CHAR");
+      expectCode(() => decodeStrict(input), "INVALID_BASE32_CHAR");
+    }
+    // 合法单字符仍是「解不出 1 字节」，两种模式同码。
+    expectCode(() => decode("A"), "SECRET_TOO_SHORT");
+    expectCode(() => decodeStrict("A"), "SECRET_TOO_SHORT");
+  });
+
   it("decodeIllegalChars", () => {
     expectCode(() => decode("AB1"), "INVALID_BASE32_CHAR");
     expectCode(() => decode("ab0"), "INVALID_BASE32_CHAR");
+    // 字符错误始终先于长度 / 尾长校验（与该输入有多长无关）。
+    expectCode(() => decode("1A"), "INVALID_BASE32_CHAR");
   });
 
   it("decodeStrict_rfc4648VectorsRoundTrip", () => {
@@ -156,5 +172,43 @@ describe("base32", () => {
     expect(encoded === encoded.toUpperCase()).toBe(true);
     expect(encoded.indexOf("=")).toBe(-1);
     expect(encoded.length).toBe(32);
+  });
+
+  it("decode_toleratesAllJsWhitespace", () => {
+    // 归一化的空白口径就是 JS 的 `\s`（含 NBSP / 全角空格 / BOM），
+    // 位拼接层不重复判空白：解成单遍查表后，这条用例防止空白集合被悄悄收窄。
+    const whitespace = [
+      " ",
+      "\t",
+      "\n",
+      "\r",
+      "\v",
+      "\f",
+      "\u00a0",
+      "\u1680",
+      "\u2028",
+      "\u3000",
+      "\ufeff",
+    ];
+    for (const ch of whitespace) {
+      const bytes = decode(`GEZDG${ch}NBVGY3TQOJQGEZDGNBVGY3TQOJQ`);
+      expect(bytes.length).toBe(20);
+    }
+  });
+
+  it("encodeDecodeRoundTrip_allByteLengths", () => {
+    // 覆盖「每 5 字节一组」的末组所有余量（末组 1~5 字节）与跨组边界
+    for (let length = 1; length <= 70; length++) {
+      const bytes = new Uint8Array(length);
+      for (let i = 0; i < length; i++) {
+        bytes[i] = (i * 37 + length) & 0xff;
+      }
+      const text = encode(bytes);
+      expect(text.length).toBe(Math.ceil((length * 8) / 5));
+      expect(bytesEqual(decode(text), bytes)).toBe(true);
+      expect(bytesEqual(decodeStrict(text), bytes)).toBe(true);
+      // 宽松模式的归一化（大小写 / 空白 / 尾部填充）不影响结果
+      expect(bytesEqual(decode(`${text.toLowerCase()}\n==`), bytes)).toBe(true);
+    }
   });
 });

@@ -97,7 +97,8 @@ ArkTS/ESM 的 `import` 是静态且传递的：公开类若在顶层从「含 `@
 ### 3.3 已确认的性能结论（别再重复试）
 
 - **不缓存 `Mac` / `SymKey`**：缓存可把单次签名从 6.6µs 降到 2.9µs，但 `SymKey.release()` 在 API 24 公开类型里不存在（只能等 GC），且复用 `Mac` 每次必须 `initSync`——省掉会**静默算错 digest**。收益不抵代价。
-- **不要用内联微基准决策**：本库模块间全部跨模块导入，跨模块解释器开销（~11–13µs/次）远大于函数体本身。曾经把 base32 解码改成单遍位缓冲：内联基准快 67%，真实调用路径反而慢 10%+，已回退。唯一有效的方法是 `bun run bench` / `bun run bench:ab`（同进程交错测量、min-of-7、17 个热路径场景 + 2 个 URI 冷路径场景）。
+- **不要用内联微基准决策**：本库模块间全部跨模块导入，跨模块解释器开销（~11–13µs/次）远大于函数体本身。唯一有效的方法是 `bun run bench` / `bun run bench:ab`（同进程交错测量、min-of-7、15 个热路径场景 + 2 个 URI 冷路径场景）。
+- **base32 单遍位缓冲（历史记录，别反复折腾）**：该改法曾因「内联基准快 67%、真实调用路径反而慢 10%+」被回退——错的不是位缓冲，而是**只信内联基准**。换成「128 项字符值查表 + 单遍位缓冲」后，`bench:ab` 同机 A/B 显示基准路径与真实路径同时变快：`base32.decode 16B` 0.53→0.15µs、`Secret.fromBase32` 0.52→0.19µs、`decodeStrict 128ch` 5.6→3.1µs（`encode` 场景 same、无 regress）。同理 SHA-512 把 `[hi, lo]` 元组内联成标量后 `hmac sha512` 120→24µs。结论：这类改动先用 `bench:ab` 量真实路径，再决定去留。
 - **provider 契约校验留在热路径没问题**：engine 每次 `sign` 的 try/catch + `instanceof` + 摘要长度比对，用零成本 stub provider 隔离测得 ~7ns/次（`generate` 35→44ns、`verify w=2` 274→304ns）；相对 pure-js SHA1 HMAC 3.1µs / ohos 平台签名 2.9–6.6µs 是 +0.2% 量级，`bench:ab` 17 个场景全部 same。不要再为它加缓存或把校验挪到注册期（注册期自检挡不住后续违约）。
 
 ### 3.4 同步 API
@@ -191,7 +192,7 @@ code     = (v mod 10^digits) 左补零至 digits 位          # §5.3 Step 3
 | --- | --- | --- |
 | HMAC 摘要长度 / 分块长度 | RFC 2104 §2、各 SHA 规范 | `internal/algorithm.ts` **单源**（digestLength 20/32/64、blockSize 64/64/128）；engine 按此校验 provider 返回值长度，pure-js 与 ohos 映射分别由单测与守卫对拍 |
 | secret ≥ 128bit，推荐 160bit | RFC 4226 §4 R6 | `Secret.bitLength` + 可选 `minSecretBits`（默认不强制） |
-| 最少 6 位，可能 7/8 位 | RFC 4226 §5.3 | `digits` 允许 6/7/8 |
+| 最少 6 位，可能 7/8 位 | RFC 4226 §5.3 | `options.ts` 的 `ALLOWED_DIGITS` **运行期单源**：`isValidDigits` 由它驱动、`digits.ts` 的 `10^n` 表必须覆盖它的每个成员（`digits.test.ts::allowedDigits_singleSource` 对拍）。平台类型层仍各自声明最强的字面量联合 / enum（`miniprogram-otp/src/types.ts`），那是架构约定的类型糖，不承担运行期判定 |
 | 动态截断屏蔽最高位 | RFC 4226 §5.3 | `truncate.ts` 的 `& 0x7f` |
 | 必须支持 T 超过 32 位 | RFC 6238 §4.2 | `counter.ts` high/low 拆分（不得用 `<<` 拼 32 位：ArkTS 位运算是 32 位有符号） |
 | 默认步长 30s / 默认 SHA1 | RFC 6238 §5.2/§1.2 | `DEFAULT_PERIOD = 30`、`DEFAULT_ALGORITHM = "SHA1"` |
@@ -199,7 +200,7 @@ code     = (v mod 10^digits) 左补零至 digits 位          # §5.3 Step 3
 | 校验侧限制漂移并记录 | RFC 6238 §6 | `verify` 返回 delta + `syncClockOffset` |
 | Throttling（失败退避/锁定） | RFC 4226 §7.3 | **不实现**：需要跨会话服务端状态 |
 
-**恒定时间比较**：`time-step.ts` 的 `constantTimeEquals` 逐字符异或累加、不早退；`verify` 在整个 window 内**扫完所有候选**后再返回首个命中的 delta，避免用提前返回泄漏「命中了第几个窗口」。
+**恒定时间比较**：`time-step.ts` 的 `constantTimeEquals` 逐字符异或累加、不早退；`verify` 在整个 window 内**扫完所有候选**（每个候选都算 HMAC、都比对）后再返回结果，避免用提前返回泄漏「命中了第几个窗口」。
 
 **`remaining` / `progress`**（`t0` 偏移与负值归一化必须有 `t0≠0` 用例锁定）：
 
@@ -209,7 +210,13 @@ remaining = period - (((s - t0) % period) + period) % period   # [1, period]
 progress  = (((s - t0) % period) + period) % period / period   # [0, 1)
 ```
 
-**窗口语义**：TOTP 单位是时间步、HOTP 单位是步（=1 counter）；候选 counter < 0 直接跳过（epoch 之前无定义，不报错）；返回值是相对偏移（最负 `-window`）。
+**窗口语义**：TOTP 单位是时间步、HOTP 单位是步（=1 counter）；候选 counter < 0 直接跳过（epoch 之前无定义，不报错）；返回值是相对偏移。
+
+**多重命中时的 tie-break（必须显式且可测）**：扫描顺序按 `|delta|` 递增（`0, +1, -1, +2, -2 …`），返回**第一个**命中，即「最接近基准步」的偏移；同一 `|delta|` 的 `-k` / `+k` 同时命中时取**正方向**。仍然逐个候选计算与比对（不早退），所以恒定时间性质不变；候选集合与 HMAC 次数（`2w+1`）也与旧实现完全一致，由 `engine.test.ts::verify_signCalls_matchWindowSize` 锁住。
+
+为什么不按「`-window` 起递增扫、首个命中为准」：多个候选同时命中的概率虽只有 ~`window/10^digits`，但按最负偏移返回会让调用方把 counter **往回推**（HOTP 常见写法 `counter = base + delta + 1`），等于重新放行更早的验证码。
+
+为什么同 `|delta|` 取正方向而不是负方向：`counter + k + 1` 只是跳过若干码（DoS 面有界于 ±window）；`counter - k + 1` 会把已持久化的 counter 往回退，重新放行 `base-k+1 … base-1` 这批更早的码 —— 正是 RFC 4226 §7.4 防重放要避免的方向。HOTP resync 也确实以正方向才对得上客户端计数器的前进方向。
 
 **counter 上限**：RFC 4226 的 counter 是 64 位，`number` 精确整数上限 2^53-1；2^53-1 步 × 30s ≈ 8.5×10⁹ 年，实践中不可达，故不做 BigInt，超限抛 `INVALID_COUNTER`。RFC 6238 §4.2 的「T 超 32 位」由 timestamp 路径满足（官方向量含 T=20000000000）。
 
@@ -251,7 +258,7 @@ progress  = (((s - t0) % period) + period) % period / period   # [0, 1)
 | 字段 | 缺省 | 非法处理 |
 | --- | --- | --- |
 | `type` | — | 非 `totp`/`hotp` → `UNSUPPORTED_OTPAUTH_TYPE` |
-| `secret` | — | 缺失/空 → `EMPTY_SECRET`；非法字符 → `INVALID_BASE32_CHAR`；不足 1 字节 → `SECRET_TOO_SHORT`；`{strict:true}` 非规范尾 → `INVALID_BASE32_PADDING` |
+| `secret` | — | 缺失/空 → `EMPTY_SECRET`；非法字符 → `INVALID_BASE32_CHAR`；解码后不足 1 字节 → `SECRET_TOO_SHORT`；`{strict:true}` 非规范尾 → `INVALID_BASE32_PADDING` |
 | `issuer` | 空 | 与 label 前缀不一致时**以 query 为准**（草案 §4：MUST NOT 仅因不一致拒收）；空值按「未提供」处理 |
 | `algorithm` | `SHA1` | 大小写不敏感映射；非三值 → `INVALID_ALGORITHM` |
 | `digits` | `6` | 只认纯十进制；非 6/7/8 → `INVALID_DIGITS`（6/7/8 取自草案 §3.1 的 `digits` 产生式；Google wiki 只列 6/8，取宽容超集） |
@@ -294,6 +301,11 @@ UNSUPPORTED_OTPAUTH_TYPE NOT_IMPLEMENTED
 
 两个原则：**配置/构造期错误先于用户输入错误**；**每个已知失败原因独立码**，禁止合并。
 
+**base32 解码内部顺序**（`decode` / `decodeStrict` 完全一致）：`EMPTY_SECRET` → `INVALID_BASE32_CHAR`
+→ `SECRET_TOO_SHORT`（解码后不足 1 字节，即归一化后恰 1 个合法字符）→ `INVALID_BASE32_PADDING`。
+字符校验始终先于长度判定（单遍位缓冲下把 `SECRET_TOO_SHORT` 放在循环之后即可，不额外遍历）；
+单字符输入在宽松/严格两种模式下同码，不因 `strict` 开关不同而暴露不同错误。
+
 **不泄漏**：异常消息固定文案，不含 secret / token / 派生密钥；`CRYPTO_FAILED` 不透传原生错误对象；库内零 hilog / 零日志 / 零上报 / 零持久化。
 
 ---
@@ -309,7 +321,7 @@ UNSUPPORTED_OTPAUTH_TYPE NOT_IMPLEMENTED
 | ohos 守卫 | `node packages/ohos-otp/scripts/ci/check-invariants.mjs` | 全绿（项数以脚本输出为准） |
 | ohos 本地单测 | `hvigorw test --mode module -p module=library@default -p testType=local` | 全绿（kit-free 全链路 + fixture） |
 | ohos 设备用例 | `ohosTest`（真实 cryptoFramework + barrel 链路） | 全绿 |
-| 基准 | `bun run bench` / `bun run bench:ab` | 17 热路径场景 + `OTPAuthURI.parse/build` 冷路径场景 |
+| 基准 | `bun run bench` / `bun run bench:ab` | 15 热路径场景 + `OTPAuthURI.parse/build` 冷路径场景 |
 
 > 用例条数刻意不写进文档（易腐坏）：以各命令的实测输出为准；ohos 守卫的 BASELINE 负责「数量不减少」。
 

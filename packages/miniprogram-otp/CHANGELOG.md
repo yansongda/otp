@@ -82,6 +82,14 @@
   （含无法百分号编码的孤立代理字符）
 - 可选 `options` 传 `null` 等价于未传（`JSON.parse("null")` 的常见形态），不再漏
   `TypeError`；`OTPAuthURI.build` 的 `params` 传非对象 → `INVALID_OTPAUTH_URI`
+- 纯 JS 热路径提速（行为不变）：SHA-512 去掉 `[hi, lo]` 元组分配后 `hmac sha512` 约 5x、
+  base32 解码改「128 项查表 + 单遍位缓冲」且 `Secret.fromBase32` 约 3x；`bun run bench:ab` 同机 A/B 无 regress
+- 发布物（`dist/index.js`）在构建期剥离注释：66.2KB → 37.4KB（gzip 23.4KB → 10.0KB），
+  运行时行为不变（`.d.ts` 仍保留 JSDoc 供 IDE 提示）；新增 `bun run check:size` 体积守卫防止回升
+- `verify` 多重命中时的 tie-break 显式化（行为变更，仅影响多个候选同时命中：概率 ~`window/10^digits`）：
+  窗口按 `|delta|` 递增扫描，返回**最接近基准步**的偏移（同距离取正方向，永不把 counter 往回退）；
+  此前按扫描顺序返回最负偏移，HOTP 用 `counter = base + delta + 1` 重置时会把计数器往回退、
+  等于重新放行更早的验证码。单命中 / 未命中行为不变，HMAC 次数仍为 `1 + 2w`（不早退）
 
 ### Fixed
 

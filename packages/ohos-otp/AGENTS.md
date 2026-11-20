@@ -8,7 +8,7 @@
 - **实现全部来自 `packages/core`（唯一源码）**，经 `bun run sync:core` 生成为 `library/src/main/ets/core/**`；本包只保留薄壳、平台类型层与 crypto 实现。
 - `entry/` = 消费方 smoke demo（仅依赖 barrel，**不参与** HAR 打包）。
 - 兼容性：`compatibleSdkVersion 6.0.0(20)`（API 12–19 工程无法消费，README 已声明）。
-- 现状：本地单测 300 全绿；设备端 `ohosTest` 38/38；RFC 向量 10/10 + 18/18；`ohpm prepublish` 通过。已发布至 OHPM（当前版本以 `library/oh-package.json5` 为准）。覆盖率门槛以 `.github/workflows/ohos.yml` 的 `COVERAGE_MIN_LINES` 为准。
+- 现状：本地单测全绿；设备端 `ohosTest` 全绿；RFC 向量 10/10 + 18/18；`ohpm prepublish` 通过。已发布至 OHPM（当前版本以 `library/oh-package.json5` 为准）。用例条数不写死在文档里（易腐坏），以命令输出与守卫的 BASELINE 为准。覆盖率门槛以 `.github/workflows/ohos.yml` 的 `COVERAGE_MAX_UNCOVERED`（未覆盖行数上限）为准。
 
 ## 2. 分层与不变量（**改动必须遵守**）
 
@@ -27,7 +27,7 @@
 5. **core 不进 barrel**：`Index.ets` 只导出 `OtpError`/`OtpErrorCode`/DTO/`Secret`/`HOTP`/`TOTP`/`OTPAuthURI`；测试经薄壳深路径 import。
 6. **取模只在 `Digits.format` 发生一次**；`Truncate` 只截断（`& 0x7f`，31 位非负）。
 7. **secret 绝不外泄**：库内零 `console.*`/`hilog`；`OtpError` 消息为固定文案；`Secret` 刻意不实现 `toString()`，脱敏靠 `toJSON()` → `'[REDACTED]'`。
-8. **`verify` 恒定时间**：窗口内**扫完所有候选**后才返回首个命中 delta，禁止加早退优化。
+8. **`verify` 恒定时间**：窗口内**扫完所有候选**（每个候选都算、都比）后才返回结果；多重命中时取 **|delta| 最小**（同距离取**正方向**，永不把 counter 往回退），禁止加早退优化。tie-break / 早退证据由 core 单测覆盖（`engine.test.ts`），本包不重复造 stub provider；副本行为由 `sync:core:check` 对拍，所以 `.ets` 用例只留单命中场景。
 9. **`library/example/` 随 HAR 发布，不得删除/改名**：hvigor 对 bytecode HAR 的 release 白名单目录名就是 `example`（`RELEASE_HAR_WHITE_LIST_DIR_NAME`），该目录会被原样打进包内 `package/example/`；OHPM「支持文档 / example」的 20 分完全依赖它。里面只放文档（README），不放不参与编译与 lint 的源码。缺失由 `scripts/ci/check-invariants.mjs` 与 CI 的 HAR 内容校验拦截。
 10. **provider 错误契约**：`CryptoSource` 失败必须经 core 的 `otpFail` 走平台工厂（`name === 'OtpError'`），engine 只把**未知**错误收敛为 `CRYPTO_FAILED`；未知算法必须 `INVALID_ALGORITHM`（绝不静默降级 SHA1），算法集合由守卫与 core `internal/algorithm.ts` 逐项对拍。
 
@@ -46,7 +46,7 @@ HDC=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony/toolchains/
 
 # 本地单测 + 覆盖率（PC；改算法逻辑后必跑）
 $HB --no-daemon -c modelVersion=6.1.1 test --mode module -p module=library@default -p testType=local -p coverage=true
-#   → Tests run: 300, Pass: 300（数量由 library/src/test 的 it( 决定；覆盖率门槛见 CI 的 COVERAGE_MIN_LINES）
+#   → Tests run: <N>, Pass: <N>（条数由 library/src/test 的 it( 决定，不写死；覆盖率门槛见 CI 的 COVERAGE_MAX_UNCOVERED）
 
 # 库产物（release）
 $HB --no-daemon -c modelVersion=6.1.1 assembleHar --mode module -p module=library@default -p product=default -p buildMode=release
@@ -65,10 +65,12 @@ $HB --no-daemon -c modelVersion=6.1.1 onDeviceTest --mode module -p module=libra
 
 # 零 SDK 依赖的两条（CI 的 guard.yml / ci.yml 跑的就是它们，可先跑）
 bash scripts/ci/lint-local.sh          # CodeLinter；exit 4 = 命中 error，0 = 通过（不带 -e 永远 0）
-node scripts/ci/check-invariants.mjs   # 仓库不变量守卫（10 项）
+node scripts/ci/check-invariants.mjs   # 仓库不变量守卫（16 项）
 ```
 
-**CI（GitHub Actions，workflow 均在仓库根 `.github/workflows/`）**：`guard.yml` = 不变量守卫（ubuntu-latest，无 SDK，秒级）；`ohos.yml` = CodeLinter + PC 单测（覆盖率门槛 88%）+ `assembleHar` + `ohpm prepublish` + entry HAP smoke，产物含 `library.har` 与覆盖率报告。工具链取自社区镜像的华为 command-line-tools（`CLI_VERSION` 与归档 sha256 钉在 workflow 里，升级走显式 PR）；**跑在 `macos-15`，因为 local test 要起 Previewer（见 §8）**。本地无 SDK 时用上面两条脚本 + `bash scripts/ci/lint-local.sh` 复现 lint 与守卫。**CI 不执行 `ohpm publish` / `git push`**（§7 人工闸门）。
+**CI（GitHub Actions，workflow 均在仓库根 `.github/workflows/`）**：`guard.yml` = 不变量守卫（ubuntu-latest，无 SDK，秒级）；`ohos.yml` = CodeLinter + PC 单测（覆盖率门槛 = 未覆盖行数上限，见 `COVERAGE_MAX_UNCOVERED`）+ `assembleHar` + `ohpm prepublish` + entry HAP smoke，产物含 `library.har` 与覆盖率报告。工具链取自社区镜像的华为 command-line-tools（`CLI_VERSION` 与归档 sha256 钉在 workflow 里，升级走显式 PR）；**跑在 `macos-15`，因为 local test 要起 Previewer（见 §8）**。本地无 SDK 时用上面两条脚本 + `bash scripts/ci/lint-local.sh` 复现 lint 与守卫。**CI 不执行 `ohpm publish` / `git push`**（§7 人工闸门）。
+
+**覆盖率门槛（`COVERAGE_MAX_UNCOVERED`，未覆盖行数上限）**：只允许下调；上调必须在 PR 里写明理由。为什么不用百分比：删掉冗余代码会让分母变小、百分比下降（正向改动被误判），代码膨胀时又会偷放水；未覆盖行数只在「真的少测了」时上升，与门槛意图一致（百分比仍打印进日志与 step summary）。
 
 **hvigor 并发**：同一时刻只跑一个 hvigor 任务（工程级锁），并行 agent 需串行放行。
 
