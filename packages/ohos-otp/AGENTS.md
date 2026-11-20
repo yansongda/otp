@@ -27,7 +27,7 @@
 5. **core 不进 barrel**：`Index.ets` 只导出 `OtpError`/`OtpErrorCode`/DTO/`Secret`/`HOTP`/`TOTP`/`OTPAuthURI`；测试经薄壳深路径 import。
 6. **取模只在 `Digits.format` 发生一次**；`Truncate` 只截断（`& 0x7f`，31 位非负）。
 7. **secret 绝不外泄**：库内零 `console.*`/`hilog`；`OtpError` 消息为固定文案；`Secret` 刻意不实现 `toString()`，脱敏靠 `toJSON()` → `'[REDACTED]'`。
-8. **`verify` 恒定时间**：窗口内**扫完所有候选**后才返回首个命中 delta，禁止加早退优化。
+8. **`verify` 恒定时间**：窗口内**扫完所有候选**（每个候选都算、都比）后才返回结果；多重命中时取 **|delta| 最小**（同距离取**正方向**，永不把 counter 往回退），禁止加早退优化。tie-break / 早退证据由 core 单测覆盖（`engine.test.ts`），本包不重复造 stub provider；副本行为由 `sync:core:check` 对拍，所以 `.ets` 用例只留单命中场景。
 9. **`library/example/` 随 HAR 发布，不得删除/改名**：hvigor 对 bytecode HAR 的 release 白名单目录名就是 `example`（`RELEASE_HAR_WHITE_LIST_DIR_NAME`），该目录会被原样打进包内 `package/example/`；OHPM「支持文档 / example」的 20 分完全依赖它。里面只放文档（README），不放不参与编译与 lint 的源码。缺失由 `scripts/ci/check-invariants.mjs` 与 CI 的 HAR 内容校验拦截。
 10. **provider 错误契约**：`CryptoSource` 失败必须经 core 的 `otpFail` 走平台工厂（`name === 'OtpError'`），engine 只把**未知**错误收敛为 `CRYPTO_FAILED`；未知算法必须 `INVALID_ALGORITHM`（绝不静默降级 SHA1），算法集合由守卫与 core `internal/algorithm.ts` 逐项对拍。
 

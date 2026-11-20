@@ -174,6 +174,18 @@ describe("totp", () => {
     ).toBe("94287082");
   });
 
+  it("t0_future_breaksGenerateButNotRemaining", () => {
+    // t0 晚于当前时刻 → 时间步为负：算码类入口按 counter 越界归因（INVALID_COUNTER），
+    // 而 remaining 只取模（供进度条），不承担「拒绝非法配置」的职责。
+    const t = new TOTP({ secret: SEEDS.SHA1_BASE32, t0: 31000 });
+    expectCode(() => t.generate(1000), "INVALID_COUNTER");
+    expectCode(
+      () => t.verify("123456", { timestamp: 1000 }),
+      "INVALID_COUNTER",
+    );
+    expect(t.remaining(1000)).toBe(9);
+  });
+
   it("fromURI_period60_sha256_counter0", () => {
     // period=60 → generate(59000) 的 counter = floor(59/60) = 0（勿与 counter=1 的 46119246 混淆）
     const t = TOTP.fromURI(

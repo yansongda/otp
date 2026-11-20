@@ -1,4 +1,4 @@
-// AUTO-GENERATED from packages/core/src/internal/bytes.ts (core@d8ce34d). DO NOT EDIT. Run: bun run sync:core
+// AUTO-GENERATED from packages/core/src/internal/bytes.ts (core@07d0740). DO NOT EDIT. Run: bun run sync:core
 /**
  * 字节容器归一化（零平台依赖）：把「8 位无符号视图 / ArrayBuffer」统一收敛成 Uint8Array 视图。
  *

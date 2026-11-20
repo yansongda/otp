@@ -7,6 +7,7 @@ import {
   isValidAlgorithm,
   isValidDigits,
 } from "../../src/internal/digits";
+import { ALLOWED_DIGITS } from "../../src/options";
 import { expectCode } from "./helpers";
 
 describe("digits", () => {
@@ -39,6 +40,27 @@ describe("digits", () => {
     expect(isValidDigits(8)).toBe(true);
     expect(isValidDigits(5)).toBe(false);
     expect(isValidDigits(9)).toBe(false);
+  });
+
+  it("allowedDigits_singleSource", () => {
+    // ALLOWED_DIGITS 是位数集合的唯一事实源：isValidDigits 必须与它逐项一致，
+    // 且 format 的 10^n 表必须覆盖每个成员（漏一个会让 `value % undefined` 静默产出 "NaN"）。
+    // 新增位数时漏改任一处都会在这里红，而不是线上才发出错码。
+    const accepted: number[] = [];
+    for (let digits = 1; digits <= 12; digits++) {
+      if (isValidDigits(digits)) {
+        accepted.push(digits);
+      }
+    }
+    // 集合比较，不绑定 ALLOWED_DIGITS 的书写顺序（日后插一个新位数不该报「顺序不对」）
+    const sorted = (list: ReadonlyArray<number>) =>
+      [...list].sort((a, b) => a - b);
+    expect(sorted(accepted)).toEqual(sorted(ALLOWED_DIGITS));
+
+    for (const digits of ALLOWED_DIGITS) {
+      expect(format(0, digits)).toBe("0".repeat(digits));
+      expect(format(10 ** digits - 1, digits)).toBe("9".repeat(digits));
+    }
   });
 
   it("isValidAlgorithm_only_three_values", () => {

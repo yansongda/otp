@@ -1,6 +1,7 @@
 /**
  * 编排层：counter → code 全链路（纯函数，接收注入 provider，零平台依赖）。
- * 取模只在 digits.format 做一次；verify 扫完全部候选后才返回首个命中 delta（恒定时间）。
+ * 取模只在 digits.format 做一次；verify 扫完全部候选后才返回**最接近基准步**的命中 delta
+ * （|delta| 最小，同 |delta| 时取正方向，绝不把 counter 往回退），恒定时间。
  */
 
 import type { HmacProvider } from "../crypto";
@@ -82,6 +83,22 @@ function assertValidWindow(window: number): void {
   }
 }
 
+/**
+ * 窗口内恒定时间比对。
+ *
+ * 扫描顺序按 |delta| 递增（0、+1、-1、+2、-2 …），且**每个候选都算、都比较**，不做早退：
+ * - 只保留第一个命中（= |delta| 最小），因此返回的偏移是「最可能的那一步」；
+ * - 不因为命中就跳过后续候选的比对，避免用计时差泄漏「命中了第几个窗口」。
+ *
+ * 为什么不是「从 -window 递增扫、首个命中为准」：多个候选同时命中的概率虽只有 ~window/10^digits，
+ * 但按最负偏移返回会让调用方把 counter 往回推（如 HOTP 重置 `counter = base + delta + 1`），
+ * 等于重新放行更早的验证码。
+ *
+ * 为什么同一 |delta| 的 -k / +k 同时命中时取**正方向**：`counter + k + 1` 只是跳过若干码，
+ * 而 `counter - k + 1` 会把已持久化的 counter 往回退，重新放行 `base-k+1 … base-1` 这批更早的
+ * 验证码（正是 RFC 4226 §7.4 防重放要避免的方向）；HOTP resync 也确实以正方向才对得上
+ * 客户端计数器的前进方向。
+ */
 export function verify(
   provider: HmacProvider,
   params: EngineParams,
@@ -100,19 +117,29 @@ export function verify(
     otpFail("INVALID_TOKEN");
   }
 
-  let firstMatch: number | null = null;
-  for (let delta = -window; delta <= window; delta++) {
-    const candidate = counter + delta;
-    if (candidate < 0 || !isSafeCounter(candidate)) {
-      continue;
+  let matched: number | null = null;
+  for (let distance = 0; distance <= window; distance++) {
+    // 前瞻在前（distance = 0 时即基准步本身）：同 |delta| 的 ±k 都命中时保留正方向。
+    const ahead = counter + distance;
+    if (isSafeCounter(ahead)) {
+      const aheadToken = generate(provider, params, ahead);
+      const isAheadMatch = constantTimeEquals(aheadToken, token);
+      if (isAheadMatch && matched === null) {
+        matched = distance;
+      }
     }
-    const candidateToken = generate(provider, params, candidate);
-    if (constantTimeEquals(candidateToken, token)) {
-      if (firstMatch === null) {
-        // window=0 时循环首项是 -0：归一化为 +0，避免调用方用 Object.is 判断时出现意外
-        firstMatch = delta === 0 ? 0 : delta;
+    // 再回看（distance > 0 才有意义）。counter 回看越界时 isSafeCounter 返回 false，
+    // 直接跳过不报错：负 counter 表示 epoch 之前，无定义。
+    if (distance > 0) {
+      const back = counter - distance;
+      if (isSafeCounter(back)) {
+        const backToken = generate(provider, params, back);
+        const isBackMatch = constantTimeEquals(backToken, token);
+        if (isBackMatch && matched === null) {
+          matched = -distance;
+        }
       }
     }
   }
-  return firstMatch;
+  return matched;
 }

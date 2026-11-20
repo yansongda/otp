@@ -221,7 +221,7 @@ export default function otpEngineTest() {
       expect(generate(fixture, p256_8, 0)).assertEqual(SHA256_C0_8DIGIT);
     });
 
-    // ── verify 正例（窗口语义：扫完才返回首个命中 delta）──
+    // ── verify 正例（窗口语义：扫完才返回最接近基准的命中 delta）──
     it('verify_positive_delta0', 0, () => {
       // base counter=1、window=0：命中 counter=1 → delta 0
       expect(verify(fixture, p6, '287082', 1, 0)).assertEqual(0);
