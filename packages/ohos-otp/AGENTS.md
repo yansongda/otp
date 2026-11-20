@@ -23,7 +23,12 @@
 1. **`internal/CryptoSource.ets` 是全库唯一 `@kit` 导入点**：新增任何系统 API 调用都必须落在该文件；验证 `grep -rn "@kit\." library/src/main/ets/ library/Index.ets` 只应命中它。
 2. **core 副本与外层薄壳必须 kit-free**：ArkTS 的 `import` 静态且传递，薄壳一旦间接引入 kit，本地单测会在**模块加载期**整体失败。
 3. **core 副本禁止手改**：改动只能改 `packages/core`（唯一源码），再跑 `bun run sync:core`；CI 用 `sync:core:check` 拦漂移。
-4. **`pure-js/` 不同步**：hvigor 会编译模块内**全部** `.ts`（未 import 的也会进 abc），所以 `scripts/sync-core.mjs` 排除 `pure-js` 与 `pure-js.ts`；ohos 不得 import 这两个入口。
+   副本头是 `// AUTO-GENERATED from packages/core/src/<rel> (core-sha256:<12hex>)`，摘要 = 该文件**正文**的 SHA-256 前 12 位
+   （刻意**不写** git commit：squash 合并会让分支 commit 变成不可达对象）。**溯源三步**：
+   ① `git log -S 'core-sha256:<12hex>' -- packages/ohos-otp/library/src/main/ets/core` 找到引入该摘要的提交；
+   ② `git show <commit>:packages/core/src/<rel> | shasum -a 256 | cut -c1-12` 复核摘要；
+   ③ 该提交 tree 里的 `packages/core/src/<rel>` 就是生成副本用的源码。
+4. **`pure-js/` 与 core 的 `index.ts` 不同步**：hvigor 会编译模块内**全部** `.ts`（未 import 的也会进 abc），所以 `scripts/sync-core.mjs` 排除 `pure-js`、`pure-js.ts` 与 core 的 barrel `index.ts`（副本里没人 import 它，但深导入会拿到未注册 provider / 错误工厂的 core）；ohos 不得 import 这两个入口。
 5. **core 不进 barrel**：`Index.ets` 只导出 `OtpError`/`OtpErrorCode`/DTO/`Secret`/`HOTP`/`TOTP`/`OTPAuthURI`；测试经薄壳深路径 import。
 6. **取模只在 `Digits.format` 发生一次**；`Truncate` 只截断（`& 0x7f`，31 位非负）。
 7. **secret 绝不外泄**：库内零 `console.*`/`hilog`；`OtpError` 消息为固定文案；`Secret` 刻意不实现 `toString()`，脱敏靠 `toJSON()` → `'[REDACTED]'`。

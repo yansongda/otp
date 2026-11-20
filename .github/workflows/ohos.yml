@@ -268,7 +268,7 @@ jobs:
               process.env.GITHUB_STEP_SUMMARY,
               `### 单测\n\n\`Tests run: ${run}, Failure: ${failure}, Error: ${error}, Pass: ${pass}, Ignore: ${ignore}\`\n`,
             );
-            if (failure !== 0 || error !== 0 || pass < 300) {
+            if (failure !== 0 || error !== 0 || pass < 301) {
               console.error(`本地单测未达预期：Failure=${failure}, Error=${error}, Pass=${pass}`);
               process.exit(1);
             }

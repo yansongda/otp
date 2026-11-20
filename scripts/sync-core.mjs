@@ -10,6 +10,7 @@
  *   bun scripts/sync-core.mjs --check  # 只校验，不一致则退出码 1（CI 用）
  */
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -22,24 +23,37 @@ const CORE_SRC = join(ROOT, "packages/core/src");
  *   留一份就是双份实现进 HAR；
  * - `index.ts`：core 的 barrel。副本里没人 import 它，
  *   但深导入会得到一个未注册 provider / 错误工厂的 core（静默降级），故不随副本发布。
- * 同一份清单也用于 git 溯源：只有这些被排除之外的改动才算「副本内容变了」。
+ * 同一份清单也决定「副本内容有没有变」：被排除的改动不影响副本，也不刷日志里的 core commit。
  */
 const EXCLUDED = ["pure-js", "pure-js.ts", "index.ts"];
-/** git pathspec：`packages/core/src` + 逐项 exclude（只改 pure-js 不该把副本头打上 -dirty）。 */
+/** git pathspec：`packages/core/src` + 逐项 exclude（仅用于日志：最后一次影响副本内容的 core commit）。 */
 const COPY_PATHSPEC = [
   "packages/core/src",
   ...EXCLUDED.map((entry) => `:(exclude)packages/core/src/${entry}`),
 ];
 const TARGET = join(ROOT, "packages/ohos-otp/library/src/main/ets/core");
 /**
- * 副本头：`core@<commit>` 是「最后一次改动 packages/core/src 的 commit」，用于溯源。
- * 为什么不用 HEAD：只改平台层的 commit 不应让全部副本看起来失同步（--check 会误报）。
+ * 副本头：`core-sha256:<12hex>` = 该文件**正文**的 SHA-256 前 12 位，用于溯源。
+ *
+ * 为什么是内容摘要而不是 git commit：
+ * - 本仓库走 squash 合并，分支上的 commit 合入后成为**不可达对象**，头里写 `core@<commit>`
+ *   会留下一个 `git show` 查不到的哈希（历史上就出现过）；
+ * - 内容摘要只取决于正文，跨 rebase / squash / 重新合并都稳定，`--check` 也能逐字比对。
+ * 反查「这版副本对应哪次 core 改动」：`git log -S 'core-sha256:<hash>' -- <副本路径>`。
  */
 const HEADER =
-  "// AUTO-GENERATED from packages/core/src/{rel} (core@{commit}). DO NOT EDIT. Run: bun run sync:core\n";
+  "// AUTO-GENERATED from packages/core/src/{rel} (core-sha256:{digest}). DO NOT EDIT. Run: bun run sync:core\n";
 
-/** 取最后一次改动「会进副本的 core 源码」的 commit；工作区有未提交的这类改动时加 `-dirty` 标记。 */
-function resolveCoreCommit() {
+/** 正文摘要（12 位 hex 足够区分，且不会让头过长）。守卫脚本用同一算法独立复核。 */
+function digestOf(source) {
+  return createHash("sha256").update(source).digest("hex").slice(0, 12);
+}
+
+/**
+ * 仅用于命令输出：最后一次改动「会进副本的 core 源码」的 commit，工作区有未提交改动时加 `-dirty`。
+ * 故意不写进文件：它是提示信息，不该影响 --check 判定，也不该在副本里留下会腐坏的哈希。
+ */
+function describeCoreState() {
   const git = (...args) =>
     execFileSync("git", args, {
       cwd: ROOT,
@@ -62,12 +76,6 @@ function resolveCoreCommit() {
     // 无法判定工作区状态时保持原值
   }
   return commit;
-}
-const CORE_COMMIT = resolveCoreCommit();
-
-/** --check 比较时忽略来源 commit：它只是溯源信息，不影响「正文是否同步」的判定。 */
-function withoutCommit(text) {
-  return text.replace(/\(core@[^)]*\)/g, "(core@<commit>)");
 }
 
 const checkOnly = process.argv.includes("--check");
@@ -104,7 +112,9 @@ async function listTsFiles(dir) {
 }
 
 function withHeader(source, rel) {
-  return HEADER.replace("{rel}", rel).replace("{commit}", CORE_COMMIT) + source;
+  return (
+    HEADER.replace("{rel}", rel).replace("{digest}", digestOf(source)) + source
+  );
 }
 
 async function main() {
@@ -129,7 +139,7 @@ async function main() {
       } catch {
         actual = "";
       }
-      if (withoutCommit(actual) !== withoutCommit(expected)) {
+      if (actual !== expected) {
         console.error("[sync-core] drift:", relative(ROOT, dest));
         drift++;
       }
@@ -159,11 +169,11 @@ async function main() {
       );
       process.exit(1);
     }
-    console.log(`[sync-core] ok (${files.length} files)`);
+    console.log(`[sync-core] ok (${files.length} files, headers verified)`);
     return;
   }
   console.log(
-    `[sync-core] synced ${files.length} files -> ${relative(ROOT, TARGET)} (core@${CORE_COMMIT})`,
+    `[sync-core] synced ${files.length} files -> ${relative(ROOT, TARGET)} (last core commit ${describeCoreState()}, log only)`,
   );
 }
 

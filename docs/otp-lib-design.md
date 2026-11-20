@@ -56,7 +56,7 @@ otp/                                  monorepo（bun workspaces）
 | --- | --- |
 | core 是唯一实现 | 算法/门面/URI/错误码只改 core；平台包内复制实现视为缺陷 |
 | 错误跨层靠工厂 | core 只 `otpFail(code)`；平台 barrel 调 `setErrorFactory`，公开 `OtpError` 由平台拥有 |
-| ohos 副本禁止手改 | `bun run sync:core` 生成 15 个文件；CI 跑 `sync:core:check`，drift 即失败 |
+| ohos 副本禁止手改 | `bun run sync:core` 从 core 生成；副本头写内容摘要 `core-sha256:<hash>`（不写 git commit：squash 合并后 commit 会成不可达对象），可反查来源；CI 跑 `sync:core:check`，drift 即失败 |
 | pure-js 不进 ohos 编译图 | ohos 只 import `core/src/index`（barrel 刻意不导出 `./pure-js`） |
 | ohos 唯一 `@kit` 导入点 | `internal/CryptoSource.ets`；`guard.yml` + 守卫脚本扫描 |
 | 跨边界签名只用基础类型 | ArkTS 不支持字面量类型 / `as const`：core 的 `type`/`algorithm` 是 `string`，平台层才收窄成 enum |

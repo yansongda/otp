@@ -41,9 +41,9 @@ Pi 只自动加载本文件（cwd 及其祖先的 context file）；子包 AGENT
 bun install
 bun run sync:core
 bun run sync:core:check
-bun run guard
 bun run lint
 bun run typecheck
+bun run guard
 bun run test
 bun run check
 bun run bench            # core 热路径基准（仅 JSC，只能同机相对比较）

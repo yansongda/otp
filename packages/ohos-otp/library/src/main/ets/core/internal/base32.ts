@@ -1,4 +1,4 @@
-// AUTO-GENERATED from packages/core/src/internal/base32.ts (core@6b1f0b0). DO NOT EDIT. Run: bun run sync:core
+// AUTO-GENERATED from packages/core/src/internal/base32.ts (core-sha256:c6fcad8c453e). DO NOT EDIT. Run: bun run sync:core
 /**
  * RFC 4648 §6 base32 编解码（纯函数，零平台依赖）。
  * 字母表 A-Z + 2-7；encode 输出大写无填充；decode 宽松（容忍空白 / 大小写 / 尾部 '='），
