@@ -97,7 +97,7 @@ ArkTS/ESM 的 `import` 是静态且传递的：公开类若在顶层从「含 `@
 ### 3.3 已确认的性能结论（别再重复试）
 
 - **不缓存 `Mac` / `SymKey`**：缓存可把单次签名从 6.6µs 降到 2.9µs，但 `SymKey.release()` 在 API 24 公开类型里不存在（只能等 GC），且复用 `Mac` 每次必须 `initSync`——省掉会**静默算错 digest**。收益不抵代价。
-- **不要用内联微基准决策**：本库模块间全部跨模块导入，跨模块解释器开销（~11–13µs/次）远大于函数体本身。唯一有效的方法是 `bun run bench` / `bun run bench:ab`（同进程交错测量、min-of-7、17 个热路径场景 + 2 个 URI 冷路径场景）。
+- **不要用内联微基准决策**：本库模块间全部跨模块导入，跨模块解释器开销（~11–13µs/次）远大于函数体本身。唯一有效的方法是 `bun run bench` / `bun run bench:ab`（同进程交错测量、min-of-7、15 个热路径场景 + 2 个 URI 冷路径场景）。
 - **base32 单遍位缓冲（历史记录，别反复折腾）**：该改法曾因「内联基准快 67%、真实调用路径反而慢 10%+」被回退——错的不是位缓冲，而是**只信内联基准**。换成「128 项字符值查表 + 单遍位缓冲」后，`bench:ab` 同机 A/B 显示基准路径与真实路径同时变快：`base32.decode 16B` 0.53→0.15µs、`Secret.fromBase32` 0.52→0.19µs、`decodeStrict 128ch` 5.6→3.1µs（`encode` 场景 same、无 regress）。同理 SHA-512 把 `[hi, lo]` 元组内联成标量后 `hmac sha512` 120→24µs。结论：这类改动先用 `bench:ab` 量真实路径，再决定去留。
 - **provider 契约校验留在热路径没问题**：engine 每次 `sign` 的 try/catch + `instanceof` + 摘要长度比对，用零成本 stub provider 隔离测得 ~7ns/次（`generate` 35→44ns、`verify w=2` 274→304ns）；相对 pure-js SHA1 HMAC 3.1µs / ohos 平台签名 2.9–6.6µs 是 +0.2% 量级，`bench:ab` 17 个场景全部 same。不要再为它加缓存或把校验挪到注册期（注册期自检挡不住后续违约）。
 
@@ -252,7 +252,7 @@ progress  = (((s - t0) % period) + period) % period / period   # [0, 1)
 | 字段 | 缺省 | 非法处理 |
 | --- | --- | --- |
 | `type` | — | 非 `totp`/`hotp` → `UNSUPPORTED_OTPAUTH_TYPE` |
-| `secret` | — | 缺失/空 → `EMPTY_SECRET`；归一化后恰 1 字符 → `SECRET_TOO_SHORT`（先于字符校验；旧实现报 `INVALID_BASE32_CHAR`）；其余非法字符 → `INVALID_BASE32_CHAR`；`{strict:true}` 非规范尾 → `INVALID_BASE32_PADDING` |
+| `secret` | — | 缺失/空 → `EMPTY_SECRET`；非法字符 → `INVALID_BASE32_CHAR`；解码后不足 1 字节 → `SECRET_TOO_SHORT`；`{strict:true}` 非规范尾 → `INVALID_BASE32_PADDING` |
 | `issuer` | 空 | 与 label 前缀不一致时**以 query 为准**（草案 §4：MUST NOT 仅因不一致拒收）；空值按「未提供」处理 |
 | `algorithm` | `SHA1` | 大小写不敏感映射；非三值 → `INVALID_ALGORITHM` |
 | `digits` | `6` | 只认纯十进制；非 6/7/8 → `INVALID_DIGITS`（6/7/8 取自草案 §3.1 的 `digits` 产生式；Google wiki 只列 6/8，取宽容超集） |
@@ -295,8 +295,9 @@ UNSUPPORTED_OTPAUTH_TYPE NOT_IMPLEMENTED
 
 两个原则：**配置/构造期错误先于用户输入错误**；**每个已知失败原因独立码**，禁止合并。
 
-**base32 解码内部顺序**（`decode` / `decodeStrict` 完全一致）：`EMPTY_SECRET` → `SECRET_TOO_SHORT`
-（归一化后恰 1 字符，先于字符校验；旧实现报 `INVALID_BASE32_CHAR`）→ `INVALID_BASE32_CHAR` → `INVALID_BASE32_PADDING`。
+**base32 解码内部顺序**（`decode` / `decodeStrict` 完全一致）：`EMPTY_SECRET` → `INVALID_BASE32_CHAR`
+→ `SECRET_TOO_SHORT`（解码后不足 1 字节，即归一化后恰 1 个合法字符）→ `INVALID_BASE32_PADDING`。
+字符校验始终先于长度判定（单遍位缓冲下把 `SECRET_TOO_SHORT` 放在循环之后即可，不额外遍历）；
 单字符输入在宽松/严格两种模式下同码，不因 `strict` 开关不同而暴露不同错误。
 
 **不泄漏**：异常消息固定文案，不含 secret / token / 派生密钥；`CRYPTO_FAILED` 不透传原生错误对象；库内零 hilog / 零日志 / 零上报 / 零持久化。
@@ -314,7 +315,7 @@ UNSUPPORTED_OTPAUTH_TYPE NOT_IMPLEMENTED
 | ohos 守卫 | `node packages/ohos-otp/scripts/ci/check-invariants.mjs` | 16/16 |
 | ohos 本地单测 | `hvigorw test --mode module -p module=library@default -p testType=local` | 全绿（kit-free 全链路 + fixture） |
 | ohos 设备用例 | `ohosTest`（真实 cryptoFramework + barrel 链路） | 全绿 |
-| 基准 | `bun run bench` / `bun run bench:ab` | 17 热路径场景 + `OTPAuthURI.parse/build` 冷路径场景 |
+| 基准 | `bun run bench` / `bun run bench:ab` | 15 热路径场景 + `OTPAuthURI.parse/build` 冷路径场景 |
 
 > 用例条数刻意不写进文档（易腐坏）：以各命令的实测输出为准；ohos 守卫的 BASELINE 负责「数量不减少」。
 

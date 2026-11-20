@@ -65,7 +65,7 @@ $HB --no-daemon -c modelVersion=6.1.1 onDeviceTest --mode module -p module=libra
 
 # 零 SDK 依赖的两条（CI 的 guard.yml / ci.yml 跑的就是它们，可先跑）
 bash scripts/ci/lint-local.sh          # CodeLinter；exit 4 = 命中 error，0 = 通过（不带 -e 永远 0）
-node scripts/ci/check-invariants.mjs   # 仓库不变量守卫（10 项）
+node scripts/ci/check-invariants.mjs   # 仓库不变量守卫（16 项）
 ```
 
 **CI（GitHub Actions，workflow 均在仓库根 `.github/workflows/`）**：`guard.yml` = 不变量守卫（ubuntu-latest，无 SDK，秒级）；`ohos.yml` = CodeLinter + PC 单测（覆盖率门槛 = 未覆盖行数上限，见 `COVERAGE_MAX_UNCOVERED`）+ `assembleHar` + `ohpm prepublish` + entry HAP smoke，产物含 `library.har` 与覆盖率报告。工具链取自社区镜像的华为 command-line-tools（`CLI_VERSION` 与归档 sha256 钉在 workflow 里，升级走显式 PR）；**跑在 `macos-15`，因为 local test 要起 Previewer（见 §8）**。本地无 SDK 时用上面两条脚本 + `bash scripts/ci/lint-local.sh` 复现 lint 与守卫。**CI 不执行 `ohpm publish` / `git push`**（§7 人工闸门）。
