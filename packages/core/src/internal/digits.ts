@@ -12,7 +12,7 @@ import { algorithmSpec } from "./algorithm";
  * 两处若各写一份，新增成员漏改只会表现为 format 静默产出 "NaN"。
  * `tests/otp/digits.test.ts::allowedDigits_singleSource` 盯住「允许集合 ↔ 10^n 表」。
  *
- * 返回值是普通 boolean（不用 `digits is DigitCount` 类型谓词）：本文件会被 sync-core
+ * 返回值是普通 boolean（不写成 `6 | 7 | 8` 的类型谓词）：本文件会被 sync-core
  * 复制进 ohos 的 HAR 编译图，ArkTS 对用户定义的类型谓词支持受限，不为类型糖引入风险。
  */
 export function isValidDigits(digits: number): boolean {

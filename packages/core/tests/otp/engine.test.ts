@@ -15,7 +15,8 @@ const key = decode(SEEDS.SHA1_BASE32);
 const params6 = { algorithm: "SHA1", digits: 6, key } as const;
 const params7 = { algorithm: "SHA1", digits: 7, key } as const;
 
-const MATCH_DIGEST = new Uint8Array(20).fill(0x2a);
+/** 命中候选的摘要（每次返回新数组：避免测试间共享同一个可变 Uint8Array）。 */
+const MATCH_DIGEST = () => new Uint8Array(20).fill(0x2a);
 
 /**
  * 按 counter 决定摘要的 stub provider：列出的 counter 产同一个 token（命中），
@@ -30,7 +31,17 @@ function stubProvider(matchCounters: ReadonlyArray<number>): HmacProvider {
       _key: Uint8Array,
       message: Uint8Array,
     ): Uint8Array {
-      // verify 传入的 message 是 8 字节大端 counter
+      // verify 传入的 message 是 8 字节大端 counter。用例只用 < 2^32 的 counter，
+      // 高 4 字节必须为 0：显式断言，避免日后把 base 调大时解析静默错位。
+      if (
+        message.length !== 8 ||
+        message[0] !== 0 ||
+        message[1] !== 0 ||
+        message[2] !== 0 ||
+        message[3] !== 0
+      ) {
+        throw new Error("stub provider: counter 超出测试支持的 2^32 范围");
+      }
       const counter =
         ((message[4] << 24) |
           (message[5] << 16) |
@@ -38,9 +49,9 @@ function stubProvider(matchCounters: ReadonlyArray<number>): HmacProvider {
           message[7]) >>>
         0;
       if (matchCounters.indexOf(counter) !== -1) {
-        return MATCH_DIGEST;
+        return MATCH_DIGEST();
       }
-      // 非命中：摘要随 counter 变化，保证「窗口外生成的 token」不会误命中
+      // 非命中：摘要随 counter 变化（低 8 位），保证「窗口外生成的 token」不会误命中
       return new Uint8Array(20).fill(counter & 0xff);
     },
   };
@@ -96,13 +107,14 @@ describe("engine", () => {
     expect(verify(everything, params6, token, base, 2)).toBe(0);
   });
 
-  it("verify_window_sameDistancePrefersNegative", () => {
-    // 只有 -1 与 +1 命中（|delta| 相同）：固定取负方向（先看过期一侧），
-    // 不依赖扫描实现细节，保证「同输入同结果」
+  it("verify_window_sameDistancePrefersForward", () => {
+    // 只有 -1 与 +1 命中（|delta| 相同）：固定取正方向，保证「同输入同结果」，
+    // 且永不把调用方持久化的 counter 往回退（HOTP `counter = base + delta + 1` 得到 base+2，
+    // 与客户端计数器的前进方向一致；取 -1 会回退到 base，走反防重放方向）。
     const base = 1000;
     const pair = stubProvider([base - 1, base + 1]);
     const token = generate(pair, params6, base + 1);
-    expect(verify(pair, params6, token, base, 1)).toBe(-1);
+    expect(verify(pair, params6, token, base, 1)).toBe(1);
   });
 
   it("verify_window_forwardOnlyMatch", () => {
@@ -119,6 +131,38 @@ describe("engine", () => {
     // 因此窗口内所有候选的码都与它不同 → null
     const outside = generate(pair, params6, base + 10);
     expect(verify(pair, params6, outside, base, 2)).toBeNull();
+  });
+
+  it("verify_signCalls_matchWindowSize", () => {
+    // 恒定时间性质的可执行证据（AGENTS「禁止早退优化」）：sign 次数只由 window 决定，
+    // 与 token 命中与否、命中第几个候选无关。counter 足够大（无越界跳过）时固定 1 + 2w：
+    // w=0 → 1 次，w=2 → 5 次，w=10 → 21 次。
+    const base = 1000;
+    const cases = [
+      { window: 0, tokenFrom: base, matches: [base] },
+      { window: 2, tokenFrom: base, matches: [base] }, // 只有基准步命中
+      {
+        window: 2,
+        tokenFrom: base,
+        matches: [base - 2, base - 1, base, base + 1, base + 2],
+      },
+      { window: 2, tokenFrom: base, matches: [base + 2] }, // 只有前瞻命中
+      { window: 2, tokenFrom: base + 10, matches: [base] }, // 窗口外 token → null
+      { window: 10, tokenFrom: base + 10, matches: [base + 10] }, // 上限 10：末位命中
+    ];
+    for (const testCase of cases) {
+      const inner = stubProvider(testCase.matches);
+      const token = generate(inner, params6, testCase.tokenFrom);
+      let calls = 0;
+      const counting: HmacProvider = {
+        sign(algorithm, secretKey, message) {
+          calls++;
+          return inner.sign(algorithm, secretKey, message);
+        },
+      };
+      verify(counting, params6, token, base, testCase.window);
+      expect(calls).toBe(1 + 2 * testCase.window);
+    }
   });
 
   it("verify_invalidToken_nonNumeric_throws", () => {

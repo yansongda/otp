@@ -24,11 +24,11 @@
 2. **平台层零平台调用**（core 已是零平台）：本包不得出现 `wx.*`、`console.*`、`node:` 内置模块；平台随机数由使用方通过 `wx.getRandomValues` + `Secret.fromBytes` 提供。
 3. **禁止 BigInt**：SHA-512 使用 hi/lo 半字，老设备兼容。
 4. **secret 绝不外泄**：错误消息固定文案；`Secret` 刻意不实现 `toString()`；`toJSON()` 返回 `[REDACTED]`。
-5. **`verify` 恒定时间**：窗口内扫完所有候选（每个候选都算、都比）后才返回结果；多重命中时取 **|delta| 最小**（同距离取负方向），禁止加早退优化。
+5. **`verify` 恒定时间**：窗口内扫完所有候选（每个候选都算、都比）后才返回结果；多重命中时取 **|delta| 最小**（同距离取**正方向**，永不把 counter 往回退），禁止加早退优化。`sign` 调用数只由 window 决定（`1 + 2w`），由 `engine.test.ts::verify_signCalls_matchWindowSize` 盯住。
 6. **取模只在 `internal/digits.ts` 发生一次**；`truncate` 只做 `& 0x7f`（31 位非负）。
-   位数集合（6/7/8）的唯一来源是 `options.ts` 的 `ALLOWED_DIGITS`：`isValidDigits` 由它驱动、
+   位数集合（6/7/8）的**运行期唯一来源**是 `options.ts` 的 `ALLOWED_DIGITS`：`isValidDigits` 由它驱动、
    `digits.ts` 的 `10^n` 表必须覆盖它的每个成员（`digits.test.ts::allowedDigits_singleSource` 对拍），
-   禁止在别处再写一份字面量。
+   禁止在别处再写一份运行期字面量（类型层的最强类型声明不受此限）。
 7. **错误码唯一来源是 core**：`src/errors.ts` 只保留平台 `OtpError`，`OtpErrorCode` 必须从 `@yansongda/otp-core` 复用（守卫脚本禁止再声明码表）；码集合现为 22 个，v1 起仅允许新增，不得改已有字符串值。新增码必须同步 core 码表 / 守卫基线 / 四份 README / CHANGELOG。
 8. **DTO 冻结**：`HmacOptions` / `TotpOptions` / `HotpOptions` / `VerifyOptions` / `OtpAuthParams` 字段名与可选性仅允许新增可选字段；`HOTP.verify` / `TOTP.verify` 由 core 分别收窄为 `HotpVerifyOptions` / `TotpVerifyOptions`（平台 type-only 转发，守卫脚本禁止重复声明）。
 9. **参数口径**：`timestamp` / `period` / `t0` / `clockOffsetMs` / `minSecretBits` 必须是安全整数（`minSecretBits` 非法时 fail-closed 抛 `INVALID_MIN_SECRET_BITS`）；`window` 上限 `MAX_VERIFY_WINDOW = 10`（barrel 导出）；TOTP 显式 `timestamp` 合法但叠加偏移后为负或超出安全整数 → `INVALID_CLOCK_OFFSET`；`Secret` 字符串/字节容器类型不对 → `INVALID_SECRET_CONTAINER`（`fromBase32` 非字符串、`fromBytes` 非 `Uint8Array` / `Uint8ClampedArray` / `ArrayBuffer`）；`token` 非字符串 → `INVALID_TOKEN`；`uri` 非字符串或 `build` 的 `issuer`·`account` 非字符串 / 无法百分号编码 → `INVALID_OTPAUTH_URI`（不得漏原生 `TypeError` / `URIError`）；`OTPAuthURI` 的 `digits` / `period` / `counter` 只认十进制整数。

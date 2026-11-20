@@ -52,7 +52,10 @@ describe("digits", () => {
         accepted.push(digits);
       }
     }
-    expect(accepted).toEqual([...ALLOWED_DIGITS]);
+    // 集合比较，不绑定 ALLOWED_DIGITS 的书写顺序（日后插一个新位数不该报「顺序不对」）
+    const sorted = (list: ReadonlyArray<number>) =>
+      [...list].sort((a, b) => a - b);
+    expect(sorted(accepted)).toEqual(sorted(ALLOWED_DIGITS));
 
     for (const digits of ALLOWED_DIGITS) {
       expect(format(0, digits)).toBe("0".repeat(digits));
