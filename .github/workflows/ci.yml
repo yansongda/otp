@@ -54,6 +54,10 @@ jobs:
       - name: Build miniprogram (tsdown bundle)
         run: bun run --filter '@yansongda/miniprogram-otp' build
 
+      # 发布物体积没有别的信号：超过 LIMITS 直接失败（上调必须在 PR 说明理由）
+      - name: Bundle size guard
+        run: bun run --filter '@yansongda/miniprogram-otp' check:size
+
       - name: Dist smoke test
         run: bun run --filter '@yansongda/miniprogram-otp' smoke:dist
 

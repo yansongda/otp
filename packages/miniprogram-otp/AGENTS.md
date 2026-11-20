@@ -49,6 +49,7 @@ bun test                  # 平台契约测试（tests/）
 bun run test:coverage     # Bun 覆盖率
 bun run build             # tsdown -> dist（单文件 CJS + 单文件 d.ts）
 bun run check:invariants  # 仓库不变量守卫（零依赖 node 脚本）
+bun run check:size        # 发布物体积守卫（dist 未压缩 / gzip 上限）
 bun run smoke:dist        # require dist 并验证 RFC 向量
 bun run release:check     # 发版前全量检查（含 npm pack --dry-run）
 npm pack --dry-run        # 仅检查发布内容
@@ -60,7 +61,7 @@ Bun 版本固定于 `.bun-version`（当前 `1.4.4`）。主 CI 通过 `bun-vers
 
 ## 4. 测试策略
 
-- **算法测试在 `packages/core`（315 条）**：RFC 4226 / 6238 / 4648 向量、哈希/HMAC 向量、错误码、strict base32、URI、时钟校准与随机注入。向量唯一来源 `packages/core/tests/otp/vectors.ts`，**逐字复制自 OHOS `RfcVectors.ets` 与 FIPS/RFC 官方向量，禁止自行推导或补算**。
+- **算法测试在 `packages/core`**（条数以 `bun test` 输出为准，不写死在文档里）：RFC 4226 / 6238 / 4648 向量、哈希/HMAC 向量（含与 `node:crypto` 的差分对拍）、错误码、strict base32、URI、时钟校准与随机注入。向量唯一来源 `packages/core/tests/otp/vectors.ts`，**逐字复制自 OHOS `RfcVectors.ets` 与 FIPS/RFC 官方向量，禁止自行推导或补算**。
 - 本包只保留 `tests/platform.test.ts`（19 条）：注册链路、错误工厂、类型桥、公开 API 契约。新增平台逻辑必须补测；测试数量不得下降（`scripts/ci/check-invariants.mjs` 基线 19/1）。
 - 算法逻辑变更只改 `packages/core` + 其测试，**禁止在本包复制实现**。
 - 微信真机 / 开发者工具“构建 npm”冒烟仍是人工门槛，CI 无法覆盖。
@@ -73,6 +74,7 @@ Bun 版本固定于 `.bun-version`（当前 `1.4.4`）。主 CI 通过 `bun-vers
 - 不使用 WeChat 不支持的 API：`padStart`、`URLSearchParams`、BigInt、Node 内置模块。
 - 不新增 `console.*` / 埋点；需要观测时用 CI 指标（测试数量、覆盖率、pack 文件清单）。
 - 发布物为 `dist/`，不提交构建产物；`dist/` 在 `.gitignore` 中。
+- **发布物体积有守卫**：`bun run check:size`（CI 在 `build` 后执行，`release:check` 也含）。上限写在 `scripts/ci/check-size.mjs` 的 `LIMITS`（未压缩 + gzip 两个口径）；上调必须在 PR 说明理由，下调直接改。为什么需要：小程序主包 2MB，体积回归没有其它信号——性能重构（如 SHA-512 内联展开）会让 bundle 变大。
 
 ## 6. 发布与仓库边界
 
