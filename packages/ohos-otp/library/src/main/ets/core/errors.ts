@@ -1,4 +1,4 @@
-// AUTO-GENERATED from packages/core/src/errors.ts (core@6f08177). DO NOT EDIT. Run: bun run sync:core
+// AUTO-GENERATED from packages/core/src/errors.ts (core@d4941b5). DO NOT EDIT. Run: bun run sync:core
 /**
  * 统一错误码 + core 默认错误类（仅无平台注册时兜底）。
  *
