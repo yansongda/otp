@@ -1,4 +1,4 @@
-// AUTO-GENERATED from packages/core/src/internal/engine.ts (core@d4941b5). DO NOT EDIT. Run: bun run sync:core
+// AUTO-GENERATED from packages/core/src/internal/engine.ts (core@d8ce34d). DO NOT EDIT. Run: bun run sync:core
 /**
  * 编排层：counter → code 全链路（纯函数，接收注入 provider，零平台依赖）。
  * 取模只在 digits.format 做一次；verify 扫完全部候选后才返回首个命中 delta（恒定时间）。

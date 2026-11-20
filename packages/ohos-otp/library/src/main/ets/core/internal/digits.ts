@@ -1,4 +1,4 @@
-// AUTO-GENERATED from packages/core/src/internal/digits.ts (core@d4941b5). DO NOT EDIT. Run: bun run sync:core
+// AUTO-GENERATED from packages/core/src/internal/digits.ts (core@d8ce34d). DO NOT EDIT. Run: bun run sync:core
 /**
  * 取模 + 左补零格式化（纯函数，零平台依赖）。
  * 取模是本库唯一发生点；补零用模板字符串，规避平台字符串补位 API 的可用性差异。

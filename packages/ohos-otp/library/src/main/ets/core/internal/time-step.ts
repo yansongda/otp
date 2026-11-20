@@ -1,4 +1,4 @@
-// AUTO-GENERATED from packages/core/src/internal/time-step.ts (core@d4941b5). DO NOT EDIT. Run: bun run sync:core
+// AUTO-GENERATED from packages/core/src/internal/time-step.ts (core@d8ce34d). DO NOT EDIT. Run: bun run sync:core
 /**
  * 时间步 / 剩余秒 / 进度 / 恒定时间比较（纯函数，零平台依赖）。
  * 只做纯数值运算，不依赖 Date / 时区；t0 单位秒。

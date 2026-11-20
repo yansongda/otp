@@ -1,4 +1,4 @@
-// AUTO-GENERATED from packages/core/src/index.ts (core@d4941b5). DO NOT EDIT. Run: bun run sync:core
+// AUTO-GENERATED from packages/core/src/index.ts (core@d8ce34d). DO NOT EDIT. Run: bun run sync:core
 /**
  * core 主干入口：协议实现 + 门面 + crypto 接口 + 错误工厂。
  *

@@ -1,4 +1,4 @@
-// AUTO-GENERATED from packages/core/src/internal/base32.ts (core@d4941b5). DO NOT EDIT. Run: bun run sync:core
+// AUTO-GENERATED from packages/core/src/internal/base32.ts (core@d8ce34d). DO NOT EDIT. Run: bun run sync:core
 /**
  * RFC 4648 §6 base32 编解码（纯函数，零平台依赖）。
  * 字母表 A-Z + 2-7；encode 输出大写无填充；decode 宽松（容忍空白 / 大小写 / 尾部 '='），
@@ -39,20 +39,17 @@ for (let i = 0; i < BASE32_ALPHABET.length; i++) {
 /**
  * 归一化串 → 字节（单遍位缓冲：8 个 5 bit 组 = 5 字节，末组按剩余有效字节截断）。
  *
- * 位缓冲只有低 12 位有意义（循环顶 `bits ≤ 7`，每次 +5 bit、凑满 8 bit 即输出），
- * 所以不会溢出；`& 0xffff` 只是把「高位恒为 0」显式写出来，等价于 RFC 4648 的末组补 0。
+ * 位缓冲里只有低 12 位是「有意义的窗口」（循环顶 `bits ≤ 7`，每次 +5 bit、凑满 8 bit 即输出），
+ * `& 0xffff` 把缓冲截在 16 位内，防止更早的陈旧位无限左移；输出侧
+ * `(buffer >>> bits) & 0xff` 只读窗口内的那 8 位，所以陈旧位永不污染结果
+ * （等价于 RFC 4648 的末组补 0）。
  *
- * 错误码顺序（当前实现的显式契约；旧实现是「字符错误优先」）：解码后不足 1 字节
- * （= 归一化后恰 1 字符）先抛 SECRET_TOO_SHORT，该字符非法也不再改判。
- * 换来的不变量是「同一输入在宽松/严格两种模式下同码」——单遍解码必须先知长度才能决定
- * 字符是否合法，两害相权取与 strict 开关无关的那个。长度 ≥ 2 时字符错误仍先于尾长校验。
+ * 错误码顺序（与 decodeStrict 完全一致，也是改造前的既有契约）：先字符、后长度。
+ * `SECRET_TOO_SHORT` 放在循环之后判定——先算长度只是为了分配结果数组，与
+ * 「字符是否合法」无关；两条判定复用同一次遍历，没有额外遍历成本。
  */
 function decodeNormalized(normalized: string): Uint8Array {
   const length = Math.floor((normalized.length * 5) / 8);
-  if (length === 0) {
-    otpFail("SECRET_TOO_SHORT");
-  }
-
   const result = new Uint8Array(length);
   let buffer = 0;
   let bits = 0;
@@ -73,13 +70,18 @@ function decodeNormalized(normalized: string): Uint8Array {
     }
   }
 
+  // 归一化后恰 1 字符（5 bit）解不出任何字节；字符非法已在循环里先报过。
+  if (outIndex === 0) {
+    otpFail("SECRET_TOO_SHORT");
+  }
+
   return result;
 }
 
 /**
  * RFC 4648 §6 解码（先归一化）。
- * 空串抛 EMPTY_SECRET；归一化后恰 1 字符抛 SECRET_TOO_SHORT（先于字符校验）；
- * 其余非法字符抛 INVALID_BASE32_CHAR。
+ * 空串抛 EMPTY_SECRET；非法字符抛 INVALID_BASE32_CHAR；解码长度 0（= 归一化后恰 1 字符）
+ * 抛 SECRET_TOO_SHORT。
  */
 export function decode(input: string): Uint8Array {
   const normalized = normalize(input);
@@ -124,9 +126,8 @@ export function encode(bytes: Uint8Array): string {
  * —— 等价于 encode(decode(s)) === s，一次再编码比对即可覆盖两种失真。
  *
  * 归一化自身（大小写 / 空白 / 尾部 '='）仍被容忍。错误码优先级与 decode 完全一致：
- * 空 → EMPTY_SECRET，归一化后恰 1 字符 → SECRET_TOO_SHORT（先于字符校验；与宽松模式同码，
- * 调用方切 strict 不会拿到不同的失败语义），其余非法字符 → INVALID_BASE32_CHAR，
- * 再到 INVALID_BASE32_PADDING。
+ * 空 → EMPTY_SECRET，非法字符 → INVALID_BASE32_CHAR，解码后不足 1 字节 → SECRET_TOO_SHORT
+ * （与宽松模式同码，调用方切 strict 不会拿到不同的失败语义），再到 INVALID_BASE32_PADDING。
  */
 export function decodeStrict(input: string): Uint8Array {
   const normalized = normalize(input);
