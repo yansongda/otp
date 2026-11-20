@@ -74,21 +74,24 @@ describe("base32", () => {
     expectCode(() => decode("A"), "SECRET_TOO_SHORT");
   });
 
-  it("decodeSingleInvalidCharTooShortBeforeCharError", () => {
-    // 当前实现的显式契约（旧实现报 INVALID_BASE32_CHAR）：单遍解码先算长度，
-    // 归一化后恰 1 字符时 SECRET_TOO_SHORT 先于 INVALID_BASE32_CHAR。
-    // 本用例冻结该行为，并连带验证「同一输入在宽松/严格两种模式下同码」。
+  it("decodeSingleInvalidChar_charErrorFirst", () => {
+    // 错误码归因（⚠ 别改成「长度先判」）：归一化后恰 1 字符时仍然先报字符错误，
+    // 因为「你打错了一个字符」比「secret 太短」对排障更有用。改造前的实现就是这个顺序，
+    // 单遍位缓冲也能保持它（SECRET_TOO_SHORT 放循环之后判定，见 decodeNormalized）。
     // 含尾部 '=' 的例子（"\t-=" 归一化后只剩 "-"）防止 normalize 与长度判定脱节。
     for (const input of ["1", "0", "!", "@", "\u212a", "\t-="]) {
-      expectCode(() => decode(input), "SECRET_TOO_SHORT");
-      expectCode(() => decodeStrict(input), "SECRET_TOO_SHORT");
+      expectCode(() => decode(input), "INVALID_BASE32_CHAR");
+      expectCode(() => decodeStrict(input), "INVALID_BASE32_CHAR");
     }
+    // 合法单字符仍是「解不出 1 字节」，两种模式同码。
+    expectCode(() => decode("A"), "SECRET_TOO_SHORT");
+    expectCode(() => decodeStrict("A"), "SECRET_TOO_SHORT");
   });
 
   it("decodeIllegalChars", () => {
     expectCode(() => decode("AB1"), "INVALID_BASE32_CHAR");
     expectCode(() => decode("ab0"), "INVALID_BASE32_CHAR");
-    // 长度 ≥ 2 时字符错误仍先于长度/尾长校验（只有归一化后恰 1 字符才是 SECRET_TOO_SHORT）
+    // 字符错误始终先于长度 / 尾长校验（与该输入有多长无关）。
     expectCode(() => decode("1A"), "INVALID_BASE32_CHAR");
   });
 
