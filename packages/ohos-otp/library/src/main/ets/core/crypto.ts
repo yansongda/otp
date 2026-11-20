@@ -1,4 +1,4 @@
-// AUTO-GENERATED from packages/core/src/crypto.ts (core@86011ce). DO NOT EDIT. Run: bun run sync:core
+// AUTO-GENERATED from packages/core/src/crypto.ts (core@07d0740). DO NOT EDIT. Run: bun run sync:core
 /**
  * 解耦层：哈希 / HMAC / 随机源接口 + 注册表（零平台依赖）。
  *
