@@ -214,14 +214,17 @@ export default function base32Test() {
       }, OtpErrorCode.SECRET_TOO_SHORT);
     });
 
-    it('decodeSingleInvalidChar_tooShortBeforeCharError', 0, () => {
-      // 当前实现的显式契约（旧实现报 INVALID_BASE32_CHAR）：单遍解码先算长度，
-      // 归一化后恰 1 字符时 SECRET_TOO_SHORT 先于字符校验；与 core 的同义用例对拍。
+    it('decodeSingleInvalidChar_charErrorFirst', 0, () => {
+      // 错误码归因：归一化后恰 1 字符时仍先报字符错误（与 core 的同义用例对拍），
+      // 合法的单字符才报 SECRET_TOO_SHORT；两种模式同码。
       expectThrowsCode(() => {
         decode('1');
-      }, OtpErrorCode.SECRET_TOO_SHORT);
+      }, OtpErrorCode.INVALID_BASE32_CHAR);
       expectThrowsCode(() => {
         decodeStrict('1');
+      }, OtpErrorCode.INVALID_BASE32_CHAR);
+      expectThrowsCode(() => {
+        decode('A');
       }, OtpErrorCode.SECRET_TOO_SHORT);
     });
 
