@@ -1,4 +1,4 @@
-// AUTO-GENERATED from packages/core/src/secret.ts (core@07d0740). DO NOT EDIT. Run: bun run sync:core
+// AUTO-GENERATED from packages/core/src/secret.ts (core@6b1f0b0). DO NOT EDIT. Run: bun run sync:core
 /**
  * Secret：secret 规范化 / 校验 / 随机生成 / toJSON 脱敏（零平台依赖，随机源经 requireRandom()）。
  *
