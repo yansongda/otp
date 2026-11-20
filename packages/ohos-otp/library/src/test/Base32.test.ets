@@ -214,6 +214,20 @@ export default function base32Test() {
       }, OtpErrorCode.SECRET_TOO_SHORT);
     });
 
+    it('decodeSingleInvalidChar_charErrorFirst', 0, () => {
+      // 错误码归因：归一化后恰 1 字符时仍先报字符错误（与 core 的同义用例对拍），
+      // 合法的单字符才报 SECRET_TOO_SHORT；两种模式同码。
+      expectThrowsCode(() => {
+        decode('1');
+      }, OtpErrorCode.INVALID_BASE32_CHAR);
+      expectThrowsCode(() => {
+        decodeStrict('1');
+      }, OtpErrorCode.INVALID_BASE32_CHAR);
+      expectThrowsCode(() => {
+        decode('A');
+      }, OtpErrorCode.SECRET_TOO_SHORT);
+    });
+
     it('decodeIllegalChar_AB1', 0, () => {
       // '1' 不在字母表（A-Z、2-7）。
       expectThrowsCode(() => {

@@ -48,8 +48,12 @@ env:
   # 升级 SDK 是一个显式 PR（同时要改下面的 sha256）。
   CLI_VERSION: '6.1.1.280'
   CLI_MIRROR: https://github.com/ErBWs/ohos-sdk/releases/download
-  # 覆盖率门槛（当前 89.32%，留一点合理浮动）
-  COVERAGE_MIN_LINES: '88'
+  # 覆盖率门槛以「未覆盖行数」为准，不用百分比。
+  # 百分比会对「删掉冗余代码」这类正向改动误判：base32 改单遍查表后总行数 772 → 752、
+  # 未覆盖行数仍为 91，百分比却从 88.21% 掉到 87.90% 而报错；反之代码膨胀时又会偷偷放水。
+  # 未覆盖行数只会在「真的少测了」时上升，与门槛意图一致；百分比仍打印进日志与 step summary。
+  # 基线取 main 实测值，确需抬高时属于显式、可评审的动作。
+  COVERAGE_MAX_UNCOVERED: '91'
 
 jobs:
   build-and-test:
@@ -272,16 +276,20 @@ jobs:
       - name: Coverage gate
         run: |
           set -euo pipefail
-          REPORT='library/.test/default/outputs/test/reports/coverageReport.json' MIN="$COVERAGE_MIN_LINES" node -e '
+          REPORT='library/.test/default/outputs/test/reports/coverageReport.json' MAX="$COVERAGE_MAX_UNCOVERED" node -e '
             const fs = require("node:fs");
             const { summary } = JSON.parse(fs.readFileSync(process.env.REPORT, "utf8"));
-            const min = Number(process.env.MIN);
+            const max = Number(process.env.MAX);
+            const uncovered = summary.lines.total - summary.lines.covered;
             const pct = (k) => `${summary[k].pct}% (${summary[k].covered}/${summary[k].total})`;
             const line = `lines ${pct("lines")} | functions ${pct("functions")} | branches ${pct("branches")}`;
-            console.log(`覆盖率  ${line}`);
-            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### 覆盖率\n\n\`${line}\`\n`);
-            if (summary.lines.pct < min) {
-              console.error(`lines 覆盖率 ${summary.lines.pct}% 低于门槛 ${min}%`);
+            console.log(`覆盖率  ${line} | 未覆盖 ${uncovered} 行（上限 ${max}）`);
+            fs.appendFileSync(
+              process.env.GITHUB_STEP_SUMMARY,
+              `### 覆盖率\n\n\`${line}\`\n\n未覆盖 ${uncovered} 行 / 上限 ${max} 行\n`,
+            );
+            if (uncovered > max) {
+              console.error(`未覆盖行数 ${uncovered} 超过上限 ${max}`);
               process.exit(1);
             }
           '
