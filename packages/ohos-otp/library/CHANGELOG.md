@@ -1,6 +1,8 @@
 # Changelog
 
-## [Unreleased]
+## 2.0.0 - 2026-11-23
+
+破坏性收敛版本：参数口径、secret 容器与 `otpauth://` 三条边界统一改为 fail-closed（含 4 个新错误码），`verify` 多重命中的 tie-break 改为取最接近基准步的偏移。与 `@yansongda/miniprogram-otp` 2.0.0 同源（共享 `packages/core` 唯一实现），行为口径逐条一致。
 
 #### Breaking changes
 
@@ -14,6 +16,7 @@
   `ArrayBuffer` 入参改为真正的拷贝语义
 - `OTPAuthURI.parse` 的 `digits` / `period` / `counter` 只认纯十进制整数；`OTPAuthURI.build`
   对非法参数改为抛错
+- `OTPAuthURI.build` 的 `type` 不是 `totp` / `hotp` → `UNSUPPORTED_OTPAUTH_TYPE`（此前静默按 hotp 输出）
 - `OTPAuthURI` label 语义按 Key URI Format 的 ABNF 收敛：分隔符是「首个 `:` 或 `%3A`」，
   与 query 里有没有 `issuer` 无关；分隔符后的 `%20`（以及原始空格）按 padding 剥离
 - `parse` 与 `build` 的 label 契约统一为 fail-closed：`account` 缺失 / 为空 / 含冒号（明文
@@ -70,6 +73,8 @@
   等于重新放行更早的验证码。单命中 / 未命中行为不变，HMAC 次数仍为 `1 + 2w`（不早退）
 - 发布物收口：HAR 内不再包含 `src/main/ets/core/index.ts`（core 的 barrel）。副本内部没有任何引用，
   对外入口始终是 `Index.ets`；仅曾深导入该未文档化路径的用法会受影响
+- core 热路径提速（**行为不变**，随 HAR 一起编译下发）：SHA-512 去掉 `[hi, lo]` 元组分配改标量 hi/lo、
+  base32 解码改「查表 + 单遍位缓冲」、HMAC 每次少分配一个密钥块缓冲
 
 #### Fixed
 
@@ -95,6 +100,20 @@
   对齐）；`toMacAlgName` 移到 `try` 外，避免被自身 catch 二次包裹
 - 算法事实（名称集合 / 摘要长度 / HMAC 分块长度）收敛到 core 的 `internal/algorithm.ts` 单源，
   `toMacAlgName` 的算法集合由守卫脚本与 core 逐项对拍（**无行为变化**，纯内部收敛）
+
+#### Compatibility
+
+- 破坏性变更全部面向 1.x 消费方，逐条见上；最容易踩到的是 **存量 `otpauth://` URI 迁移**——1.x 在
+  无 `account` 时产出的 URI 会被拒收，用存下来的 `secret` 重建并补 `account`（`issuer` 可选）即可
+- 未变：全同步 API（`*Sync` 链路）、零运行时依赖、`OtpOptions` 字段名与可选性（仍只允许新增可选字段）、
+  `compatibleSdkVersion 6.0.0(20)`、已发布错误码的字符串值（只新增不改旧）、`Secret` 脱敏与 `verify`
+  恒定时间比对
+- 发布物（HAR）除不再打包 `core/index.ts` 外，结构与对外入口（`Index.ets` / `Index.d.ets` /
+  `example/README.md` / 四件套文档）保持不变
+- 本地 Local Test 全绿；设备端 `ohosTest` 用例集合未减少（条数以 `scripts/ci/check-invariants.mjs` 的
+  BASELINE 与 CI 输出为准），真实 crypto 路径需模拟器/真机执行
+
+---
 
 ## 1.1.1 - 2026-11-12
 
