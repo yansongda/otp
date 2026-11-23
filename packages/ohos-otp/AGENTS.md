@@ -70,7 +70,7 @@ $HB --no-daemon -c modelVersion=6.1.1 onDeviceTest --mode module -p module=libra
 
 # 零 SDK 依赖的两条（CI 的 guard.yml / ci.yml 跑的就是它们，可先跑）
 bash scripts/ci/lint-local.sh          # CodeLinter；exit 4 = 命中 error，0 = 通过（不带 -e 永远 0）
-node scripts/ci/check-invariants.mjs   # 仓库不变量守卫（16 项）
+node scripts/ci/check-invariants.mjs   # 仓库不变量守卫（含版本一致性 / 错误码对拍 / 测试条数下限等）
 ```
 
 **CI（GitHub Actions，workflow 均在仓库根 `.github/workflows/`）**：`guard.yml` = 不变量守卫（ubuntu-latest，无 SDK，秒级）；`ohos.yml` = CodeLinter + PC 单测（覆盖率门槛 = 未覆盖行数上限，见 `COVERAGE_MAX_UNCOVERED`）+ `assembleHar` + `ohpm prepublish` + entry HAP smoke，产物含 `library.har` 与覆盖率报告。工具链取自社区镜像的华为 command-line-tools（`CLI_VERSION` 与归档 sha256 钉在 workflow 里，升级走显式 PR）；**跑在 `macos-15`，因为 local test 要起 Previewer（见 §8）**。本地无 SDK 时用上面两条脚本 + `bash scripts/ci/lint-local.sh` 复现 lint 与守卫。**CI 不执行 `ohpm publish` / `git push`**（§7 人工闸门）。
@@ -86,7 +86,7 @@ node scripts/ci/check-invariants.mjs   # 仓库不变量守卫（16 项）
 | `src/test/`     | PC Local Test（kit-free 可跑） | 纯算法核心全链路 + 公开类（注入 `HmacFixture`/`RandomFixture`）+ RFC 黄金向量    |
 | `src/ohosTest/` | 设备/模拟器                    | 真实 `CryptoFrameworkHmac`、barrel 注册链路、默认 provider（**不注入 fixture**） |
 
-- 新算法逻辑只改 `packages/core` 并补 core 测试；`src/test` 的 266 条经薄壳直接测 core（断言不变），涉及真实 crypto 的断言只能放 `src/ohosTest`。
+- 新算法逻辑只改 `packages/core` 并补 core 测试；`src/test` 的用例（条数以守卫 BASELINE 为准）经薄壳直接测 core（断言不变），涉及真实 crypto 的断言只能放 `src/ohosTest`。
 - 向量唯一来源：`src/test/vectors/RfcVectors.ets`——**逐字照抄，禁止自行推导或补算**；期望值不得由被测实现反推（自证）。
 - Local Test 环境下 cryptoFramework 返回空数据（`doFinalSync()` 的 DataBlob `len=0`），是环境限制而非缺陷；不要在 PC 用例里断言真实 digest。
 - 测试文件禁止 `expect(true)` 占位；`it(` 计数不得下降。
